@@ -1,0 +1,67 @@
+{
+  "_README": "Edit this file to customize the default stories for this phase, then return to the prompt and accept. Story IDs use the <phase-int>.<story-int> format (ADR-004). Deleting the file means 'skip this phase'.",
+  "schema_version": 1,
+  "phase_id": "P5",
+  "phase_name": "Pose-Estimation (GigaPose + MegaPose)",
+  "target_version": "0.1",
+  "stories": [
+    {
+      "id": "5.1",
+      "title": "GigaPose Repo + Pretrained-Weights",
+      "description": "Auto-generated default story for phase Pose-Estimation (GigaPose + MegaPose). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P1",
+      "deps": [],
+      "acceptance_criteria": [],
+      "order": 1
+    },
+    {
+      "id": "5.2",
+      "title": "GigaPose-Inference auf CNOS-Detections (Crops)",
+      "description": "Auto-generated default story for phase Pose-Estimation (GigaPose + MegaPose). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "5.1"
+      ],
+      "acceptance_criteria": [],
+      "order": 2
+    },
+    {
+      "id": "5.3",
+      "title": "MegaPose-Refinement-Integration (Render-and-Compare)",
+      "description": "Auto-generated default story for phase Pose-Estimation (GigaPose + MegaPose). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "5.2"
+      ],
+      "acceptance_criteria": [],
+      "order": 3
+    },
+    {
+      "id": "5.4",
+      "title": "End-to-End-Pipeline-Verkettung (Detect → Coarse → Refine)",
+      "description": "Auto-generated default story for phase Pose-Estimation (GigaPose + MegaPose). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "5.3"
+      ],
+      "acceptance_criteria": [],
+      "order": 4
+    },
+    {
+      "id": "5.5",
+      "title": "Pose-Eval auf Synth-Test-Set (Translation/Rotation-Error)",
+      "description": "Auto-generated default story for phase Pose-Estimation (GigaPose + MegaPose). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "5.4"
+      ],
+      "acceptance_criteria": [],
+      "order": 5
+    }
+  ]
+}

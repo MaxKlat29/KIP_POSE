@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "current": "0.0.1",
+  "project_state": "bootstrap",
+  "last_bump_trigger": "bootstrap",
+  "last_bump_at": "2026-05-17T13:19:11Z",
+  "history": [
+    {
+      "version": "0.0.1",
+      "ts": "2026-05-17T13:19:11Z",
+      "trigger": "bootstrap",
+      "actor": "claude-project",
+      "milestone": "Project bootstrapped",
+      "notes": "gantt init in /Users/Admin/POSE"
+    }
+  ]
+}

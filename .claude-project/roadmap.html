@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Claude Gantt</title>
+  <link rel="stylesheet" href="gantt.css" />
+</head>
+<body>
+  <a class="sr-only" href="#main">Skip to roadmap</a>
+
+  <!-- ─ topbar ───────────────────────────────────────────────────────────── -->
+  <header class="topbar" role="banner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Claude Gantt</span>
+    </div>
+    <div class="topbar-meta">
+      <span id="project-name" class="project-name">—</span>
+      <span class="dot-sep" aria-hidden="true">·</span>
+      <span id="version-tag" class="version-tag muted">v0.0.0</span>
+      <span class="dot-sep" aria-hidden="true">·</span>
+      <span id="ticker" class="muted ticker">0 stories · 0 phases</span>
+    </div>
+    <div class="topbar-actions">
+      <button id="btn-jump-current" class="btn accent-pill hidden"
+              title="Jump to current story" aria-label="Jump to current story">→ <span id="current-story-label">1.1</span></button>
+      <button id="btn-help" class="btn ghost" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+      <button id="btn-refresh" class="btn ghost" title="Refresh (r)" aria-label="Refresh">↻</button>
+      <button id="btn-open-editor" class="btn ghost hidden" title="Open in editor tab" aria-label="Open in editor tab">⤢</button>
+    </div>
+  </header>
+
+  <!-- ─ filter-bar ───────────────────────────────────────────────────────── -->
+  <nav class="filter-bar" role="navigation" aria-label="Filters">
+    <div class="filter-group">
+      <button class="filter-pill" data-filter="status" id="filter-status" aria-haspopup="listbox" aria-expanded="false">
+        <span class="filter-label">All status</span>
+        <span class="filter-count hidden">0</span>
+        <span class="filter-chev" aria-hidden="true">▾</span>
+      </button>
+      <button class="filter-pill" data-filter="owner" id="filter-owner" aria-haspopup="listbox" aria-expanded="false">
+        <span class="filter-label">All owners</span>
+        <span class="filter-count hidden">0</span>
+        <span class="filter-chev" aria-hidden="true">▾</span>
+      </button>
+      <button class="filter-pill" data-filter="priority" id="filter-priority" aria-haspopup="listbox" aria-expanded="false">
+        <span class="filter-label">All priorities</span>
+        <span class="filter-count hidden">0</span>
+        <span class="filter-chev" aria-hidden="true">▾</span>
+      </button>
+    </div>
+    <div class="filter-toggles">
+      <label class="filter-toggle">
+        <input type="checkbox" id="toggle-deps" />
+        <span>deps</span>
+      </label>
+      <label class="filter-toggle">
+        <input type="checkbox" id="toggle-cp" />
+        <span>critical-path</span>
+      </label>
+    </div>
+    <button id="btn-clear-filters" class="btn ghost clear-filters hidden">Clear filters</button>
+  </nav>
+
+  <!-- ─ main ─────────────────────────────────────────────────────────────── -->
+  <main id="main" role="main" aria-label="Roadmap">
+
+    <!-- empty: no roadmap.json -->
+    <section id="empty-no-roadmap" class="empty hidden">
+      <div class="empty-icon" aria-hidden="true">📋</div>
+      <h2>No roadmap yet</h2>
+      <p class="muted">Initialize a project to see your gantt.</p>
+      <button class="btn primary" id="btn-init-roadmap">Run <code>project new &lt;name&gt;</code></button>
+    </section>
+
+    <!-- empty: phases empty -->
+    <section id="empty-no-phases" class="empty hidden">
+      <div class="empty-icon" aria-hidden="true">🗺</div>
+      <h2>Roadmap initialized</h2>
+      <p class="muted">Add a phase to get started:</p>
+      <code class="cmd-hint">gantt add-phase "Foundation"</code>
+    </section>
+
+    <!-- error state -->
+    <section id="error-state" class="empty hidden">
+      <div class="empty-icon error-icon" aria-hidden="true">⚠</div>
+      <h2>Could not load roadmap</h2>
+      <p class="muted file-path" id="error-file-path"></p>
+      <code class="error-msg" id="error-msg"></code>
+      <div class="error-actions">
+        <button class="btn ghost" id="btn-retry">Retry</button>
+        <button class="btn ghost hidden" id="btn-open-file">Open file</button>
+      </div>
+    </section>
+
+    <!-- loading: skeleton -->
+    <section id="loading-state" class="loading hidden" aria-hidden="true">
+      <div class="skeleton-phase"><div class="skel-header"></div><div class="skel-bars">
+        <span></span><span></span><span></span><span></span></div></div>
+      <div class="skeleton-phase"><div class="skel-header"></div><div class="skel-bars">
+        <span></span><span></span><span></span><span></span></div></div>
+      <div class="skeleton-phase"><div class="skel-header"></div><div class="skel-bars">
+        <span></span><span></span><span></span><span></span></div></div>
+    </section>
+
+    <!-- the gantt -->
+    <section id="gantt" class="gantt hidden" aria-live="polite">
+      <div id="cycle-banner" class="cycle-banner hidden" role="alert">
+        <span class="banner-icon" aria-hidden="true">⚠</span>
+        <span class="banner-text"></span>
+      </div>
+      <div id="phases" class="phases"></div>
+      <!-- dependency-arrow overlay (A.4) -->
+      <svg id="deps-overlay" class="deps-overlay hidden" aria-hidden="true" focusable="false">
+        <defs>
+          <marker id="arrowhead-normal" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="arrowhead-cp" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g id="deps-paths"></g>
+      </svg>
+    </section>
+
+    <!-- filter-empty (inline) -->
+    <section id="filter-empty" class="filter-empty hidden">
+      <span>No stories match current filters</span>
+      <button class="btn ghost" id="btn-clear-filters-2">Clear filters</button>
+    </section>
+
+  </main>
+
+  <!-- ─ footer ───────────────────────────────────────────────────────────── -->
+  <footer class="footer" role="contentinfo">
+    <span class="footer-left">
+      <span id="footer-updated" class="muted">—</span>
+    </span>
+    <span class="footer-center muted">
+      <span id="footer-counts">0 stories</span>
+      <span class="dot-sep" aria-hidden="true">·</span>
+      <span>★ = critical path</span>
+      <span class="dot-sep" aria-hidden="true">·</span>
+      <span>● = current story</span>
+    </span>
+    <span class="footer-right">
+      <button class="btn ghost" id="btn-legend" aria-haspopup="dialog" aria-expanded="false">Legend ▾</button>
+    </span>
+  </footer>
+
+  <!-- ─ side-panel (drawer) ──────────────────────────────────────────────── -->
+  <aside id="drawer" class="drawer hidden" aria-hidden="true">
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <header class="drawer-head">
+        <div class="drawer-head-meta" id="drawer-meta"></div>
+        <button id="drawer-close" class="btn ghost" title="Close (Esc)" aria-label="Close">✕</button>
+      </header>
+      <div class="drawer-body" id="drawer-body"></div>
+    </div>
+  </aside>
+
+  <!-- ─ tooltip ──────────────────────────────────────────────────────────── -->
+  <div id="tooltip" class="tooltip hidden" role="tooltip" aria-hidden="true"></div>
+
+  <!-- ─ filter dropdown portal ──────────────────────────────────────────── -->
+  <div id="filter-dropdown" class="filter-dropdown hidden" role="listbox" aria-multiselectable="true"></div>
+
+  <!-- ─ legend popover ──────────────────────────────────────────────────── -->
+  <div id="legend-popover" class="legend-popover hidden" role="dialog" aria-label="Legend"></div>
+
+  <!-- ─ keyboard shortcuts modal ────────────────────────────────────────── -->
+  <div id="shortcuts-modal" class="shortcuts-modal hidden" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+    <div class="shortcuts-overlay"></div>
+    <div class="shortcuts-panel">
+      <header class="shortcuts-head">
+        <h2 id="shortcuts-title">Keyboard Shortcuts</h2>
+        <button class="btn ghost" id="shortcuts-close" aria-label="Close">✕</button>
+      </header>
+      <div class="shortcuts-body">
+        <dl>
+          <dt>Tab / Shift+Tab</dt><dd>cycle topbar → filters → stories → footer</dd>
+          <dt>Enter / Space</dt><dd>open story detail panel</dd>
+          <dt>Esc</dt><dd>close panel / tooltip / dropdown</dd>
+          <dt>← / →</dt><dd>prev / next story in same phase</dd>
+          <dt>↑ / ↓</dt><dd>same index in prev / next phase</dd>
+          <dt>c / e</dt><dd>collapse / expand all phases</dd>
+          <dt>j</dt><dd>jump to current story</dd>
+          <dt>d</dt><dd>toggle dependency arrows</dd>
+          <dt>/</dt><dd>focus filter bar</dd>
+          <dt>r</dt><dd>refresh roadmap</dd>
+          <dt>?</dt><dd>this shortcuts modal</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─ live region for sr announcements ─────────────────────────────────── -->
+  <div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <script>window.ROADMAP_DATA = {"schema_version": 1, "project": "pose", "project_path": "/Users/Admin/POSE", "created": "2026-05-17T13:19:11Z", "updated": "2026-05-17T13:19:12Z", "version_ref": "0.0.1", "current_phase": null, "current_story": null, "phases": [{"id": "P1", "name": "Foundation + Repo-Setup", "description": "Python-Env (CUDA, PyTorch), Repo-Struktur, Test-Fixtures, CAD-Loader, JSON-Pose-Schema, Coord-System-Konvention.", "order": 1, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["kai-ml", "jonas-backend"], "stories": [], "color": "#a855f7"}, {"id": "P2", "name": "Clickdummy v0 (Mock-Daten)", "description": "Three.js-Viewer mit selbst-gebauten Beispieldaten. Frühe End-Visualisierung. Side-by-Side Image-links + 3D-rechts. Zementiert das Datenformat.", "order": 2, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["lena-frontend"], "stories": [], "color": "#ec4899"}, {"id": "P3", "name": "Synth-Data-Pipeline (BlenderProc4BOP)", "description": "CAD-Modelle auf simulierten Tisch fallen lassen, PBR-Rendering, Domain-Randomization, BOP-Format-Output. Ersetzt/wrappet bestehende Physics-Sim.", "order": 3, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["kai-ml"], "stories": [], "color": "#0891b2"}, {"id": "P4", "name": "Detection-Stage (CNOS)", "description": "CAD-template-driven Detection + Segmentation, RGB-only, unseen-objects-fähig.", "order": 4, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["kai-ml"], "stories": [], "color": "#16a34a"}, {"id": "P5", "name": "Pose-Estimation (GigaPose + MegaPose)", "description": "RGB-only Coarse-Pose mit GigaPose, gefolgt von MegaPose-Refinement. Stärkste RGB-only-Combo laut SOTA-Brief.", "order": 5, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["kai-ml"], "stories": [], "color": "#4f46e5"}, {"id": "P6", "name": "Stable-Pose-Snap (Planar-Postprocessing)", "description": "Predicted Pose auf nächste stabile Liegelage auf bekannter Tischebene projizieren. Stabilizer für RGB-only-Pipeline.", "order": 6, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["kai-ml"], "stories": [], "color": "#f59e0b"}, {"id": "P7", "name": "Eval-Harness + Reports", "description": "BOP-Metriken (AR, ADD, MSPD, MSSD), Translation/Rotation-Error, Reports, Worst-Examples-Viewer.", "order": 7, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["kai-ml", "ravi-qs"], "stories": [], "color": "#dc2626"}, {"id": "P8", "name": "Clickdummy v1 (Echte Daten)", "description": "Pipeline-Outputs an Clickdummy gepluggt. File-Drop → Inference → Live-3D-Rekonstruktion.", "order": 8, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["lena-frontend", "jonas-backend"], "stories": [], "color": "#ec4899"}, {"id": "P9", "name": "Integration + Docs + v0.1-Release", "description": "CLI-Wrapper, ADRs finalisieren, README, Docs, v0.1.0-Tag + Brain-Snapshot.", "order": 9, "status": "planned", "started_at": null, "completed_at": null, "target_version": "0.1", "suggested_owners": ["jonas-backend", "sam-devops"], "stories": [], "color": "#64748b"}], "critical_path": [], "metadata": {"profile": "ml-cv-pose"}};</script>
+  <script src="gantt.js"></script>
+</body>
+</html>

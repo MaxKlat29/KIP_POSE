@@ -1,0 +1,67 @@
+{
+  "_README": "Edit this file to customize the default stories for this phase, then return to the prompt and accept. Story IDs use the <phase-int>.<story-int> format (ADR-004). Deleting the file means 'skip this phase'.",
+  "schema_version": 1,
+  "phase_id": "P7",
+  "phase_name": "Eval-Harness + Reports",
+  "target_version": "0.1",
+  "stories": [
+    {
+      "id": "7.1",
+      "title": "BOP-Eval-Toolkit-Integration",
+      "description": "Auto-generated default story for phase Eval-Harness + Reports. Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P1",
+      "deps": [],
+      "acceptance_criteria": [],
+      "order": 1
+    },
+    {
+      "id": "7.2",
+      "title": "Test-Set-Aufbau (held-out aus Sim, optional 50 echte Frames)",
+      "description": "Auto-generated default story for phase Eval-Harness + Reports. Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "7.1"
+      ],
+      "acceptance_criteria": [],
+      "order": 2
+    },
+    {
+      "id": "7.3",
+      "title": "Metrics-CSV + JSON-Report Generator",
+      "description": "Auto-generated default story for phase Eval-Harness + Reports. Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "7.2"
+      ],
+      "acceptance_criteria": [],
+      "order": 3
+    },
+    {
+      "id": "7.4",
+      "title": "Error-Analysis",
+      "description": "worst-50-examples HTML-Report",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "7.3"
+      ],
+      "acceptance_criteria": [],
+      "order": 4
+    },
+    {
+      "id": "7.5",
+      "title": "Sim-vs-Real-Performance-Vergleich (falls Real-Daten verfügbar)",
+      "description": "Auto-generated default story for phase Eval-Harness + Reports. Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "7.4"
+      ],
+      "acceptance_criteria": [],
+      "order": 5
+    }
+  ]
+}

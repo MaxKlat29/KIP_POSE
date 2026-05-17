@@ -1,0 +1,67 @@
+{
+  "_README": "Edit this file to customize the default stories for this phase, then return to the prompt and accept. Story IDs use the <phase-int>.<story-int> format (ADR-004). Deleting the file means 'skip this phase'.",
+  "schema_version": 1,
+  "phase_id": "P9",
+  "phase_name": "Integration + Docs + v0.1-Release",
+  "target_version": "0.1",
+  "stories": [
+    {
+      "id": "9.1",
+      "title": "End-to-End-CLI",
+      "description": "'pose infer <image> --cads <dir>'",
+      "owner": "jonas-backend",
+      "priority": "P1",
+      "deps": [],
+      "acceptance_criteria": [],
+      "order": 1
+    },
+    {
+      "id": "9.2",
+      "title": "ADRs finalisieren (Methoden-Wahl, RGB-only, Stable-Snap, BlenderProc)",
+      "description": "Auto-generated default story for phase Integration + Docs + v0.1-Release. Edit this file before accepting the stubs.",
+      "owner": "jonas-backend",
+      "priority": "P2",
+      "deps": [
+        "9.1"
+      ],
+      "acceptance_criteria": [],
+      "order": 2
+    },
+    {
+      "id": "9.3",
+      "title": "README mit Quickstart + Architektur-Diagramm + Demo-GIF",
+      "description": "Auto-generated default story for phase Integration + Docs + v0.1-Release. Edit this file before accepting the stubs.",
+      "owner": "jonas-backend",
+      "priority": "P2",
+      "deps": [
+        "9.2"
+      ],
+      "acceptance_criteria": [],
+      "order": 3
+    },
+    {
+      "id": "9.4",
+      "title": "Docs",
+      "description": "Pipeline-Stages, Eval-Reproduktion, Bauteil-Onboarding",
+      "owner": "jonas-backend",
+      "priority": "P2",
+      "deps": [
+        "9.3"
+      ],
+      "acceptance_criteria": [],
+      "order": 4
+    },
+    {
+      "id": "9.5",
+      "title": "v0.1.0-Release-Tag + Brain-Snapshot",
+      "description": "Auto-generated default story for phase Integration + Docs + v0.1-Release. Edit this file before accepting the stubs.",
+      "owner": "jonas-backend",
+      "priority": "P2",
+      "deps": [
+        "9.4"
+      ],
+      "acceptance_criteria": [],
+      "order": 5
+    }
+  ]
+}

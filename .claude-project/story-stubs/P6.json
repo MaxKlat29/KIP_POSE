@@ -1,0 +1,67 @@
+{
+  "_README": "Edit this file to customize the default stories for this phase, then return to the prompt and accept. Story IDs use the <phase-int>.<story-int> format (ADR-004). Deleting the file means 'skip this phase'.",
+  "schema_version": 1,
+  "phase_id": "P6",
+  "phase_name": "Stable-Pose-Snap (Planar-Postprocessing)",
+  "target_version": "0.1",
+  "stories": [
+    {
+      "id": "6.1",
+      "title": "Stable-Lagen-Cluster aus P3 laden (top-K diskrete Lagen)",
+      "description": "Auto-generated default story for phase Stable-Pose-Snap (Planar-Postprocessing). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P1",
+      "deps": [],
+      "acceptance_criteria": [],
+      "order": 1
+    },
+    {
+      "id": "6.2",
+      "title": "Tisch-Ebenen-Calibration aus Camera-Intrinsics + Setup",
+      "description": "Auto-generated default story for phase Stable-Pose-Snap (Planar-Postprocessing). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "6.1"
+      ],
+      "acceptance_criteria": [],
+      "order": 2
+    },
+    {
+      "id": "6.3",
+      "title": "Snap-Algorithmus",
+      "description": "predicted Pose → argmin(dist) zur Stable-Lage",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "6.2"
+      ],
+      "acceptance_criteria": [],
+      "order": 3
+    },
+    {
+      "id": "6.4",
+      "title": "Yaw-only-Refinement um Z-Achse nach Snap",
+      "description": "Auto-generated default story for phase Stable-Pose-Snap (Planar-Postprocessing). Edit this file before accepting the stubs.",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "6.3"
+      ],
+      "acceptance_criteria": [],
+      "order": 4
+    },
+    {
+      "id": "6.5",
+      "title": "Ablation-Study",
+      "description": "mit/ohne Snap auf Eval-Set (AR-Vergleich)",
+      "owner": "kai-ml",
+      "priority": "P2",
+      "deps": [
+        "6.4"
+      ],
+      "acceptance_criteria": [],
+      "order": 5
+    }
+  ]
+}

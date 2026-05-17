@@ -1,0 +1,79 @@
+{
+  "_README": "Edit this file to customize the default stories for this phase, then return to the prompt and accept. Story IDs use the <phase-int>.<story-int> format (ADR-004). Deleting the file means 'skip this phase'.",
+  "schema_version": 1,
+  "phase_id": "P2",
+  "phase_name": "Clickdummy v0 (Mock-Daten)",
+  "target_version": "0.1",
+  "stories": [
+    {
+      "id": "2.1",
+      "title": "Three.js Bootstrap mit Vite + CAD-Loader (STL)",
+      "description": "Auto-generated default story for phase Clickdummy v0 (Mock-Daten). Edit this file before accepting the stubs.",
+      "owner": "lena-frontend",
+      "priority": "P1",
+      "deps": [],
+      "acceptance_criteria": [],
+      "order": 1
+    },
+    {
+      "id": "2.2",
+      "title": "Side-by-Side Layout",
+      "description": "Image links, 3D-Scene rechts",
+      "owner": "lena-frontend",
+      "priority": "P2",
+      "deps": [
+        "2.1"
+      ],
+      "acceptance_criteria": [],
+      "order": 2
+    },
+    {
+      "id": "2.3",
+      "title": "Mock-JSON Loader (Image + Pose-Liste)",
+      "description": "Auto-generated default story for phase Clickdummy v0 (Mock-Daten). Edit this file before accepting the stubs.",
+      "owner": "lena-frontend",
+      "priority": "P2",
+      "deps": [
+        "2.2"
+      ],
+      "acceptance_criteria": [],
+      "order": 3
+    },
+    {
+      "id": "2.4",
+      "title": "OrbitControls + Zoom + Grid + Light-Rig",
+      "description": "Auto-generated default story for phase Clickdummy v0 (Mock-Daten). Edit this file before accepting the stubs.",
+      "owner": "lena-frontend",
+      "priority": "P2",
+      "deps": [
+        "2.3"
+      ],
+      "acceptance_criteria": [],
+      "order": 4
+    },
+    {
+      "id": "2.5",
+      "title": "Mock-Data-Generator",
+      "description": "3-5 Demo-Frames mit handgesetzten Posen",
+      "owner": "lena-frontend",
+      "priority": "P2",
+      "deps": [
+        "2.4"
+      ],
+      "acceptance_criteria": [],
+      "order": 5
+    },
+    {
+      "id": "2.6",
+      "title": "Snap-to-Stable-Pose Animation (Demo-Effekt",
+      "description": "Pose snapped sichtbar zur Lage)",
+      "owner": "lena-frontend",
+      "priority": "P2",
+      "deps": [
+        "2.5"
+      ],
+      "acceptance_criteria": [],
+      "order": 6
+    }
+  ]
+}
