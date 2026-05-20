@@ -37,6 +37,8 @@ def parse_args():
     p.add_argument("--spawn", choices=["none", "tray", "random"], default="none")
     p.add_argument("--spawn-box", default=None,
                    help="static placement: cx,cy,cz,half — drop parts randomly in this box")
+    p.add_argument("--physics-z", type=float, default=None,
+                   help="enable physics: gravity + an invisible ground collider with top at z")
     p.add_argument("--num-objects", type=int, default=6)
     p.add_argument("--num-renders", type=int, default=1)
     p.add_argument("--width", type=int, default=1280)
@@ -68,7 +70,7 @@ def main():
     import omni.replicator.core as rep
     import omni.timeline
     import carb
-    from pxr import UsdGeom, UsdLux, Gf
+    from pxr import UsdGeom, UsdLux, Gf, UsdPhysics
 
     _s = carb.settings.get_settings()
     _s.set("/app/asyncRendering", False)
@@ -138,6 +140,22 @@ def main():
             if p.IsA(UsdGeom.Camera):
                 log(f"   {p.GetPath()}")
         simulation_app.close(); sys.exit(1)
+
+    if args.physics_z is not None:
+        ps = UsdPhysics.Scene.Define(stage, "/World/_PhysicsScene")
+        ps.CreateGravityDirectionAttr(Gf.Vec3f(0, 0, -1))
+        ps.CreateGravityMagnitudeAttr(9.81)
+        gp = UsdGeom.Cube.Define(stage, "/World/_PhysGround")
+        gp.GetSizeAttr().Set(1.0)
+        gx = UsdGeom.Xformable(gp)
+        gx.ClearXformOpOrder()
+        gx.AddTranslateOp().Set(Gf.Vec3d(0.5, 0.1, args.physics_z - 0.01))
+        gx.AddScaleOp().Set(Gf.Vec3f(4.0, 4.0, 0.02))
+        UsdPhysics.CollisionAPI.Apply(gp.GetPrim())
+        UsdGeom.Imageable(gp.GetPrim()).MakeInvisible()
+        log(f"physics enabled: gravity + invisible ground top at z={args.physics_z}")
+        for _ in range(5):
+            simulation_app.update()
 
     os.makedirs(args.output, exist_ok=True)
     rng = np.random.default_rng(args.seed)
