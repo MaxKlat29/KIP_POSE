@@ -44,6 +44,9 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--add-light", action="store_true",
                    help="add a fallback dome light (use if the scene renders dark)")
+    p.add_argument("--hide", default=None,
+                   help="comma-separated name substrings; matching prims are made invisible "
+                        "(e.g. the robot arm so the camera sees the table)")
     p.add_argument("--no-headless", action="store_true")
     return p.parse_args()
 
@@ -91,6 +94,19 @@ def main():
         simulation_app.update()
     stage = ctx.get_stage()
     log(f"scene loaded ({len(list(stage.Traverse()))} prims)")
+
+    if args.hide:
+        subs = [s.strip().lower() for s in args.hide.split(",") if s.strip()]
+        hidden = 0
+        for prim in stage.Traverse():
+            if any(sub in prim.GetName().lower() for sub in subs):
+                img = UsdGeom.Imageable(prim)
+                if img:
+                    img.MakeInvisible()
+                    hidden += 1
+        log(f"hid {hidden} prim(s) matching {subs}")
+        for _ in range(5):
+            simulation_app.update()
 
     if args.add_light:
         UsdLux.DomeLight.Define(stage, "/World/_FallbackDome").CreateIntensityAttr(500.0)
