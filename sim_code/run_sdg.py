@@ -83,7 +83,8 @@ def main():
     # 4. Open the scene and let it load.
     ctx = omni.usd.get_context()
     print(f"[run_sdg] opening scene: {args.scene}")
-    ok, _ = ctx.open_stage(args.scene)
+    _r = ctx.open_stage(args.scene)
+    ok = _r[0] if isinstance(_r, (tuple, list)) else _r   # API returns bool or (bool, str)
     if not ok:
         print(f"[run_sdg] FAILED to open stage: {args.scene}")
         simulation_app.close()
