@@ -5,6 +5,15 @@ pipeline plus the surrounding ML/eval/visualization tooling for detecting and
 posing parts (`Anker_Kurz`, `Anker_Lang`, …) on a tray so a robot arm can grasp
 them.
 
+## Example output
+
+Synthetic top-down capture from the real Zivid camera in the assembled cell
+(LARA5 robot arm in frame), parts physics-dropped and scattered across the
+table at fixed real-world scale, with occlusion-filtered 2D labels — 9 frames
+showing the physics variation:
+
+![SDG dataset preview](docs/sdg-dataset-preview.png)
+
 ## Repository layout
 
 | Path | What |

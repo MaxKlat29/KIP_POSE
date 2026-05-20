@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-20T06:20:22Z",
+  "updated": "2026-05-20T08:15:01Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,13 +22,13 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 7,
+  "next_id": 12,
   "tickets": [
     {
       "id": "T-001",
       "title": "P2 Clickdummy v0 — Pipeline-Process-Visualizer",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P1",
@@ -39,9 +39,9 @@
       ],
       "session": "",
       "created": "2026-05-17T13:26:41Z",
-      "updated": "2026-05-17T14:15:02Z",
+      "updated": "2026-05-20T06:28:50Z",
       "started_at": "2026-05-17T13:26:50Z",
-      "completed_at": null,
+      "completed_at": "2026-05-20T06:28:50Z",
       "comments": [],
       "logs": [
         {
@@ -91,6 +91,18 @@
           "agent": "claude",
           "level": "success",
           "msg": "Light-Mode + 2 vertikale Spalten + QS raus. Linke Spalte = 5 Vorbereitungs-Stationen (Kamera→Katalog→Trainingsbilder→Liegelagen→Pipeline lernt), rechte Spalte = 6 Live-Pipeline-Stationen (Foto→Bauteile finden→Lage messen→Snap→3D→Greifkommando). SCHRITT-Pills zeigen zeitliche Reihenfolge. Cleaner Background, dezente Shadows."
+        },
+        {
+          "ts": "2026-05-20T06:28:50Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Clickdummy gelöscht (Max: hau raus) — Ticket obsolet"
+        },
+        {
+          "ts": "2026-05-20T06:28:50Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
         }
       ]
     },
@@ -143,7 +155,7 @@
       "id": "T-003",
       "title": "sim-Pipeline nach sim_code clonen + KIP_POSE public-Repo + Clickdummy raus",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -153,9 +165,9 @@
       ],
       "session": "",
       "created": "2026-05-20T06:15:39Z",
-      "updated": "2026-05-20T06:20:22Z",
+      "updated": "2026-05-20T07:53:43Z",
       "started_at": "2026-05-20T06:15:39Z",
-      "completed_at": null,
+      "completed_at": "2026-05-20T07:53:43Z",
       "comments": [],
       "logs": [
         {
@@ -163,6 +175,24 @@
           "agent": "claude",
           "level": "info",
           "msg": "Scope: alles-rein public KIP_POSE, pip-venv Isaac Sim. Clickdummy raus."
+        },
+        {
+          "ts": "2026-05-20T06:28:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Repo aufgeräumt + lokal committed (a5da965, branch main). OFFEN: gh repo create KIP_POSE --public --push"
+        },
+        {
+          "ts": "2026-05-20T07:53:43Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "KIP_POSE public + gepusht: github.com/MaxKlat29/KIP_POSE (commits a5da965, f2856d4)"
+        },
+        {
+          "ts": "2026-05-20T07:53:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -170,7 +200,7 @@
       "id": "T-004",
       "title": "Isaac Sim 5.1 headless install auf GPU-Workstation (pip-venv, /mnt/data)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -180,17 +210,36 @@
       ],
       "session": "",
       "created": "2026-05-20T06:20:22Z",
-      "updated": "2026-05-20T06:20:22Z",
+      "updated": "2026-05-20T07:53:43Z",
       "started_at": "2026-05-20T06:20:22Z",
-      "completed_at": null,
+      "completed_at": "2026-05-20T07:53:43Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-20T06:28:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Isaac Sim 5.1 installiert (venv /mnt/data/isaacsim-venv, DONE_EXIT_0) + 16G swap. OFFEN: RTX-Shader-Fehler im Smoke-Test debuggen"
+        },
+        {
+          "ts": "2026-05-20T07:53:43Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Smoke-Test GRÜN: SimApp headless ready, RTX rendert (512x512x4 PNG). Fix war fehlende libGLU.so.1 + Shader-Erstkompilierung"
+        },
+        {
+          "ts": "2026-05-20T07:53:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
     },
     {
       "id": "T-005",
       "title": "Remote-Run-Harness: WoL -> Tailscale -> headless SDG-Run -> rsync results",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P2",
@@ -200,11 +249,42 @@
       ],
       "session": "",
       "created": "2026-05-20T06:20:22Z",
-      "updated": "2026-05-20T06:20:22Z",
-      "started_at": null,
-      "completed_at": null,
+      "updated": "2026-05-20T07:55:36Z",
+      "started_at": "2026-05-20T07:53:43Z",
+      "completed_at": "2026-05-20T07:55:36Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-20T06:28:50Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "wake_and_run.sh geschrieben (WoL->Tailscale->tmux->rsync). Verify pending bis USDs da"
+        },
+        {
+          "ts": "2026-05-20T07:53:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "wake_and_run.sh + repo-deploy auf Workstation funktioniert. CAD-Assets (568M) rsynced. Minimaler Run gestartet"
+        },
+        {
+          "ts": "2026-05-20T07:53:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-20T07:55:36Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Harness-Flow bewiesen: WoL->Tailscale->repo-deploy->headless-run->rsync-back. wake_and_run.sh + run_minimal.py end-to-end"
+        },
+        {
+          "ts": "2026-05-20T07:55:36Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
     },
     {
       "id": "T-006",
@@ -222,6 +302,201 @@
       "updated": "2026-05-20T06:20:22Z",
       "started_at": null,
       "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-007",
+      "title": "Minimaler SDG-Run: echte Anker-Teile -> RGB/BBox/Seg/Depth",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "isaac-sim",
+        "sdg"
+      ],
+      "session": "",
+      "created": "2026-05-20T07:53:43Z",
+      "updated": "2026-05-20T07:55:36Z",
+      "started_at": "2026-05-20T07:53:43Z",
+      "completed_at": "2026-05-20T07:55:36Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-20T07:55:36Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "MINIMAL RUN GRÜN: 6 Anker-Teile gerendert, RGB+Depth+BBox+Semantic+Instance, Labels korrekt, visuell bestätigt (Motor-Anker PBR)"
+        },
+        {
+          "ts": "2026-05-20T07:55:36Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-008",
+      "title": "nodestat: stdlib status-endpoint (GPU+CPU+disk+jobs) als systemd-service",
+      "description": "Schlanker Python-stdlib HTTP-Server :9099/status auf GPU-Workstation. JSON: gpu(util/vram/temp/power), cpu(load/pct), mem, disk(/,/mnt/data), uptime, jobs(GPU-compute-apps). GPU-optional damit wiederverwendbar fuer andere nodes. systemd-unit, auto-start (ueberlebt WoL/reboot).",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "monitoring",
+        "tailscale"
+      ],
+      "session": "",
+      "created": "2026-05-20T07:57:53Z",
+      "updated": "2026-05-20T08:15:01Z",
+      "started_at": "2026-05-20T07:57:53Z",
+      "completed_at": "2026-05-20T08:11:21Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-20T07:59:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "nodestat live auf GPU-Box: systemd active, GET/HEAD via tailscale 100.85.216.95:9099 ok, GPU-Reading unter DynamicUser ok"
+        },
+        {
+          "ts": "2026-05-20T07:59:50Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-20T08:11:21Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-20T08:15:01Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "GST_Scene gerendert, 6 Anker-Teile im Anker-Tray, BBox+Labels, Roboterarm im Bild (commit gepusht)"
+        }
+      ]
+    },
+    {
+      "id": "T-009",
+      "title": "tailscale-status extension: System/GPU-Status rendern (statusJson)",
+      "description": "ServiceDef.statusJson flag: prober captured+parsed JSON body, neuer statusData im snapshot. Sidebar: inline GPU-Summary unter service-row + High-Level CPU/GPU/disk neben node-name. Detail-Webview: voller breakdown. Ollama->Civion-Services umbiegen (toter port 11434). Rebuild + reinstall.",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "monitoring",
+        "tailscale",
+        "vscode-ext"
+      ],
+      "session": "",
+      "created": "2026-05-20T07:57:53Z",
+      "updated": "2026-05-20T08:11:21Z",
+      "started_at": "2026-05-20T07:57:53Z",
+      "completed_at": "2026-05-20T08:11:21Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-20T08:06:20Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Extension v0.3.0 kompiliert: statusJson-flag im prober, inline GPU/sys-summary in sidebar, node-head high-level CPU/GPU/disk, rich detail-webview (bars+jobs). Ollama->Civion umgebogen. E2E gegen alle endpoints gruen. Symlink-install -> nur Reload-Window noetig."
+        },
+        {
+          "ts": "2026-05-20T08:06:20Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-20T08:10:34Z",
+          "agent": "claude",
+          "level": "error",
+          "msg": "REGRESSION: einfacher Backslash im Regex /^\\/mnt\\// kollabierte im webview-template-literal zu /^/mnt// -> Syntax-Error -> ganzes webview-script tot -> keine node-anzeige."
+        },
+        {
+          "ts": "2026-05-20T08:10:34Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "FIX: regex durch split('/').filter(Boolean).pop() ersetzt. Verifiziert: webview-script new Function() syntax-ok + render() mit echten GPU/sys-daten im DOM-stub ohne throw, alle summary-zeilen da. Recompiled."
+        },
+        {
+          "ts": "2026-05-20T08:11:21Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Max visuell bestaetigt: Sidebar zeigt alle nodes mit CPU/GPU/disk-zeilen. 'Sieht gut aus.'"
+        },
+        {
+          "ts": "2026-05-20T08:11:21Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        }
+      ]
+    },
+    {
+      "id": "T-010",
+      "title": "nodestat ausrollen auf startup + tracking + ai-desk",
+      "description": "Selben nodestat.py + systemd-unit auf die anderen Linux-tailscale-nodes deployen, damit deren node-head auch CPU/disk(/GPU) zeigt. SSH-Zugang pro box verifizieren. iphone-von-piri = kein endpoint (iOS).",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "monitoring",
+        "tailscale"
+      ],
+      "session": "",
+      "created": "2026-05-20T07:57:53Z",
+      "updated": "2026-05-20T08:11:21Z",
+      "started_at": null,
+      "completed_at": "2026-05-20T08:11:21Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-20T08:06:20Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "nodestat ausgerollt auf ai-desk(admin@) + tracking(tradmin@) + startup(max@), alle bind an tailscale-IP, systemd active, JSON via TS-IP gruen. GPU-box auch auf TS-IP umgebunden. 3 status-services in config.ts registriert."
+        },
+        {
+          "ts": "2026-05-20T08:06:20Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_review"
+        },
+        {
+          "ts": "2026-05-20T08:11:21Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        }
+      ]
+    },
+    {
+      "id": "T-011",
+      "title": "Echte-Situation-Render: Zelle (Tisch+Roboter+Tray) + Teile + Labels von oben",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "isaac-sim",
+        "scene"
+      ],
+      "session": "",
+      "created": "2026-05-20T08:15:01Z",
+      "updated": "2026-05-20T08:15:01Z",
+      "started_at": null,
+      "completed_at": "2026-05-20T08:15:01Z",
       "comments": [],
       "logs": []
     }
