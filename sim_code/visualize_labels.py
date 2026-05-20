@@ -29,7 +29,7 @@ def _font(size):
     return ImageFont.load_default()
 
 
-def annotate(out_dir, idx, font):
+def annotate(out_dir, idx, font, max_occlusion=1.0):
     rgb_path = os.path.join(out_dir, f"rgb_{idx:04d}.png")
     bb_path = os.path.join(out_dir, f"bbox_2d_{idx:04d}.json")
     img = Image.open(rgb_path).convert("RGB")
@@ -40,8 +40,11 @@ def annotate(out_dir, idx, font):
     n = 0
     for row in bb["data"]:
         sid, x0, y0, x1, y1 = row[0], row[1], row[2], row[3], row[4]
+        occ = row[5] if len(row) > 5 else 0.0
         label = id2lab.get(str(sid), {}).get("class", str(sid))
         if label.lower() == "ground":            # skip the full-frame ground box
+            continue
+        if occ >= max_occlusion:                  # drop (near-)fully occluded parts
             continue
         col = _COLORS[sid % len(_COLORS)]
         draw.rectangle([x0, y0, x1, y1], outline=col, width=3)
@@ -59,6 +62,8 @@ def annotate(out_dir, idx, font):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", required=True, help="output dir with rgb_*.png + bbox_2d_*.json")
+    ap.add_argument("--max-occlusion", type=float, default=0.9,
+                    help="skip boxes with occlusionRatio >= this (parts behind the arm)")
     args = ap.parse_args()
 
     font = _font(20)
@@ -69,9 +74,9 @@ def main():
     if not idxs:
         print(f"no rgb_*.png in {args.dir}")
         return
-    print(f"annotating {len(idxs)} sample(s) in {args.dir}:")
+    print(f"annotating {len(idxs)} sample(s) in {args.dir} (max_occlusion={args.max_occlusion}):")
     for i in idxs:
-        annotate(args.dir, i, font)
+        annotate(args.dir, i, font, args.max_occlusion)
 
 
 if __name__ == "__main__":
