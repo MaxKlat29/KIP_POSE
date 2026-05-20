@@ -16,6 +16,7 @@ env/
 # Keep the directory structure (.gitkeep) but never commit the payload.
 data/usd/*
 data/output/*
+data/SDG/
 !data/usd/.gitkeep
 !data/output/.gitkeep
 *.usd
