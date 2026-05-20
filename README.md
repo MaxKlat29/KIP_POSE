@@ -44,7 +44,18 @@ bash scripts/setup_isaacsim_workstation.sh
 /mnt/data/isaacsim-venv/bin/python scripts/verify_isaacsim.py
 ```
 
-**Generate a dataset** (wakes the workstation, runs headless, pulls results):
+**Minimal demo — simulation → top-down image with labels** (proven end-to-end):
+
+```bash
+bash scripts/demo_minimal.sh
+```
+
+This wakes the workstation, runs the minimal SDG (`sim_code/run_minimal.py`:
+real Anker parts on a ground plane, top-down camera), pulls the result back, and
+overlays the labels (`sim_code/visualize_labels.py`) into
+`data/output/minimal/annotated_*.png`.
+
+**Full dataset run** (uses a scene with the Zivid camera, once configured):
 
 ```bash
 bash scripts/wake_and_run.sh           # see the script header for env overrides
