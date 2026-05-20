@@ -9,8 +9,9 @@ them.
 
 Synthetic top-down capture from the real Zivid camera in the assembled cell
 (LARA5 robot arm in frame), parts physics-dropped and scattered across the
-table at fixed real-world scale, with occlusion-filtered 2D labels — 9 frames
-showing the physics variation:
+table at fixed real-world scale, with **oriented 2D bounding boxes** (rotated to
+each part's long axis, PCA over the instance mask) — 9 frames showing the
+physics variation:
 
 ![SDG dataset preview](docs/sdg-dataset-preview.png)
 

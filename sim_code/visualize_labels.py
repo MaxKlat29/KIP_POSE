@@ -18,6 +18,12 @@ _COLORS = [
     (220, 110, 255), (255, 140, 50), (60, 220, 220), (255, 90, 170),
 ]
 
+_CLASS_COLORS = {"anker_kurz": (80, 180, 255), "anker_lang": (255, 80, 80)}
+
+
+def _class_color(cls):
+    return _CLASS_COLORS.get(cls.lower(), (90, 230, 120))
+
 
 def _font(size):
     for p in (
@@ -34,6 +40,24 @@ def annotate(out_dir, idx, font, max_occlusion=1.0):
     bb_path = os.path.join(out_dir, f"bbox_2d_{idx:04d}.json")
     img = Image.open(rgb_path).convert("RGB")
     draw = ImageDraw.Draw(img)
+
+    # Prefer oriented boxes (obb_2d_*.json) — rotated to the part's long axis.
+    obb_path = os.path.join(out_dir, f"obb_2d_{idx:04d}.json")
+    if os.path.exists(obb_path):
+        boxes = json.load(open(obb_path)).get("boxes", [])
+        for b in boxes:
+            col = _class_color(b["class"])
+            pts = [(x, y) for x, y in b["corners"]]
+            draw.polygon(pts, outline=col, width=3)
+            lx, ly = pts[0]
+            tb = draw.textbbox((lx, ly), b["class"], font=font)
+            draw.rectangle([tb[0], tb[1] - 3, tb[2] + 5, tb[3] + 1], fill=col)
+            draw.text((lx + 3, ly - 2), b["class"], fill=(0, 0, 0), font=font)
+        out = os.path.join(out_dir, f"annotated_{idx:04d}.png")
+        img.save(out)
+        print(f"  {os.path.basename(out)}  ({len(boxes)} oriented boxes)")
+        return out
+
     bb = json.load(open(bb_path))
     id2lab = bb["info"]["idToLabels"]
 

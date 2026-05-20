@@ -14,8 +14,64 @@ instance + depth.
         --camera /World/Zivid --spawn tray --num-objects 6
 """
 import argparse
+import json
+import math
 import os
 import time
+
+
+def compute_oriented_boxes(inst, sem, sem_id2label, part_classes, min_pixels=80):
+    """Oriented 2D boxes per part instance via PCA on the segmentation masks.
+
+    Aligns each box to the part's principal (long) axis, so a part lying at an
+    angle gets a rotated box hugging it — not the axis-aligned enclosing box.
+    Uses only the visible instance pixels, so it is occlusion-robust.
+    """
+    import numpy as np
+    boxes = []
+    if inst is None or sem is None:
+        return boxes
+    inst = np.asarray(inst)
+    sem = np.asarray(sem)
+    if inst.ndim > 2:
+        inst = inst[..., 0]
+    if sem.ndim > 2:
+        sem = sem[..., 0]
+    for iid in np.unique(inst):
+        if int(iid) == 0:
+            continue
+        mask = inst == iid
+        n = int(mask.sum())
+        if n < min_pixels:
+            continue
+        sids, counts = np.unique(sem[mask], return_counts=True)
+        sid = int(sids[counts.argmax()])
+        cls = sem_id2label.get(str(sid), {}).get("class", "")
+        if cls.lower() not in part_classes:
+            continue
+        ys, xs = np.nonzero(mask)
+        pts = np.stack([xs, ys], axis=1).astype(np.float64)
+        c = pts.mean(0)
+        d = pts - c
+        cov = (d.T @ d) / max(len(d) - 1, 1)
+        evals, evecs = np.linalg.eigh(cov)
+        major = evecs[:, int(evals.argmax())]
+        minor = evecs[:, int(evals.argmin())]
+        pa, pi = d @ major, d @ minor
+        a0, a1 = float(pa.min()), float(pa.max())
+        i0, i1 = float(pi.min()), float(pi.max())
+        corners = [c + major * a0 + minor * i0, c + major * a1 + minor * i0,
+                   c + major * a1 + minor * i1, c + major * a0 + minor * i1]
+        boxes.append({
+            "class": cls,
+            "corners": [[round(float(p[0]), 1), round(float(p[1]), 1)] for p in corners],
+            "center": [round(float(c[0]), 1), round(float(c[1]), 1)],
+            "angle_deg": round(math.degrees(math.atan2(float(major[1]), float(major[0]))), 1),
+            "length_px": round(a1 - a0, 1),
+            "width_px": round(i1 - i0, 1),
+            "area_px": n,
+        })
+    return boxes
 
 
 def log(m):
@@ -229,6 +285,19 @@ def main():
         rep.orchestrator.step(rt_subframes=16)
         data = {k: a.get_data() for k, a in annots.items()}
         dg.save_output(data, ridx, args.output)
+
+        # oriented 2D boxes (PCA on the instance masks) -> obb_2d_<idx>.json
+        inst = data["instance_seg"]
+        seg = data["semantic_seg"]
+        obbs = compute_oriented_boxes(
+            inst["data"] if isinstance(inst, dict) else None,
+            seg["data"] if isinstance(seg, dict) else None,
+            seg["info"].get("idToLabels", {}) if isinstance(seg, dict) else {},
+            {"anker_kurz", "anker_lang"},
+        )
+        with open(os.path.join(args.output, f"obb_2d_{ridx:04d}.json"), "w") as f:
+            json.dump({"boxes": obbs}, f, indent=2)
+        log(f"  obb: {len(obbs)} oriented boxes")
 
     timeline.stop()
     log(f"done -> {args.output}")
