@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "project": "POSE",
+  "project_path": "/Users/Admin/POSE",
+  "created": "2026-05-17T13:21:19Z",
+  "updated": "2026-05-20T06:20:22Z",
+  "columns": [
+    {
+      "id": "backlog",
+      "label": "Backlog"
+    },
+    {
+      "id": "in_progress",
+      "label": "In Arbeit"
+    },
+    {
+      "id": "in_review",
+      "label": "In Review"
+    },
+    {
+      "id": "done",
+      "label": "Fertig"
+    }
+  ],
+  "next_id": 7,
+  "tickets": [
+    {
+      "id": "T-001",
+      "title": "P2 Clickdummy v0 — Pipeline-Process-Visualizer",
+      "description": "",
+      "column": "in_review",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "story",
+        "phase-2",
+        "clickdummy"
+      ],
+      "session": "",
+      "created": "2026-05-17T13:26:41Z",
+      "updated": "2026-05-17T14:15:02Z",
+      "started_at": "2026-05-17T13:26:50Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-17T13:26:50Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-17T13:26:51Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Start P2 Clickdummy v0 Pipeline-Process-Visualizer. 2-Modi (Synth-Data + Inference), Three.js + Vite + Vanilla JS."
+        },
+        {
+          "ts": "2026-05-17T13:38:49Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Clickdummy v0 läuft auf http://localhost:5173. Two-Panel-Layout, 2 Modi (Inference+SynthData), 6 Stages je Modus, 4 Demo-Scenes, Stage-Tracker + Play/Step/Reset Controls + JSON-Drawer. Three.js + Vite + Vanilla JS. README in clickdummy/."
+        },
+        {
+          "ts": "2026-05-17T13:39:11Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-17T13:47:26Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Pivot: User-Feedback — alter Two-Panel-3D-Walkthrough verworfen. Neu: Architecture-Whiteboard mit Lanes (Setup/Data/Models/Inference/Eval), Klick-bare Stationen, Cross-Lane-Edges, Flow-Animation. Miro-style für Kollegen-Onboarding."
+        },
+        {
+          "ts": "2026-05-17T13:54:42Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Architecture-Whiteboard live: 5 Lanes (Setup/Data/Models/Inference/Eval), 21 Stationen, ~30 Edges (data/model/control), klick-bare Detail-Panels, Pan+Zoom (Drag+Scroll), Animate-Flow für Inference-Spur. Vanilla JS+SVG, kein Framework. http://localhost:5173/"
+        },
+        {
+          "ts": "2026-05-17T14:04:20Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Pivot done: Konzept-Whiteboard (12 Stationen mit eigenen Illustrationen, fachlich statt technisch, links-rechts Flow, 3 Sections Vorbereitung/Hauptfluss/Qualität, branches die zusammenfließen). Detail-Panel zeigt Was-passiert-hier/In/Out/Warum/Hinweis. Animation: Foto reist B1→B6."
+        },
+        {
+          "ts": "2026-05-17T14:15:02Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Light-Mode + 2 vertikale Spalten + QS raus. Linke Spalte = 5 Vorbereitungs-Stationen (Kamera→Katalog→Trainingsbilder→Liegelagen→Pipeline lernt), rechte Spalte = 6 Live-Pipeline-Stationen (Foto→Bauteile finden→Lage messen→Snap→3D→Greifkommando). SCHRITT-Pills zeigen zeitliche Reihenfolge. Cleaner Background, dezente Shadows."
+        }
+      ]
+    },
+    {
+      "id": "T-002",
+      "title": "POSE Pipeline-Konzept v0.1 PDF (7 Seiten, A4)",
+      "description": "",
+      "column": "done",
+      "assignee": "nora-pm",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "docs",
+        "konzept"
+      ],
+      "session": "",
+      "created": "2026-05-17T14:41:20Z",
+      "updated": "2026-05-17T16:49:20Z",
+      "started_at": null,
+      "completed_at": "2026-05-17T14:41:20Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-17T14:41:20Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        },
+        {
+          "ts": "2026-05-17T14:41:20Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "7-Seiten Konzept-PDF unter /Users/Admin/POSE/konzept/POSE-Konzept-v0.1.pdf. Cover, Setup+Architektur, Phase A (Vorbereitung), Phase B (Inferenz mit Deep-Dives), Mapping+Eval+Roadmap+Risiken. Inkl. SVG-Architekturdiagramm, Stable-Lagen-Illu, 2D→3D-Mapping-Diagramm. Erzeugt aus HTML+CSS via Chrome --print-to-pdf."
+        },
+        {
+          "ts": "2026-05-17T15:34:02Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Polish-Pass abgeschlossen: 7 Seiten alle gefüllt (Page 4 leer-Bug gefixed via explicit .newpage class). Mapping-SVG neu gezeichnet — Vektor-Symbole als italic+mini-arrow statt combining-marks (keine ☐-Boxen mehr). Stable-Lagen-Illu auf hell mit Wahrscheinlichkeitsbalken. TL;DR + Deep-Dive-Boxes haben klare Header-Trennlinien. Pfad: /Users/Admin/POSE/konzept/POSE-Konzept-v0.1.pdf"
+        },
+        {
+          "ts": "2026-05-17T16:49:20Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Variant-Klassifikations-Refactor + 3D-Viewer-Output abgeschlossen. 7 Seiten. Pipeline jetzt: Detection (YOLOv8) → Variant-Klassifikation (Bottom-Face) → Yaw-Regression → 3D-Konstruktion → Viewer. Stable-Pose-Snap obsolet (Snap im Klassifikator built-in). Output: 3D-Szene mit Pose im Tisch-KS + Roboter-KS."
+        }
+      ]
+    },
+    {
+      "id": "T-003",
+      "title": "sim-Pipeline nach sim_code clonen + KIP_POSE public-Repo + Clickdummy raus",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "setup",
+        "github"
+      ],
+      "session": "",
+      "created": "2026-05-20T06:15:39Z",
+      "updated": "2026-05-20T06:20:22Z",
+      "started_at": "2026-05-20T06:15:39Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-20T06:20:22Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Scope: alles-rein public KIP_POSE, pip-venv Isaac Sim. Clickdummy raus."
+        }
+      ]
+    },
+    {
+      "id": "T-004",
+      "title": "Isaac Sim 5.1 headless install auf GPU-Workstation (pip-venv, /mnt/data)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "isaac-sim",
+        "workstation"
+      ],
+      "session": "",
+      "created": "2026-05-20T06:20:22Z",
+      "updated": "2026-05-20T06:20:22Z",
+      "started_at": "2026-05-20T06:20:22Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-005",
+      "title": "Remote-Run-Harness: WoL -> Tailscale -> headless SDG-Run -> rsync results",
+      "description": "",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "isaac-sim",
+        "harness"
+      ],
+      "session": "",
+      "created": "2026-05-20T06:20:22Z",
+      "updated": "2026-05-20T06:20:22Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-006",
+      "title": "Roadmap nachziehen: Isaac Sim ersetzt BlenderProc4BOP (Depth jetzt drin)",
+      "description": "",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "roadmap"
+      ],
+      "session": "",
+      "created": "2026-05-20T06:20:22Z",
+      "updated": "2026-05-20T06:20:22Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    }
+  ]
+}

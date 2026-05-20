@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>POSE — Pipeline-Konzept v0.1</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 18mm 16mm;
+    @top-left {
+      content: "POSE · Pipeline-Konzept v0.1";
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 8pt;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+    @top-right {
+      content: "2026-05-17";
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 8pt;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
+    @bottom-right {
+      content: counter(page) " / " counter(pages);
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 8pt;
+      color: #94a3b8;
+    }
+  }
+  @page :first {
+    @top-left { content: ""; }
+    @top-right { content: ""; }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.42;
+    color: #161e2e;
+    background: white;
+  }
+
+  h1, h2, h3, h4 { color: #0b1426; font-weight: 700; line-height: 1.2; }
+  h3, h4 { page-break-after: avoid; }
+  h1 { font-size: 28pt; letter-spacing: -0.01em; margin: 0 0 4pt; }
+  h2 {
+    font-size: 14pt;
+    margin: 14pt 0 5pt;
+    padding-bottom: 3pt;
+    border-bottom: 1.4pt solid #1d4ed8;
+    color: #1d4ed8;
+  }
+  h2.newpage { page-break-before: always; margin-top: 0; }
+  h3 { font-size: 11pt; margin: 8pt 0 3pt; color: #1f2937; }
+  h4 { font-size: 9pt; margin: 6pt 0 2pt; color: #475569; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  p { margin: 0 0 5pt; }
+  ul, ol { padding-left: 16pt; margin: 3pt 0 6pt; }
+  li { margin-bottom: 1.5pt; }
+  strong { color: #0b1426; }
+  code, .mono { font-family: "SF Mono", Menlo, "Roboto Mono", monospace; font-size: 8.5pt; }
+  code { background: #f1f4f9; padding: 1px 4px; border-radius: 3px; color: #1f2937; }
+
+  /* Cover */
+  .cover h1 { font-size: 32pt; margin: 12mm 0 4pt; }
+  .cover .sub { font-size: 12pt; color: #475569; margin-bottom: 14pt; line-height: 1.4; }
+  .meta-row {
+    display: flex; gap: 16pt; flex-wrap: wrap;
+    font-size: 8.5pt;
+    color: #64748b;
+    margin-bottom: 14pt;
+    padding: 7pt 0;
+    border-top: 0.5pt solid #cbd5e1;
+    border-bottom: 0.5pt solid #cbd5e1;
+  }
+  .meta-row b { color: #1f2937; font-weight: 600; }
+
+  .hero {
+    border: 1pt solid #d8e0eb;
+    border-radius: 8pt;
+    padding: 13pt 16pt;
+    background: linear-gradient(180deg, #f7faff 0%, #ffffff 100%);
+    margin-bottom: 12pt;
+  }
+  .hero h4 { margin: 10pt 0 4pt; color: #1d4ed8; }
+  .hero h4:first-child { margin-top: 0; }
+  .hero p:last-child { margin-bottom: 0; }
+
+  /* TL;DR / callouts — uniform style, clear heading separator */
+  .tldr, .callout {
+    border-radius: 6pt;
+    padding: 10pt 14pt;
+    margin: 8pt 0;
+  }
+  .tldr {
+    background: #f0f7ff;
+    border-left: 3pt solid #1d4ed8;
+  }
+  .tldr h4 {
+    margin: 0 0 6pt;
+    padding-bottom: 5pt;
+    border-bottom: 0.5pt solid #c7dcff;
+    color: #1d4ed8;
+  }
+  .tldr p:last-child { margin-bottom: 0; }
+  .callout {
+    background: #fff8ec;
+    border-left: 3pt solid #d97706;
+    font-size: 9.5pt;
+  }
+  .callout.is-info { background: #f0f7ff; border-left-color: #1d4ed8; }
+  .callout.is-warn { background: #fef2f2; border-left-color: #dc2626; }
+
+  /* Two-column */
+  .cols { display: flex; gap: 12pt; margin: 6pt 0; }
+  .cols .col { flex: 1; min-width: 0; }
+
+  /* Step cards */
+  .steps { display: flex; gap: 5pt; margin: 8pt 0; }
+  .step {
+    flex: 1;
+    border: 1pt solid #e1e7f0;
+    border-radius: 5pt;
+    padding: 7pt 9pt;
+    background: #ffffff;
+    min-width: 0;
+    page-break-inside: avoid;
+  }
+  .step .num { font-family: "SF Mono", monospace; font-size: 8pt; color: #1d4ed8; font-weight: 700; letter-spacing: 0.08em; }
+  .step .ttl { font-weight: 700; font-size: 9.5pt; color: #0b1426; margin-top: 1pt; line-height: 1.25; }
+  .step .desc { font-size: 8pt; color: #475569; line-height: 1.35; margin-top: 2pt; }
+
+  /* Tables */
+  table.tech, table.steps-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin: 6pt 0;
+    page-break-inside: avoid;
+  }
+  table.tech th, table.tech td,
+  table.steps-table th, table.steps-table td {
+    text-align: left;
+    padding: 4pt 7pt;
+    border-bottom: 0.5pt solid #e1e7f0;
+    vertical-align: top;
+  }
+  table.tech th, table.steps-table th {
+    background: #f1f4f9;
+    font-weight: 700;
+    color: #1f2937;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 8pt;
+  }
+  table.tech td.k { color: #475569; font-weight: 600; width: 28%; }
+
+  table.steps-table td:first-child { font-weight: 700; color: #0b1426; width: 22%; }
+  table.steps-table td:nth-child(3) { color: #475569; font-family: "SF Mono", monospace; font-size: 8.5pt; width: 26%; }
+  table.steps-table td:last-child { color: #d97706; font-family: "SF Mono", monospace; font-size: 8.5pt; width: 14%; text-align: right; white-space: nowrap; }
+
+  /* Diagram wrappers */
+  .diagram { margin: 6pt 0; text-align: center; page-break-inside: avoid; }
+  .diagram .cap { font-size: 8pt; color: #64748b; margin-top: 3pt; font-style: italic; }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+
+  /* Pill */
+  .pill {
+    display: inline-block;
+    font-family: "SF Mono", monospace;
+    font-size: 7.5pt;
+    font-weight: 700;
+    padding: 1pt 6pt;
+    border-radius: 999px;
+    background: #f1f4f9;
+    color: #475569;
+    border: 0.5pt solid #cbd5e1;
+    margin-left: 4pt;
+    vertical-align: middle;
+  }
+  .pill-data  { background: #eef4ff; color: #1d4ed8; border-color: #c7dcff; }
+  .pill-train { background: #f3edff; color: #7c3aed; border-color: #d9c8ff; }
+
+  pre.schema {
+    background: #f7f9fc;
+    border: 1pt solid #e1e7f0;
+    border-radius: 5pt;
+    padding: 7pt 9pt;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 8pt;
+    line-height: 1.4;
+    color: #1f2937;
+    margin: 5pt 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Highlights */
+  .hl { background: linear-gradient(180deg, transparent 55%, #fff2c5 55%); padding: 0 1pt; }
+
+  /* Mini-Illu (Stable-Lagen) */
+  .illu-frame {
+    border: 1pt solid #e1e7f0;
+    border-radius: 7pt;
+    overflow: hidden;
+    background: #ffffff;
+    height: 130pt;
+    margin: 6pt 0 4pt;
+    page-break-inside: avoid;
+  }
+  .illu-frame svg { width: 100%; height: 100%; }
+
+  .deep-dive {
+    background: #f7f9fc;
+    border: 1pt solid #e1e7f0;
+    border-left: 3pt solid #1d4ed8;
+    border-radius: 6pt;
+    padding: 11pt 14pt;
+    margin: 10pt 0;
+    page-break-inside: avoid;
+  }
+  .deep-dive h4 {
+    margin: 0 0 7pt;
+    padding-bottom: 5pt;
+    border-bottom: 0.5pt solid #d8e0eb;
+    color: #1d4ed8;
+    font-size: 9.5pt;
+  }
+  .deep-dive p:last-child { margin-bottom: 0; }
+  .deep-dive ol { margin-top: 4pt; }
+
+  .tldr, .callout, .step, table.tech, .diagram, pre.schema { page-break-inside: avoid; }
+  /* steps-table is too tall for one page — must split between rows */
+  table.steps-table { page-break-inside: auto !important; }
+  table.steps-table tbody, table.steps-table thead { page-break-inside: auto !important; }
+  table.steps-table tr { page-break-inside: avoid; page-break-after: auto; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- Seite 1 — Cover + Exec Summary + Phasen + Kernentscheidung         -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<div class="cover">
+  <h1>POSE</h1>
+  <div class="sub"><strong>6D-Pose-Estimation für Roboter-Pick-and-Place</strong> — wie der Roboter aus einem Top-Down-Foto erkennt, welche Bauteile wo und wie liegen.</div>
+
+  <div class="meta-row">
+    <span><b>Version</b> · 0.1 (Konzept)</span>
+    <span><b>Datum</b> · 2026-05-17</span>
+    <span><b>Setup</b> · Roboterarm + Top-Down-Kamera + CAD-Bibliothek</span>
+    <span><b>Compute</b> · RTX 3090 (lokal)</span>
+  </div>
+
+  <div class="hero">
+    <h4>Was wir bauen</h4>
+    <p>Eine ML-Pipeline, die aus einem <strong>RGB-Foto von oben</strong> auf eine Tischplatte liest, welche <strong>Bauteile dort liegen</strong> (Klassifikation + Lokalisierung) und in welcher <strong>räumlichen Orientierung</strong> (6D-Pose: Position + Rotation). Die Ausgabe ist eine <strong>rekonstruierte 3D-Szene</strong> — alle Bauteile mit ihrer Pose im Tisch-Koordinatensystem (und optional ins Roboter-Koordinatensystem transformiert), visualisierbar in einem 3D-Viewer.</p>
+    <h4>Warum 6D — nicht 2D?</h4>
+    <p>Klassische 2D-Detektion findet zwar <em>wo</em> im Bild ein Teil ist, sagt aber nichts über seine Orientierung. Eine flach liegende Mutter sieht in 2D anders aus als eine hochkant stehende — der nachgelagerte Greifplaner braucht die exakte 3D-Lage, sonst greift der Roboter ins Leere oder verkantet das Teil.</p>
+    <h4>Scoping — fester Bauteilkatalog</h4>
+    <p>Wir arbeiten <strong>ausschließlich mit Bauteilen mit bekanntem CAD-Modell</strong>. <em>Keine</em> "unseen objects". Das erlaubt uns, <strong>eigene Modelle gezielt auf den Bauteilkatalog zu trainieren</strong> statt auf generalisierende Forschungsmodelle zu setzen — deutlich präziser für das feste Set.</p>
+  </div>
+
+  <div class="tldr">
+    <h4>TL;DR — Wie wir das lösen</h4>
+    <p>POSE nutzt die Planar-Tatsache aggressiv aus: pro Bauteil <span class="hl">analysieren wir per Drop-Simulation, welche Mesh-Face den Tisch berührt</span> (z.&nbsp;B. Schraube → seitlich oder auf einer Spitze; Würfel → 6 Seiten; L-Bracket → 4 Varianten). Daraus ergeben sich X diskrete <strong>Liegevarianten</strong> pro Bauteil. Die Pipeline besteht aus drei Modellen, alle trainiert auf synthetischen Daten: <span class="hl">Detection (YOLOv8)</span> findet wo + was, <span class="hl">Variant-Klassifikator</span> entscheidet welche Liegevariante, <span class="hl">Yaw-Regressor</span> bestimmt nur noch die 2D-Drehung. 3D-Pose ist damit nicht regrediert sondern <em>konstruiert</em> — präziser, robuster, kein 6D-Refinement nötig.</p>
+  </div>
+
+  <h3>Die Pipeline in drei Phasen</h3>
+
+  <div class="steps">
+    <div class="step">
+      <div class="num">PHASE A</div>
+      <div class="ttl">Vorbereitung &amp; Training</div>
+      <div class="desc">Kamera einmessen, CAD-Bibliothek aufbauen, synthetische Trainingsbilder simulieren (30–50k Frames), stabile Liegelagen pro Bauteil vorberechnen, Detection- und Pose-Modelle auf den eigenen Synth-Daten trainieren.</div>
+    </div>
+    <div class="step">
+      <div class="num">PHASE B</div>
+      <div class="ttl">Inferenz (pro Foto)</div>
+      <div class="desc">Bauteile detektieren (BBox+Klasse) → Liegevariante klassifizieren (welche Face liegt unten?) → Yaw-Rotation regredieren → 3D-Szene im Tisch-KS konstruieren → in 3D-Viewer anzeigen.</div>
+    </div>
+    <div class="step">
+      <div class="num">PHASE C</div>
+      <div class="ttl">Eval</div>
+      <div class="desc">BOP-Standard-Metriken (AR, ADD), Worst-Examples-Viewer, Sim-vs-Real-Vergleich. Acceptance: AR ≥ 0.70 auf eigenem Test-Set.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- Seite 2 — Setup + Gesamtarchitektur                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<h2 class="newpage">1. Setup &amp; Anforderungen</h2>
+
+<div class="cols">
+  <div class="col">
+    <h4>Was wir mitbringen</h4>
+    <ul>
+      <li><strong>Roboterarm</strong> über einer ebenen Tischplatte.</li>
+      <li><strong>Top-Down-Kamera</strong> (RGB), in fester Position über dem Tisch.</li>
+      <li><strong>CAD-Bibliothek</strong> aller Bauteile (STL/STEP), die der Roboter greifen können soll.</li>
+      <li><strong>Bestehende Physics-Sim</strong> (Blender + Python), die wir auf BlenderProc-Standard umstellen.</li>
+      <li><strong>GPU-Workstation</strong>: RTX 3090 (24 GB), CUDA-Stack, lokale Inferenz.</li>
+    </ul>
+  </div>
+  <div class="col">
+    <h4>Was die Pipeline liefert</h4>
+    <ul>
+      <li>Pro Foto eine <strong>JSON-Liste</strong> erkannter Bauteile.</li>
+      <li>Pro Bauteil: <code>object_id</code>, <code>pose_4x4</code> (Welt-Koordinaten), <code>confidence</code>, <code>stable_lage_idx</code>.</li>
+      <li>Inferenz &lt; 1 s pro Frame, AR ≥ 0.70 auf Test-Set.</li>
+      <li>Erweiterbar: neue Bauteile via CAD-Modell + neuer Trainings-Run (~30–90&nbsp;min pro Bauteil-Pose-Modell + YOLO-Re-Training auf erweitertem Set).</li>
+    </ul>
+  </div>
+</div>
+
+<h2 class="no-break">2. Gesamtarchitektur</h2>
+
+<p>Die Architektur trennt klar zwischen <strong>einmaliger Vorbereitung</strong> (Phase A, links) und <strong>wiederkehrender Inferenz</strong> (Phase B, rechts). Phase A produziert Artefakte (Modelle, Templates, Liegelagen-Tabellen, Kalibrierung), die Phase B verwendet.</p>
+
+<div class="diagram">
+  <svg viewBox="0 0 780 380" width="780" height="380" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arr-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+      <marker id="arr-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+      <marker id="arr-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker>
+      <marker id="arr-e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+    </defs>
+
+    <rect x="10" y="10" width="380" height="360" rx="10" fill="#f7faff" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+    <text x="200" y="32" text-anchor="middle" font-size="10" font-weight="700" fill="#475569" letter-spacing="1">PHASE A · EINMALIGE VORBEREITUNG</text>
+
+    <rect x="410" y="10" width="360" height="360" rx="10" fill="#fff8ec" stroke="#cbd5e1" stroke-dasharray="3 3"/>
+    <text x="590" y="32" text-anchor="middle" font-size="10" font-weight="700" fill="#475569" letter-spacing="1">PHASE B · LIVE-INFERENZ PRO FOTO</text>
+
+    <g font-size="9" font-family="Helvetica" fill="#1f2937">
+      <rect x="30" y="55" width="155" height="40" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.4"/>
+      <text x="107" y="71" text-anchor="middle" font-weight="700">📦 CAD-Bibliothek</text>
+      <text x="107" y="84" text-anchor="middle" font-size="8" fill="#64748b">STL/STEP der Bauteile</text>
+
+      <rect x="215" y="55" width="155" height="40" rx="6" fill="#ffffff" stroke="#64748b" stroke-width="1.4"/>
+      <text x="292" y="71" text-anchor="middle" font-weight="700">📐 Kamera-Kalibrierung</text>
+      <text x="292" y="84" text-anchor="middle" font-size="8" fill="#64748b">Intrinsics + Tisch-Ebene</text>
+
+      <rect x="30" y="115" width="155" height="40" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.4"/>
+      <text x="107" y="131" text-anchor="middle" font-weight="700">🎲 Synth-Datengenerierung</text>
+      <text x="107" y="144" text-anchor="middle" font-size="8" fill="#64748b">BlenderProc + PyBullet</text>
+
+      <rect x="215" y="115" width="155" height="40" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.4"/>
+      <text x="292" y="131" text-anchor="middle" font-weight="700">📊 Liegevariant-Analyse</text>
+      <text x="292" y="144" text-anchor="middle" font-size="8" fill="#64748b">Bottom-Face-Cluster pro CAD</text>
+
+      <rect x="30" y="175" width="155" height="40" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.4"/>
+      <text x="107" y="191" text-anchor="middle" font-weight="700">📚 Synth-Trainingsset</text>
+      <text x="107" y="204" text-anchor="middle" font-size="8" fill="#64748b">~30–50k labeled Frames</text>
+
+      <rect x="215" y="175" width="155" height="40" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.4"/>
+      <text x="292" y="191" text-anchor="middle" font-weight="700">📁 Sim Test-Set</text>
+      <text x="292" y="204" text-anchor="middle" font-size="8" fill="#64748b">Held-out + Ground-Truth</text>
+
+      <rect x="30" y="240" width="340" height="55" rx="6" fill="#ffffff" stroke="#7c3aed" stroke-width="1.4"/>
+      <text x="200" y="258" text-anchor="middle" font-weight="700">🧠 Drei Modelle auf Synth-Daten trainiert</text>
+      <text x="200" y="275" text-anchor="middle" font-size="8" fill="#64748b">YOLOv8 (Detection)  ·  Variant-Classifier (welche Liegevariante?)  ·  Yaw-Regressor (1D)</text>
+      <text x="200" y="288" text-anchor="middle" font-size="8" fill="#64748b">→ Festes Bauteil-Set · Training: ~6–10 h gesamt auf RTX 3090</text>
+
+      <rect x="30" y="315" width="340" height="40" rx="6" fill="#ffffff" stroke="#dc2626" stroke-width="1.4"/>
+      <text x="200" y="332" text-anchor="middle" font-weight="700">📊 Eval-Harness (BOP-Toolkit)</text>
+      <text x="200" y="345" text-anchor="middle" font-size="8" fill="#64748b">AR · ADD · Worst-Examples · Sim-vs-Real</text>
+    </g>
+
+    <g font-size="9" font-family="Helvetica" fill="#1f2937">
+      <rect x="435" y="55" width="310" height="34" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="1.4"/>
+      <text x="590" y="76" text-anchor="middle" font-weight="700">📷 Top-Down-Foto (RGB)</text>
+
+      <rect x="435" y="105" width="310" height="34" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="1.4"/>
+      <text x="590" y="126" text-anchor="middle" font-weight="700">🔍 Detection: BBox + Klasse (YOLOv8)</text>
+
+      <rect x="435" y="155" width="310" height="34" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+      <text x="590" y="176" text-anchor="middle" font-weight="700">📌 Liegevariant-Klassifikation (welche Face?)</text>
+
+      <rect x="435" y="205" width="310" height="34" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="1.4"/>
+      <text x="590" y="226" text-anchor="middle" font-weight="700">🎯 Yaw-Regression (Drehung um Z)</text>
+
+      <rect x="435" y="255" width="310" height="34" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="1.4"/>
+      <text x="590" y="276" text-anchor="middle" font-weight="700">🏗 3D-Szene konstruieren (Variant→Pose→Tisch)</text>
+
+      <rect x="435" y="305" width="310" height="34" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+      <text x="590" y="326" text-anchor="middle" font-weight="700">🪟 3D-Viewer · Tisch- + Roboter-KS</text>
+    </g>
+
+    <g stroke="#d97706" stroke-width="1.4" fill="none">
+      <line x1="590" y1="89" x2="590" y2="105" marker-end="url(#arr-f)"/>
+      <line x1="590" y1="139" x2="590" y2="155" marker-end="url(#arr-f)"/>
+      <line x1="590" y1="189" x2="590" y2="205" marker-end="url(#arr-f)"/>
+      <line x1="590" y1="239" x2="590" y2="255" marker-end="url(#arr-f)"/>
+      <line x1="590" y1="289" x2="590" y2="305" marker-end="url(#arr-f)"/>
+    </g>
+
+    <g stroke="#2563eb" stroke-width="1" fill="none">
+      <line x1="107" y1="95" x2="107" y2="115" marker-end="url(#arr-d)"/>
+      <line x1="107" y1="155" x2="107" y2="240" marker-end="url(#arr-d)"/>
+      <line x1="185" y1="135" x2="215" y2="135" marker-end="url(#arr-d)"/>
+      <line x1="292" y1="155" x2="292" y2="175" marker-end="url(#arr-d)"/>
+    </g>
+
+    <!-- Cluster-edges: Models → Detection/Variant/Yaw (one violet bundle) -->
+    <g stroke="#7c3aed" stroke-width="1.4" fill="none" stroke-dasharray="4 3">
+      <path d="M 370 265 C 405 265, 405 122, 435 122" marker-end="url(#arr-t)"/>
+      <path d="M 370 265 C 405 265, 405 172, 435 172" marker-end="url(#arr-t)"/>
+      <path d="M 370 265 C 405 265, 405 222, 435 222" marker-end="url(#arr-t)"/>
+    </g>
+    <!-- Blue: Liegevariant-Analyse → Variant-Classifier, Camera-Cal → 3D-Konstruktion -->
+    <g stroke="#2563eb" stroke-width="1.4" fill="none" stroke-dasharray="4 3">
+      <path d="M 370 135 C 405 135, 405 172, 435 172" marker-end="url(#arr-d)"/>
+      <path d="M 370 75 C 405 75, 405 272, 435 272" marker-end="url(#arr-d)"/>
+    </g>
+
+    <!-- Eval feedback: 3D-Viewer → BOP-Eval ← Sim-Test-Set -->
+    <g stroke="#dc2626" stroke-width="1.2" fill="none" stroke-dasharray="3 2">
+      <path d="M 435 322 C 410 325, 405 335, 200 335" marker-end="url(#arr-e)"/>
+      <line x1="292" y1="215" x2="292" y2="315" marker-end="url(#arr-e)"/>
+    </g>
+
+    <g font-size="8" font-family="Helvetica">
+      <rect x="20" y="362" width="10" height="3" fill="#2563eb"/>
+      <text x="35" y="366" fill="#475569">Daten</text>
+      <rect x="70" y="362" width="10" height="3" fill="#7c3aed"/>
+      <text x="85" y="366" fill="#475569">Modell-Wissen</text>
+      <rect x="155" y="362" width="10" height="3" fill="#d97706"/>
+      <text x="170" y="366" fill="#475569">Live-Datenfluss</text>
+      <rect x="245" y="362" width="10" height="3" fill="#dc2626"/>
+      <text x="260" y="366" fill="#475569">Eval-Schleife</text>
+    </g>
+  </svg>
+  <div class="cap">Abb. 1 — Gesamtarchitektur. Links: Vorbereitung. Rechts: sieben sequenzielle Inferenz-Stufen. Violette gestrichelte Pfeile zeigen, wie die vortrainierten Modelle in die Inferenz-Stufen einfließen.</div>
+</div>
+
+<h3>Drei Säulen, die das Konzept tragen</h3>
+<ol>
+  <li><strong>Synth-Daten statt Real-Labels</strong> — 30–50k synthetische Top-Down-Bilder mit perfekter Ground-Truth aus den CAD-Modellen. Manuelles Labeln entfällt.</li>
+  <li><strong>Pose nicht regredieren, sondern konstruieren</strong> — pro Bauteil bestimmen wir per Drop-Simulation, welche Mesh-Faces als Bottom-Face vorkommen können. Die Pipeline klassifiziert dann nur noch <em>welche</em> Variante vorliegt + den Yaw-Winkel — die 3D-Pose folgt deterministisch.</li>
+  <li><strong>Drei einfache Modelle statt ein komplexes</strong> — Detection (YOLOv8) + Variant-Klassifikator + Yaw-Regressor. Jedes Modell hat eine klar definierte, kleine Aufgabe, alle trainieren wir selbst auf unseren Synth-Daten.</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- Seite 3 — Phase A: Vorbereitung im Detail                          -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<h2 class="newpage">3. Phase A — Vorbereitung (einmalig pro Bauteil-Set)</h2>
+
+<h3>3.1 Synth-Datengenerierung <span class="pill pill-data">BlenderProc + PyBullet</span></h3>
+<p>BlenderProc (Open-Source, DLR) ist der De-facto-Standard für BOP-konforme synthetische Trainingsdaten. Aus den CAD-Modellen werden zigtausend Top-Down-Frames gerendert — jedes mit randomisierten Materialien, Lichtern und HDRI-Hintergründen. Die Position der Bauteile entsteht durch eine PyBullet-Physik-Simulation: virtuelle Teile fallen auf den simulierten Tisch und kommen in stabilen Lagen zur Ruhe.</p>
+<table class="tech">
+  <tr><td class="k">Input</td><td>CAD-Bibliothek (STL/OBJ), Tisch-Geometrie, Kamera-Modell</td></tr>
+  <tr><td class="k">Wie</td><td>5–15 zufällig gewählte Teile pro Frame → PyBullet-Drop → Pose-Settle → PBR-Rendering aus Top-Down-View → Domain-Randomization (Materialien, Lichter, HDRI, leichter Kamera-Jitter)</td></tr>
+  <tr><td class="k">Output</td><td>BOP-Format: <code>train_pbr/&lt;scene&gt;/&lt;frame&gt;.png</code> + <code>scene_gt.json</code> (perfekte Pose pro Teil) + Masken + Depth optional</td></tr>
+  <tr><td class="k">Volumen</td><td>30–50k Frames pro Run (BOP-Standard), ~8–12 h auf RTX 3090</td></tr>
+</table>
+
+<h3>3.2 Liegevariant-Analyse <span class="pill pill-data">Drop-Sim + Bottom-Face-Cluster</span></h3>
+<p>Pro Bauteil <strong>N=200 Drops</strong> in PyBullet. Für jeden Drop bestimmen wir, <strong>welche Mesh-Face den Tisch berührt</strong> (Bottom-Face). Cluster nach Bottom-Face = kleine Liste an <strong>Liegevarianten</strong> pro Bauteil. Die Drehung um die Hochachse (Yaw) wird hier <em>ausgeklammert</em> — sie ist innerhalb einer Variante kontinuierlich variabel und wird in der Inferenz separat geschätzt. Beispiele: <strong>Schraube</strong> = 3 Varianten (seitlich rotationssymmetrisch, auf Kopf, auf Spitze); <strong>Würfel</strong> = 6 (eine pro Seite); <strong>asymmetrisches L-Bracket mit Bohrung</strong> = 4. Drop-Häufigkeiten gewichten die Trainings-Sampling-Verteilung.</p>
+
+<div class="illu-frame" style="height: 145pt;">
+  <svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica">
+    <rect width="400" height="200" fill="#ffffff"/>
+    <text x="200" y="22" text-anchor="middle" fill="#1d4ed8" font-size="10.5" font-weight="700" letter-spacing="1">BEISPIEL · M6 SCHRAUBE · 3 LIEGEVARIANTEN (DEFINIERT ÜBER BOTTOM-FACE)</text>
+
+    <!-- Variant 1: seitlich (Schaft-Zylinder unten) -->
+    <g transform="translate(80 105)">
+      <rect x="-50" y="-50" width="100" height="100" rx="7" fill="#f7faff" stroke="#cbd5e1"/>
+      <!-- screw lying on side -->
+      <rect x="-30" y="-5" width="48" height="10" rx="3" fill="#9aa4b4" stroke="#5a6070" stroke-width="0.7"/>
+      <rect x="-36" y="-8" width="10" height="16" fill="#7a8090"/>
+      <!-- ground reference line -->
+      <line x1="-44" y1="9" x2="44" y2="9" stroke="#16a34a" stroke-width="1.5"/>
+      <!-- arrow indicating bottom face -->
+      <text x="-50" y="58" font-size="7.5" fill="#16a34a" font-weight="700">↑ Bottom-Face: Schaft-Zylinder</text>
+      <text x="0" y="-58" text-anchor="middle" font-size="10" fill="#1f2937" font-weight="700">V1 · seitlich</text>
+      <!-- probability bar -->
+      <rect x="-44" y="68" width="88" height="6" rx="3" fill="#e1e7f0"/>
+      <rect x="-44" y="68" width="79" height="6" rx="3" fill="#1d4ed8"/>
+      <text x="44" y="80" text-anchor="end" font-size="8" fill="#1d4ed8" font-weight="700">90 %</text>
+    </g>
+
+    <!-- Variant 2: auf Kopf — Schraubenkopf unten am Boden, Schaft zeigt nach oben -->
+    <g transform="translate(200 105)">
+      <rect x="-50" y="-50" width="100" height="100" rx="7" fill="#f7faff" stroke="#cbd5e1"/>
+      <!-- Schaft (vertikal, oben) -->
+      <rect x="-3" y="-22" width="6" height="46" rx="1" fill="#9aa4b4" stroke="#5a6070" stroke-width="0.7"/>
+      <!-- Gewinde-Andeutung am Schaft -->
+      <line x1="-3" y1="-12" x2="3" y2="-12" stroke="#5a6070" stroke-width="0.4"/>
+      <line x1="-3" y1="-2"  x2="3" y2="-2"  stroke="#5a6070" stroke-width="0.4"/>
+      <line x1="-3" y1="8"   x2="3" y2="8"   stroke="#5a6070" stroke-width="0.4"/>
+      <line x1="-3" y1="18"  x2="3" y2="18"  stroke="#5a6070" stroke-width="0.4"/>
+      <!-- Kopf (dick, unten, am Boden) -->
+      <rect x="-9" y="24" width="18" height="10" rx="1.2" fill="#7a8090" stroke="#5a6070" stroke-width="0.7"/>
+      <line x1="-44" y1="35" x2="44" y2="35" stroke="#16a34a" stroke-width="1.5"/>
+      <text x="-50" y="58" font-size="7.5" fill="#16a34a" font-weight="700">↑ Bottom-Face: Kopf-Endface</text>
+      <text x="0" y="-58" text-anchor="middle" font-size="10" fill="#1f2937" font-weight="700">V2 · auf Kopf</text>
+      <rect x="-44" y="68" width="88" height="6" rx="3" fill="#e1e7f0"/>
+      <rect x="-44" y="68" width="6" height="6" rx="3" fill="#1d4ed8"/>
+      <text x="44" y="80" text-anchor="end" font-size="8" fill="#1d4ed8" font-weight="700">7 %</text>
+    </g>
+
+    <!-- Variant 3: auf Spitze — Kopf oben, Gewinde-Spitze unten am Boden -->
+    <g transform="translate(320 105)">
+      <rect x="-50" y="-50" width="100" height="100" rx="7" fill="#f7faff" stroke="#cbd5e1"/>
+      <!-- Kopf (dick, oben) -->
+      <rect x="-9" y="-24" width="18" height="10" rx="1.2" fill="#7a8090" stroke="#5a6070" stroke-width="0.7"/>
+      <!-- Schaft (vertikal, vom Kopf bis Boden) -->
+      <rect x="-3" y="-14" width="6" height="48" rx="1" fill="#9aa4b4" stroke="#5a6070" stroke-width="0.7"/>
+      <!-- Gewinde-Andeutung -->
+      <line x1="-3" y1="-4" x2="3" y2="-4" stroke="#5a6070" stroke-width="0.4"/>
+      <line x1="-3" y1="6"  x2="3" y2="6"  stroke="#5a6070" stroke-width="0.4"/>
+      <line x1="-3" y1="16" x2="3" y2="16" stroke="#5a6070" stroke-width="0.4"/>
+      <line x1="-3" y1="26" x2="3" y2="26" stroke="#5a6070" stroke-width="0.4"/>
+      <line x1="-44" y1="35" x2="44" y2="35" stroke="#16a34a" stroke-width="1.5"/>
+      <text x="-50" y="58" font-size="7.5" fill="#16a34a" font-weight="700">↑ Bottom-Face: Gewinde-Endface</text>
+      <text x="0" y="-58" text-anchor="middle" font-size="10" fill="#1f2937" font-weight="700">V3 · auf Spitze</text>
+      <rect x="-44" y="68" width="88" height="6" rx="3" fill="#e1e7f0"/>
+      <rect x="-44" y="68" width="3" height="6" rx="3" fill="#1d4ed8"/>
+      <text x="44" y="80" text-anchor="end" font-size="8" fill="#1d4ed8" font-weight="700">3 %</text>
+    </g>
+  </svg>
+</div>
+<p style="font-size:8.5pt; color:#64748b; text-align:center; margin-top:0;"><em>Abb. 2 — Liegevarianten als Funktion der Bottom-Face: Schraube hat 3 (seitlich, auf Kopf, auf Gewinde-Spitze). Yaw-Rotation (um Hochachse) wird nicht in der Variante kodiert, sondern separat regrediert.</em></p>
+
+<h3>3.3 Trainings-Renderings pro Variante <span class="pill pill-data">~Variant × Yaw-Sampling</span></h3>
+<p>Pro Bauteil und pro Liegevariante rendern wir das CAD-Modell für 36 Yaw-Winkel (10°-Schritte) — bei einer Schraube also 3 Varianten × 36 = ~100 Templates, bei einem Würfel 6 × 36 = 216. Diese Renderings bilden die <strong>Trainings-Targets</strong> für den Variant-Klassifikator (Label = Variant-ID) und den Yaw-Regressor (Label = Yaw-Winkel). Ergebnis pro CAD: <code>&lt;cad-id&gt;/variants/&lt;v_id&gt;/&lt;yaw&gt;.png</code> + Labels. Render-Zeit pro Bauteil: ca. 5 Minuten.</p>
+
+<h3>3.4 Kamera-Kalibrierung &amp; Modell-Training</h3>
+<p><strong>Kalibrierung (OpenCV, einmalig):</strong> Schachbrett-Aufnahmen → Brennweite/Bildmitte/Verzerrung; Tisch-Markierungen → Ebenengleichung via RANSAC. Re-Kalibrierung bei Kamera-Bewegung.</p>
+<p><strong>Modell-Training (~6–10&nbsp;h gesamt):</strong> <em>YOLOv8 Detection</em> auf 30–50k Synth-Frames, alle Bauteile als Klassen, ~6–8&nbsp;h. <em>Variant-Klassifikator (CNN)</em>: 128×128-Crop → Variant-Wahrscheinlichkeit, ~30&nbsp;min. <em>Yaw-Regressor (kleiner CNN)</em>: Crop + Variant → sin/cos-Yaw, ~30&nbsp;min.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- Seite 4 — Phase B: Inferenz                                          -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<h2 class="newpage">4. Phase B — Inferenz (pro Foto)</h2>
+
+<p>Fünf sequenzielle Stufen, end-to-end &lt; 200&nbsp;ms pro Frame auf RTX 3090. Statt ein einzelnes komplexes 6D-Pose-Modell zu trainieren, lösen wir das Problem über drei spezialisierte einfache Modelle (Detection, Variant-Klassifikation, Yaw-Regression) plus deterministische 3D-Konstruktion am Schluss.</p>
+
+<table class="steps-table">
+  <thead><tr>
+    <th>Schritt</th><th>Was passiert</th><th>Werkzeug</th><th>Latenz</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>1 · Foto</td>
+    <td>RGB-Frame von der Top-Down-Kamera, 1920×1080.</td>
+    <td>Kamera-SDK</td>
+    <td>~5 ms</td>
+  </tr>
+  <tr>
+    <td>2 · Detektion</td>
+    <td>YOLOv8 (trained auf 30–50k Synth-Frames) findet alle Bauteile im Bild. Output: BBox + Klasse (<code>object_id</code>) + Konfidenz pro Teil. Bestimmt <em>wo</em> + <em>was</em>, nichts über Orientierung.</td>
+    <td>YOLOv8 (custom)</td>
+    <td>~30–50 ms</td>
+  </tr>
+  <tr>
+    <td>3 · Variant-Klassifikation</td>
+    <td>Pro Detection Crop (128×128) extrahieren. Klassifikator gibt die <strong>Liegevariante</strong> aus (welche Mesh-Face liegt unten?). Bei einer Schraube also 1 aus {seitlich, auf Kopf, auf Spitze}. Damit ist Roll + Pitch eindeutig.</td>
+    <td>CNN (custom)</td>
+    <td>~10 ms/Crop</td>
+  </tr>
+  <tr>
+    <td>4 · Yaw-Regression</td>
+    <td>Pro Crop + Variant: kleines CNN regrediert nur den Drehwinkel um die Hochachse (sin/cos-Encoding für Periodizität). Bei rotationssymmetrischen Varianten wird der Yaw als nicht definiert markiert.</td>
+    <td>CNN (custom, leicht)</td>
+    <td>~5 ms/Crop</td>
+  </tr>
+  <tr>
+    <td>5 · 3D-Konstruktion + Viewer</td>
+    <td>Variant + Yaw → CAD wird in die <strong>bekannte stabile Pose</strong> (aus Phase A 3.2) gelegt, um Yaw rotiert, dann an die Welt-Position (aus BBox-Center via Kamera-Intrinsics + Tisch-Ebene) verschoben. Output: 3D-Szene mit Pose im <strong>Tisch-Koordinatensystem</strong>, optional ins Roboter-KS transformiert. Visualisierung in Three.js-Viewer.</td>
+    <td>numpy + Three.js</td>
+    <td>~15 ms</td>
+  </tr>
+</table>
+
+<div class="deep-dive">
+  <h4>Deep-Dive 1 — Warum nicht direkt 6D-Pose regredieren?</h4>
+  <p>Die "klassische" Lösung wäre ein einzelnes Netz, das aus dem Crop direkt eine 6D-Pose ausgibt (3D-Position + 3 Rotations-Achsen). Das ist aber <em>schwer</em> zu trainieren: das Modell muss lernen, dass eine Pose-Differenz von z.&nbsp;B. 180° um die Schraubenachse <em>kein</em> Fehler ist (Rotations-Symmetrie), während eine Differenz von 90° zwischen "liegt seitlich" und "steht auf Kopf" ein riesiger Sprung im 3D-Raum ist. Klassische Pose-Loss-Funktionen ignorieren das.</p>
+  <p>Unser Ansatz <strong>baut diese Struktur als Induktiv-Bias ein</strong>: die diskreten stabilen Lagen sind durch die Physics-Sim bekannt; die Pipeline muss nur klassifizieren <em>welche</em>. Yaw wird separat regrediert weil dort die kontinuierliche Variation natürlich ist. Effektiv: <em>schweres Problem</em> (6D-Pose-Regression) durch <em>einfaches Problem</em> (Klassifikation + 1D-Regression) ersetzt.</p>
+</div>
+
+<div class="deep-dive">
+  <h4>Deep-Dive 2 — Wie konstruieren wir die 3D-Pose? (Schritt 5)</h4>
+  <p>Sobald Variant und Yaw bekannt sind, ist die 3D-Pose deterministisch — keine ML-Approximation mehr:</p>
+  <ol>
+    <li><strong>Stabile-Pose-Lookup:</strong> Variant-ID → die in Phase A 3.2 vorberechnete stabile 3D-Pose-Matrix des CAD im Tisch-Koordinatensystem (z.&nbsp;B. "Schraube seitlich" = Schaft-Achse parallel zur Tischebene, Z=Schaft-Durchmesser/2).</li>
+    <li><strong>Yaw anwenden:</strong> Rotation um die Hochachse, Winkel aus dem Yaw-Regressor.</li>
+    <li><strong>Position aus BBox-Center:</strong> Pixel-Mitte der Detection → via Kamera-Intrinsics + Tisch-Ebene auf 3D-Welt-Position projizieren (siehe Mapping-Mathe nächste Seite).</li>
+  </ol>
+  <p>Das Resultat ist <em>genau so präzise wie unsere Bottom-Face-Cluster + Yaw-Regressor</em>. Es gibt nichts mehr zu "snappen", weil die Pose nie das Korsett der stabilen Lagen verlässt — sie wird direkt darin konstruiert. Anschaulich: das Top-Down-Bild ist die orthografische Projektion des CAD-Modells in dieser stabilen Pose mit dem geschätzten Yaw. Wir legen das CAD im Viewer einfach exakt so hin.</p>
+</div>
+
+<h3>Output-Schema · 3D-Szene mit zwei Koordinatensystemen</h3>
+<p style="margin-bottom: 4pt;">Die Pose wird primär im <strong>Tisch-Koordinatensystem</strong> ausgegeben (Ursprung in der Tischmitte, Z senkrecht zur Tischebene). Optional zusätzlich ins <strong>Roboter-Basis-Koordinatensystem</strong> transformiert — die Transformation T<sub>table→robot</sub> ist eine einmalige Setup-Größe.</p>
+<pre class="schema">{ "frame_id":  "2026-05-17T13:42:00.123Z",
+  "coordinate_systems": {
+    "primary":            "table_frame",
+    "table_to_robot_T":   [[r,r,r,t],[r,r,r,t],[r,r,r,t],[0,0,0,1]]
+  },
+  "objects": [
+    { "object_id":         "screw_m6_a",
+      "class":             "M6 Schraube",
+      "variant_id":        1,            // welche Liegevariante (= Bottom-Face)
+      "variant_label":     "seitlich",
+      "yaw_rad":           1.234,        // Drehung um Z-Achse
+      "pose_in_table":     [[r00,r01,r02,tx], [r10,r11,r12,ty],
+                            [r20,r21,r22,tz], [0,0,0,1]],
+      "pose_in_robot":     [[r00,r01,r02,tx], [r10,r11,r12,ty],
+                            [r20,r21,r22,tz], [0,0,0,1]],
+      "confidence_detect": 0.97,
+      "confidence_variant":0.94 },
+    ...
+  ] }</pre>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- Seite 5 — Mapping + Eval + Roadmap + Risiken                       -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<h2 class="newpage">5. Detail: 2D → 3D Mapping</h2>
+
+<div class="cols">
+  <div class="col">
+    <p>Aus einem Bild-Pixel allein lässt sich keine 3D-Position bestimmen — der Pixel entspricht einem Strahl von der Kamera durch die Welt. Wir brauchen eine Zusatzannahme. Bei uns: <strong>das Bauteil liegt auf einer bekannten Ebene</strong> (Tischplatte).</p>
+
+    <p><strong>Wir tun das in drei Schritten:</strong></p>
+    <ol>
+      <li><strong>Strahl rückprojizieren:</strong> Aus Pixel (u, v) und Kamera-Intrinsics K wird der 3D-Strahl <em>r</em> = K⁻¹ · (u, v, 1) im Kamera-Frame berechnet.</li>
+      <li><strong>Strahl mit Tisch-Ebene schneiden:</strong> Tisch-Ebene ist als Normale <em>n</em> und Abstand <em>d</em> im Kamera-Frame bekannt. Schnittpunkt: <em>t</em> = <em>d</em> / (<em>n</em> · <em>r</em>); die Welt-Position ist <em>t</em> · <em>r</em>.</li>
+      <li><strong>Rotation transformieren:</strong> Die im Kamera-Frame geschätzte Rotation wird via Cam→World-Extrinsics in Welt-Koordinaten gedreht.</li>
+    </ol>
+
+    <p>Die Pose-Estimator liefern die Pose im Kamera-Frame; wir transformieren sie ins <strong>Tisch-Koordinatensystem</strong> (Primärausgabe) und optional weiter ins <strong>Roboter-Basis-Koordinatensystem</strong>. Die Cam→Tisch- und Tisch→Roboter-Transformationen sind beide einmalige Setup-Größen.</p>
+
+    <div class="callout is-info" style="margin-top: 6pt; font-size: 9pt;"><strong>Warum Tisch-KS als Primär?</strong> Weil der Tisch unsere physische Referenz ist: Bauteile liegen darauf, die Tischebene ist via Kalibrierung bekannt, und das KS ist intuitiv (X/Y in der Ebene, Z senkrecht hoch). Die Roboter-Transformation ist eine reine Multiplikation mit einer konstanten Matrix.</div>
+  </div>
+  <div class="col">
+    <div class="diagram" style="margin:0;">
+      <svg viewBox="0 0 340 270" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica">
+        <defs>
+          <marker id="arr-n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+        </defs>
+
+        <!-- Camera (top left) -->
+        <g transform="translate(55 40)">
+          <text x="0" y="-22" text-anchor="middle" font-size="10" fill="#1f2937" font-weight="700">Kamera</text>
+          <rect x="-18" y="-13" width="36" height="26" rx="3" fill="#1f2937" stroke="#2563eb" stroke-width="1.2"/>
+          <circle r="7" fill="#0b1426" stroke="#2563eb" stroke-width="1.4"/>
+          <circle r="3.5" fill="#2563eb"/>
+        </g>
+
+        <!-- Image plane below camera -->
+        <g transform="translate(55 82)">
+          <text x="0" y="-6" text-anchor="middle" font-size="9" fill="#64748b" font-style="italic">Bildebene</text>
+          <rect x="-26" y="0" width="52" height="30" fill="#f7faff" stroke="#94a3b8" stroke-width="0.9" stroke-dasharray="3 2"/>
+          <circle cx="9" cy="17" r="2.8" fill="#d97706"/>
+          <text x="9" y="44" text-anchor="middle" font-size="9" fill="#d97706" font-weight="700">(u, v)</text>
+        </g>
+
+        <!-- Ray from camera through pixel to world point -->
+        <line x1="55" y1="53" x2="250" y2="215" stroke="#d97706" stroke-width="1.8" stroke-dasharray="5 3"/>
+
+        <!-- Ray label (pill) on the line, with bold italic r + tiny arrow above -->
+        <g transform="translate(180 120)">
+          <rect x="-58" y="-11" width="116" height="22" rx="11" fill="#ffffff" stroke="#fbd28a" stroke-width="1"/>
+          <text x="0" y="3" text-anchor="middle" font-size="10" fill="#b45309" font-weight="700">
+            <tspan font-style="italic">r</tspan> = K⁻¹ · (u, v, 1)
+          </text>
+          <!-- Mini arrow above the r -->
+          <line x1="-46" y1="-4" x2="-39" y2="-4" stroke="#b45309" stroke-width="1.4"/>
+          <polygon points="-39,-4 -41,-6 -41,-2" fill="#b45309"/>
+        </g>
+
+        <!-- Table plane -->
+        <line x1="25" y1="215" x2="315" y2="215" stroke="#475569" stroke-width="2"/>
+        <g stroke="#cbd5e1" stroke-width="0.6">
+          <line x1="30" y1="215" x2="40" y2="227"/><line x1="55" y1="215" x2="65" y2="227"/><line x1="80" y1="215" x2="90" y2="227"/>
+          <line x1="105" y1="215" x2="115" y2="227"/><line x1="130" y1="215" x2="140" y2="227"/><line x1="155" y1="215" x2="165" y2="227"/>
+          <line x1="180" y1="215" x2="190" y2="227"/><line x1="205" y1="215" x2="215" y2="227"/><line x1="230" y1="215" x2="240" y2="227"/>
+          <line x1="255" y1="215" x2="265" y2="227"/><line x1="280" y1="215" x2="290" y2="227"/>
+        </g>
+        <text x="170" y="252" text-anchor="middle" font-size="9.5" fill="#475569" font-style="italic">
+          Tisch-Ebene · kalibriert: Normale <tspan font-weight="700" font-style="normal">n</tspan>, Abstand <tspan font-weight="700" font-style="normal">d</tspan>
+        </text>
+
+        <!-- Hit point + part on table -->
+        <circle cx="250" cy="215" r="3.5" fill="#2563eb"/>
+        <rect x="237" y="208" width="26" height="6" rx="2" fill="#9aa4b4" stroke="#5a6070" stroke-width="0.5"/>
+
+        <!-- Welt-Pos label off to the right (above table) -->
+        <g transform="translate(280 188)">
+          <rect x="0" y="-11" width="56" height="18" rx="9" fill="#eef4ff" stroke="#2563eb" stroke-width="1"/>
+          <text x="28" y="2" text-anchor="middle" font-size="9" fill="#1d4ed8" font-weight="700">Welt-Position</text>
+        </g>
+        <line x1="280" y1="188" x2="262" y2="213" stroke="#2563eb" stroke-width="0.8"/>
+
+        <!-- Tisch-KS axes at the hit point: X (red), Y (green), Z (blue) -->
+        <g stroke-width="1.6" stroke-linecap="round">
+          <line x1="250" y1="215" x2="270" y2="215" stroke="#dc2626" marker-end="url(#arr-n)"/>
+          <line x1="250" y1="215" x2="245" y2="232" stroke="#16a34a"/>
+          <line x1="250" y1="215" x2="250" y2="195" stroke="#2563eb"/>
+        </g>
+        <text x="272" y="219" font-size="8" fill="#dc2626" font-weight="700">X</text>
+        <text x="240" y="240" font-size="8" fill="#16a34a" font-weight="700">Y</text>
+        <text x="254" y="193" font-size="8" fill="#2563eb" font-weight="700">Z</text>
+        <text x="222" y="205" font-size="8" fill="#475569" font-style="italic">Tisch-KS</text>
+      </svg>
+      <div class="cap" style="margin-top: 4pt;">Abb. 3 — Pixel → Welt-Mapping. Aus Pixel (u, v) wird über die Kamera-Intrinsics K der Strahl <em>r</em> berechnet. Der Schnittpunkt des Strahls mit der Tisch-Ebene ist die Welt-Position des Bauteils.</div>
+    </div>
+  </div>
+</div>
+
+<h2 class="no-break">6. Eval — Wie messen wir, ob's gut genug ist?</h2>
+<p>Wir lehnen uns an den <strong>BOP-Benchmark</strong> (Brno) an — die De-facto-Referenz für 6D-Pose-Estimation:</p>
+<table class="tech">
+  <tr><th>Metrik</th><th>Was sie misst</th><th>Acceptance v0.1</th></tr>
+  <tr><td><strong>Average Recall (AR)</strong></td><td>Gewichteter Mittelwert über ADD/MSPD/MSSD bei verschiedenen Toleranzen</td><td>≥ 0.70</td></tr>
+  <tr><td><strong>Translation-Error (median)</strong></td><td>Euklidischer Abstand pred ↔ GT</td><td>&lt; 5&nbsp;mm</td></tr>
+  <tr><td><strong>Rotation-Error (median)</strong></td><td>Geodätischer Winkel pred ↔ GT</td><td>&lt; 5°</td></tr>
+  <tr><td><strong>Inferenz-Latenz</strong></td><td>End-to-end pro Frame auf RTX 3090</td><td>&lt; 1&nbsp;s</td></tr>
+</table>
+<p>Daneben: <strong>Worst-Examples-Viewer</strong> (HTML-Report mit den 50 schlechtesten Predictions, Bild + Pose-Overlay) und ein <strong>Sim-vs-Real-Vergleich</strong>, sobald wir 200+ echt-gelabelte Frames haben.</p>
+
+
+</body>
+</html>

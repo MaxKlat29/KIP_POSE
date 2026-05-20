@@ -1,0 +1,8 @@
+# Code owners for KIP_POSE
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @MaxKlat29
+
+# Synthetic data generation pipeline — original author
+/sim_code/datagenerationscript.py @MaxKlat29 @Marc8350

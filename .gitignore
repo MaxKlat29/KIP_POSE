@@ -1,0 +1,32 @@
+# ── OS / editor junk ──────────────────────────────────────────
+.DS_Store
+*.swp
+.idea/
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# ── Large / binary simulation data ────────────────────────────
+# USD assets are delivered separately; rendered output is generated.
+# Keep the directory structure (.gitkeep) but never commit the payload.
+data/usd/*
+data/output/*
+!data/usd/.gitkeep
+!data/output/.gitkeep
+*.usd
+*.usda
+*.usdc
+*.usdz
+
+# ── transient lock / backup files ─────────────────────────────
+*.lock
+*.pre-bump.bak
+
+# ── Isaac Sim / run logs ──────────────────────────────────────
+*.log
+kit/
