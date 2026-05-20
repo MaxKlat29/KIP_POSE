@@ -20,12 +20,16 @@ import os
 import time
 
 
-def compute_oriented_boxes(inst, sem, sem_id2label, part_classes, min_pixels=80):
+def compute_oriented_boxes(inst, sem, sem_id2label, part_classes,
+                           bbox_data=None, min_pixels=80):
     """Oriented 2D boxes per part instance via PCA on the segmentation masks.
 
     Aligns each box to the part's principal (long) axis, so a part lying at an
     angle gets a rotated box hugging it — not the axis-aligned enclosing box.
     Uses only the visible instance pixels, so it is occlusion-robust.
+
+    If ``bbox_data`` (the bounding_box_2d_tight result) is given, each oriented
+    box is tagged with the occlusionRatio of the nearest same-class tight box.
     """
     import numpy as np
     boxes = []
@@ -37,6 +41,16 @@ def compute_oriented_boxes(inst, sem, sem_id2label, part_classes, min_pixels=80)
         inst = inst[..., 0]
     if sem.ndim > 2:
         sem = sem[..., 0]
+
+    # class -> [(cx, cy, occlusion)] from the tight boxes, for occlusion lookup
+    tight = {}
+    if isinstance(bbox_data, dict):
+        b_lab = bbox_data.get("info", {}).get("idToLabels", {})
+        for row in bbox_data.get("data", []):
+            cls = b_lab.get(str(int(row[0])), {}).get("class", "").lower()
+            occ = float(row[5]) if len(row) > 5 else 0.0
+            tight.setdefault(cls, []).append(((row[1] + row[3]) / 2.0,
+                                              (row[2] + row[4]) / 2.0, occ))
     for iid in np.unique(inst):
         if int(iid) == 0:
             continue
@@ -62,6 +76,10 @@ def compute_oriented_boxes(inst, sem, sem_id2label, part_classes, min_pixels=80)
         i0, i1 = float(pi.min()), float(pi.max())
         corners = [c + major * a0 + minor * i0, c + major * a1 + minor * i0,
                    c + major * a1 + minor * i1, c + major * a0 + minor * i1]
+        occ = 0.0
+        cands = tight.get(cls.lower(), [])
+        if cands:
+            occ = min(cands, key=lambda t: (t[0] - c[0]) ** 2 + (t[1] - c[1]) ** 2)[2]
         boxes.append({
             "class": cls,
             "corners": [[round(float(p[0]), 1), round(float(p[1]), 1)] for p in corners],
@@ -70,6 +88,7 @@ def compute_oriented_boxes(inst, sem, sem_id2label, part_classes, min_pixels=80)
             "length_px": round(a1 - a0, 1),
             "width_px": round(i1 - i0, 1),
             "area_px": n,
+            "occlusion": round(float(occ), 3),
         })
     return boxes
 
@@ -93,6 +112,8 @@ def parse_args():
     p.add_argument("--spawn", choices=["none", "tray", "random"], default="none")
     p.add_argument("--spawn-box", default=None,
                    help="static placement: cx,cy,cz,half — drop parts randomly in this box")
+    p.add_argument("--spawn-bounds", default=None,
+                   help="restrict random-mode spawn to xmin,xmax,ymin,ymax (inner table)")
     p.add_argument("--physics-z", type=float, default=None,
                    help="enable physics: gravity + an invisible ground collider with top at z")
     p.add_argument("--num-objects", type=int, default=6)
@@ -139,6 +160,11 @@ def main():
     dg.SPAWN_MODE = args.spawn if args.spawn != "none" else dg.SPAWN_MODE
     dg.NUM_ANKERS_IN_TRAY = args.num_objects
     dg.NUM_OBJECTS = args.num_objects
+    if args.spawn_bounds:
+        xm, xx, ym, yx = (float(v) for v in args.spawn_bounds.split(","))
+        b = dict(dg.SPAWN_BOUNDS)          # keep Marc's high drop-height z range
+        b["x"], b["y"] = (xm, xx), (ym, yx)
+        dg.SPAWN_BOUNDS = b
 
     # open the assembled scene
     ctx = omni.usd.get_context()
@@ -294,6 +320,7 @@ def main():
             seg["data"] if isinstance(seg, dict) else None,
             seg["info"].get("idToLabels", {}) if isinstance(seg, dict) else {},
             {"anker_kurz", "anker_lang"},
+            bbox_data=data.get("bbox_2d"),
         )
         with open(os.path.join(args.output, f"obb_2d_{ridx:04d}.json"), "w") as f:
             json.dump({"boxes": obbs}, f, indent=2)

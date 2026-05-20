@@ -45,7 +45,10 @@ def annotate(out_dir, idx, font, max_occlusion=1.0):
     obb_path = os.path.join(out_dir, f"obb_2d_{idx:04d}.json")
     if os.path.exists(obb_path):
         boxes = json.load(open(obb_path)).get("boxes", [])
+        n = 0
         for b in boxes:
+            if b.get("occlusion", 0.0) > max_occlusion:    # drop heavily-occluded parts
+                continue
             col = _class_color(b["class"])
             pts = [(x, y) for x, y in b["corners"]]
             draw.polygon(pts, outline=col, width=3)
@@ -53,9 +56,10 @@ def annotate(out_dir, idx, font, max_occlusion=1.0):
             tb = draw.textbbox((lx, ly), b["class"], font=font)
             draw.rectangle([tb[0], tb[1] - 3, tb[2] + 5, tb[3] + 1], fill=col)
             draw.text((lx + 3, ly - 2), b["class"], fill=(0, 0, 0), font=font)
+            n += 1
         out = os.path.join(out_dir, f"annotated_{idx:04d}.png")
         img.save(out)
-        print(f"  {os.path.basename(out)}  ({len(boxes)} oriented boxes)")
+        print(f"  {os.path.basename(out)}  ({n} oriented boxes, max_occ={max_occlusion})")
         return out
 
     bb = json.load(open(bb_path))
