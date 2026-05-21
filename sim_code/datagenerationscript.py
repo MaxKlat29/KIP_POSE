@@ -141,7 +141,7 @@ RIGID_BODY = {
 # ── KOLLISIONS-KONFIGURATION ───────────────────────────────────
 COLLISION = {
     "enabled":        True,
-    "approximation":  "convexDecomposition",
+    "approximation":  "convexHull",
     "contact_offset": 0.005,
     "rest_offset":    0.0,
 }

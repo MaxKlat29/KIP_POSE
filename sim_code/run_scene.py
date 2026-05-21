@@ -127,6 +127,9 @@ def parse_args():
                    help="comma-separated name substrings; matching prims are made invisible "
                         "(e.g. the robot arm so the camera sees the table)")
     p.add_argument("--no-headless", action="store_true")
+    p.add_argument("--keep-open", action="store_true",
+                   help="after rendering, wait for Enter before closing the UI "
+                        "(useful with --no-headless to inspect the scene)")
     return p.parse_args()
 
 
@@ -239,6 +242,33 @@ def main():
         for _ in range(5):
             simulation_app.update()
 
+    # ── auto-collider on Basiswagen ───────────────────────────────────────────
+    # If the scene contains /World/Basiswagen/Basiswagen (GST_Scene), apply
+    # CollisionAPI so spawned parts land on it instead of falling through.
+    # Also ensure a PhysicsScene with gravity exists (required for any physics
+    # settling, regardless of which scene is open).
+    _BASISWAGEN_PRIM = "/World/Basiswagen/Basiswagen"
+    bw_prim = stage.GetPrimAtPath(_BASISWAGEN_PRIM)
+    if bw_prim.IsValid():
+        from pxr import PhysxSchema
+        if not stage.GetPrimAtPath("/World/_PhysicsScene").IsValid():
+            ps = UsdPhysics.Scene.Define(stage, "/World/_PhysicsScene")
+            ps.CreateGravityDirectionAttr(Gf.Vec3f(0, 0, -1))
+            ps.CreateGravityMagnitudeAttr(9.81)
+            log("physics: created PhysicsScene (9.81 m/s² -Z)")
+        if not bw_prim.HasAPI(UsdPhysics.CollisionAPI):
+            UsdPhysics.CollisionAPI.Apply(bw_prim)
+            mc = UsdPhysics.MeshCollisionAPI.Apply(bw_prim)
+            mc.CreateApproximationAttr().Set("convexHull")
+            physx_col = PhysxSchema.PhysxCollisionAPI.Apply(bw_prim)
+            physx_col.CreateContactOffsetAttr().Set(0.005)
+            physx_col.CreateRestOffsetAttr().Set(0.0)
+            log(f"auto-collider: CollisionAPI applied to {_BASISWAGEN_PRIM}")
+        else:
+            log(f"auto-collider: {_BASISWAGEN_PRIM} already has CollisionAPI")
+        for _ in range(5):
+            simulation_app.update()
+
     os.makedirs(args.output, exist_ok=True)
     rng = np.random.default_rng(args.seed)
     timeline = omni.timeline.get_timeline_interface()
@@ -334,6 +364,22 @@ def main():
 
     timeline.stop()
     log(f"done -> {args.output}")
+
+    if args.keep_open:
+        import threading
+        log("--keep-open: UI is live. Press Enter in this terminal to close.")
+        _quit = threading.Event()
+        def _wait_for_enter():
+            try:
+                input()
+            except EOFError:
+                pass
+            _quit.set()
+        threading.Thread(target=_wait_for_enter, daemon=True).start()
+        # keep pumping the UI event loop on the main thread while waiting
+        while not _quit.is_set():
+            simulation_app.update()
+
     simulation_app.close()
 
 
