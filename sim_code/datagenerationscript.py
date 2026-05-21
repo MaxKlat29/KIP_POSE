@@ -110,6 +110,25 @@ OBJECT_SIZE  = 0.03
 RANDOM_SEED  = 42
 MAX_SPAWN_ATTEMPTS = 100
 
+# ── LIGHTING RANDOMIZATION ────────────────────────────────────
+# Controls the Replicator-driven light randomization added on branch marc.
+# Set LIGHT_RANDOMIZE = False to keep the scene lights unchanged (legacy behaviour).
+LIGHT_RANDOMIZE = True
+LIGHT_CONFIG = {
+    # Number of randomized sphere lights added per render.
+    "count": 3,
+    # Intensity range (lux).  Metallic anchor parts are sensitive to this.
+    "intensity": (200_000, 2_000_000),
+    # Colour temperature range expressed as (R,G,B) float tuples.
+    "color_min": (0.8, 0.65, 0.45),   # warm / tungsten tint
+    "color_max": (1.0, 1.00, 1.00),   # neutral white
+    # Sphere radius range (m) – larger = softer shadows.
+    "radius":    (0.05, 0.25),
+    # Position bounding box (m) around the tray area, above it.
+    "pos_min": (-0.1, -0.1,  0.4),
+    "pos_max": ( 0.9,  0.6,  1.2),
+}
+
 # ── RIGID BODY KONFIGURATION ───────────────────────────────────
 RIGID_BODY = {
     "enabled":          True,
@@ -384,6 +403,51 @@ def spawn_random_mode(stage, rng):
 #  SPEICHERN
 # ══════════════════════════════════════════════════════════════
 
+# ══════════════════════════════════════════════════════════════
+#  LIGHTING HELPERS
+# ══════════════════════════════════════════════════════════════
+
+def setup_randomized_lights():
+    """Register a Replicator randomizer that re-rolls N sphere lights on every
+    rep.orchestrator.step() call.  Returns the light group prim so the caller
+    can detach / remove it after the run.
+
+    Must be called *after* SimulationApp is up and rep is imported.
+    Respects LIGHT_RANDOMIZE — is a no-op when disabled.
+    """
+    if not LIGHT_RANDOMIZE:
+        return None
+
+    cfg = LIGHT_CONFIG
+    lights = rep.create.light(
+        light_type="Sphere",
+        count=cfg["count"],
+        intensity=rep.distribution.uniform(*cfg["intensity"]),
+        color=rep.distribution.uniform(cfg["color_min"], cfg["color_max"]),
+        position=rep.distribution.uniform(cfg["pos_min"], cfg["pos_max"]),
+        scale=rep.distribution.uniform(*cfg["radius"]),
+    )
+
+    # Register so Replicator re-randomizes on every orchestrator step.
+    with lights:
+        rep.modify.attribute(
+            "intensity",
+            rep.distribution.uniform(*cfg["intensity"]),
+        )
+        rep.modify.attribute(
+            "color",
+            rep.distribution.uniform(cfg["color_min"], cfg["color_max"]),
+        )
+        rep.modify.pose(
+            position=rep.distribution.uniform(cfg["pos_min"], cfg["pos_max"]),
+        )
+
+    print(f"  [Lights] {cfg['count']} randomized sphere lights registered "
+          f"(intensity {cfg['intensity'][0]/1e3:.0f}k–{cfg['intensity'][1]/1e3:.0f}k lux, "
+          f"LIGHT_RANDOMIZE={LIGHT_RANDOMIZE})")
+    return lights
+
+
 def convert_numpy(obj):
     if isinstance(obj, np.ndarray):   return obj.tolist()
     if isinstance(obj, np.integer):   return int(obj)
@@ -427,6 +491,23 @@ def save_output(data, render_idx, output_dir):
         Image.fromarray((depth_norm * 65535).astype(np.uint16)).save(path)
         print(f"     depth           → {path}")
 
+    # ── 3-D bounding boxes (world-space AABB per instance) ──────
+    if data.get("bbox_3d") is not None:
+        path = os.path.join(output_dir, f"bbox_3d_{render_idx:04d}.json")
+        with open(path, "w") as f:
+            json.dump(convert_numpy(data["bbox_3d"]), f, indent=2)
+        print(f"     bbox_3d         → {path}")
+
+    # ── 6-DoF object poses (4×4 transform matrix per instance) ──
+    # Format: { "data": [ { "semanticId": int,
+    #                        "localToWorldTransform": [[...], ...] }, ... ],
+    #           "info": { "idToLabels": { "1": {"class": "Anker_Kurz"}, ... } } }
+    if data.get("obj_pose") is not None:
+        path = os.path.join(output_dir, f"pose_{render_idx:04d}.json")
+        with open(path, "w") as f:
+            json.dump(convert_numpy(data["obj_pose"]), f, indent=2)
+        print(f"     obj_pose        → {path}")
+
 
 # ══════════════════════════════════════════════════════════════
 #  MAIN
@@ -462,6 +543,9 @@ async def run_data_generation():
                 print(f"    → {prim.GetPath().pathString}")
         return
 
+    # Lighting randomization (Replicator-driven sphere lights)
+    setup_randomized_lights()
+
     # Annotators
     render_product = rep.create.render_product(
         ZIVID_CAMERA_PATH, resolution=(IMAGE_WIDTH, IMAGE_HEIGHT)
@@ -471,11 +555,16 @@ async def run_data_generation():
     semantic_annot = rep.AnnotatorRegistry.get_annotator("semantic_segmentation")
     instance_annot = rep.AnnotatorRegistry.get_annotator("instance_segmentation")
     depth_annot    = rep.AnnotatorRegistry.get_annotator("distance_to_camera")
+    # 6-DoF pose labels — critical for pose estimation training
+    bbox_3d_annot  = rep.AnnotatorRegistry.get_annotator("bounding_box_3d")
+    pose_annot     = rep.AnnotatorRegistry.get_annotator("pose")
 
-    for annot in [rgb_annot, bbox_annot, semantic_annot, instance_annot, depth_annot]:
+    all_annots = [rgb_annot, bbox_annot, semantic_annot, instance_annot,
+                  depth_annot, bbox_3d_annot, pose_annot]
+    for annot in all_annots:
         annot.attach([render_product])
 
-    print(f"[Setup] Annotators bereit\n")
+    print(f"[Setup] Annotators bereit (inkl. bbox_3d + pose)\n")
 
     for render_idx in range(NUM_RENDERS):
         print(f"\n{'─' * 50}")
@@ -520,13 +609,15 @@ async def run_data_generation():
             "semantic_seg": semantic_annot.get_data(),
             "instance_seg": instance_annot.get_data(),
             "depth":        depth_annot.get_data(),
+            "bbox_3d":      bbox_3d_annot.get_data(),
+            "obj_pose":     pose_annot.get_data(),
         }
 
         print(f"  → Speichere:")
         save_output(data, render_idx, OUTPUT_DIR)
 
     timeline.stop()
-    for annot in [rgb_annot, bbox_annot, semantic_annot, instance_annot, depth_annot]:
+    for annot in all_annots:
         annot.detach()
 
     print(f"\n{'=' * 60}")

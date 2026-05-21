@@ -116,7 +116,10 @@ def main():
         simulation_app.close()
         sys.exit(1)
 
-    # 6. Annotators (same set as the editor script).
+    # 6. Lighting randomization (Replicator sphere lights, branch marc).
+    dg.setup_randomized_lights()
+
+    # 7. Annotators — same set as the editor script + bbox_3d + pose.
     render_product = rep.create.render_product(
         dg.ZIVID_CAMERA_PATH, resolution=(dg.IMAGE_WIDTH, dg.IMAGE_HEIGHT)
     )
@@ -126,11 +129,14 @@ def main():
         "semantic_seg": rep.AnnotatorRegistry.get_annotator("semantic_segmentation"),
         "instance_seg": rep.AnnotatorRegistry.get_annotator("instance_segmentation"),
         "depth":        rep.AnnotatorRegistry.get_annotator("distance_to_camera"),
+        # 6-DoF pose labels (branch marc)
+        "bbox_3d":      rep.AnnotatorRegistry.get_annotator("bounding_box_3d"),
+        "obj_pose":     rep.AnnotatorRegistry.get_annotator("pose"),
     }
     for a in annots.values():
         a.attach([render_product])
 
-    # 7. Synchronous generation loop (editor's `await next_update_async()` -> update()).
+    # 8. Synchronous generation loop (editor's `await next_update_async()` -> update()).
     for render_idx in range(dg.NUM_RENDERS):
         print(f"\n[Render {render_idx + 1}/{dg.NUM_RENDERS}]")
 

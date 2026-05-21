@@ -104,6 +104,14 @@ def main():
     for _ in range(20):
         simulation_app.update()
 
+    # ── lighting randomization (branch marc) ──────────────────
+    # run_minimal builds its own scene so we override the light position
+    # bounds to match the small spawn area (±AREA metres around origin).
+    dg.LIGHT_CONFIG = dict(dg.LIGHT_CONFIG)
+    dg.LIGHT_CONFIG["pos_min"] = (-AREA, -AREA, 0.4)
+    dg.LIGHT_CONFIG["pos_max"] = ( AREA,  AREA, 1.2)
+    dg.setup_randomized_lights()
+
     # ── render loop ───────────────────────────────────────────
     render_product = rep.create.render_product(cam_path, (args.width, args.height))
     annots = {
@@ -112,6 +120,9 @@ def main():
         "semantic_seg": rep.AnnotatorRegistry.get_annotator("semantic_segmentation"),
         "instance_seg": rep.AnnotatorRegistry.get_annotator("instance_segmentation"),
         "depth":        rep.AnnotatorRegistry.get_annotator("distance_to_camera"),
+        # 6-DoF pose labels (branch marc)
+        "bbox_3d":      rep.AnnotatorRegistry.get_annotator("bounding_box_3d"),
+        "obj_pose":     rep.AnnotatorRegistry.get_annotator("pose"),
     }
     for a in annots.values():
         a.attach([render_product])

@@ -243,6 +243,9 @@ def main():
     rng = np.random.default_rng(args.seed)
     timeline = omni.timeline.get_timeline_interface()
 
+    # Lighting randomization (branch marc)
+    dg.setup_randomized_lights()
+
     render_product = rep.create.render_product(args.camera, (args.width, args.height))
     annots = {
         "rgb":          rep.AnnotatorRegistry.get_annotator("rgb"),
@@ -250,6 +253,9 @@ def main():
         "semantic_seg": rep.AnnotatorRegistry.get_annotator("semantic_segmentation"),
         "instance_seg": rep.AnnotatorRegistry.get_annotator("instance_segmentation"),
         "depth":        rep.AnnotatorRegistry.get_annotator("distance_to_camera"),
+        # 6-DoF pose labels (branch marc)
+        "bbox_3d":      rep.AnnotatorRegistry.get_annotator("bounding_box_3d"),
+        "obj_pose":     rep.AnnotatorRegistry.get_annotator("pose"),
     }
     for a in annots.values():
         a.attach([render_product])
