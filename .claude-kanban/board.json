@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-20T08:15:01Z",
+  "updated": "2026-05-21T09:57:20Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 12,
+  "next_id": 13,
   "tickets": [
     {
       "id": "T-001",
@@ -499,6 +499,39 @@
       "completed_at": "2026-05-20T08:15:01Z",
       "comments": [],
       "logs": []
+    },
+    {
+      "id": "T-012",
+      "title": "Face-Atlas Modul: empirische Isaac-Drop-Discovery + Spec/Brain",
+      "description": "",
+      "column": "in_review",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "isaac-sim",
+        "faces"
+      ],
+      "session": "",
+      "created": "2026-05-21T09:47:32Z",
+      "updated": "2026-05-21T09:57:20Z",
+      "started_at": "2026-05-21T09:47:32Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-21T09:57:20Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Face-Atlas Modul fertig: analytisch+empirisch, 3-stufiges De-Bloating, verifiziert (Anker 1 Face, Poltopf empirisch 100% liegend). Commit a00beb9"
+        },
+        {
+          "ts": "2026-05-21T09:57:20Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
     }
   ]
 }
