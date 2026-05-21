@@ -449,9 +449,11 @@ def setup_randomized_lights():
 
 
 def convert_numpy(obj):
-    if isinstance(obj, np.ndarray):   return obj.tolist()
-    if isinstance(obj, np.integer):   return int(obj)
-    if isinstance(obj, np.floating):  return float(obj)
+    # np.ndarray: .tolist() converts simple dtypes but can leave numpy scalars
+    # inside structured-array tuples — so recurse AFTER tolist().
+    if isinstance(obj, np.ndarray):   return convert_numpy(obj.tolist())
+    # catch every remaining numpy scalar (integer, floating, bool_, etc.)
+    if isinstance(obj, np.generic):   return obj.item()
     if isinstance(obj, dict):         return {k: convert_numpy(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):return [convert_numpy(i) for i in obj]
     return obj

@@ -285,8 +285,13 @@ def main():
         "depth":        rep.AnnotatorRegistry.get_annotator("distance_to_camera"),
         # 6-DoF pose labels (branch marc)
         "bbox_3d":      rep.AnnotatorRegistry.get_annotator("bounding_box_3d"),
-        "obj_pose":     rep.AnnotatorRegistry.get_annotator("pose"),
     }
+    # "pose" annotator was removed / renamed in newer Replicator versions — optional
+    try:
+        annots["obj_pose"] = rep.AnnotatorRegistry.get_annotator("pose")
+        log("pose annotator: registered")
+    except Exception as _e:
+        log(f"pose annotator: not available in this Replicator version ({_e.__class__.__name__}) — skipping")
     for a in annots.values():
         a.attach([render_product])
 
@@ -367,18 +372,32 @@ def main():
 
     if args.keep_open:
         import threading
-        log("--keep-open: UI is live. Press Enter in this terminal to close.")
+        import sys as _sys
+        log("--keep-open: UI is live. Press Enter (or Ctrl-C) in this terminal to close.")
         _quit = threading.Event()
         def _wait_for_enter():
-            try:
-                input()
-            except EOFError:
-                pass
-            _quit.set()
+            if _sys.stdin.isatty():
+                # interactive terminal → wait for the user to press Enter
+                try:
+                    input()
+                except EOFError:
+                    pass
+                _quit.set()
+            else:
+                # stdin is not a TTY (piped / closed by python.sh) →
+                # don't quit on EOFError; block until Ctrl-C / SIGINT instead
+                try:
+                    while not _quit.is_set():
+                        time.sleep(0.5)
+                except (KeyboardInterrupt, SystemExit):
+                    _quit.set()
         threading.Thread(target=_wait_for_enter, daemon=True).start()
         # keep pumping the UI event loop on the main thread while waiting
-        while not _quit.is_set():
-            simulation_app.update()
+        try:
+            while not _quit.is_set():
+                simulation_app.update()
+        except (KeyboardInterrupt, SystemExit):
+            pass
 
     simulation_app.close()
 
