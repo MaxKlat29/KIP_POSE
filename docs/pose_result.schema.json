@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MaxKlat29/KIP_POSE/docs/pose_result.schema.json",
+  "title": "POSE — pose_result",
+  "description": "Frozen contract between the inference pipeline (producer, S-008/S-009) and the 3D viewer (consumer, S-010/S-011). One file per processed scene image. World frame is Z-up, origin = table plane null-point, units = meters. Rotation convention is column: world = R @ body, consistent with the faces_<part>.json registry (faces/cluster_views.py).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "results"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_image",
+        "table_origin",
+        "units",
+        "coordinate_convention",
+        "schema_version"
+      ],
+      "properties": {
+        "source_image": {
+          "type": "string",
+          "description": "Path or filename of the scene image the results were inferred from.",
+          "minLength": 1
+        },
+        "table_origin": {
+          "type": "array",
+          "description": "World-coordinate null-point of the table plane [x, y, z] in meters. The viewer anchors the table to this point.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "units": {
+          "type": "string",
+          "description": "Length unit for all translations and table_origin. Frozen to meters.",
+          "const": "m"
+        },
+        "coordinate_convention": {
+          "type": "string",
+          "description": "Human-readable convention statement. MUST document: Z-up world, column rotation world = R @ body (same as faces_<part>.json registry), origin = table plane null-point."
+        },
+        "schema_version": {
+          "type": "string",
+          "description": "Semantic version of this contract. Producer and consumer assert compatibility on the major version.",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "description": "One entry per detected part instance in the scene.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "instance_id",
+          "part",
+          "face",
+          "R_world",
+          "t_world",
+          "confidence",
+          "bbox_2d",
+          "upright"
+        ],
+        "properties": {
+          "instance_id": {
+            "type": "integer",
+            "description": "Unique id of this part instance within the scene (stable for the viewer to track).",
+            "minimum": 0
+          },
+          "part": {
+            "type": "string",
+            "description": "Part identifier, must match the CAD/registry name (e.g. 'Anker_Lang', 'Zahnrad_Typ7'). Drives model routing and CAD load in the viewer.",
+            "minLength": 1
+          },
+          "face": {
+            "type": "string",
+            "description": "Resting face name as produced by the registry, e.g. 'Face 1'. Matches faces_<part>.json faces[].name.",
+            "minLength": 1
+          },
+          "R_world": {
+            "type": "array",
+            "description": "3x3 rotation matrix flattened row-major to 9 floats. Column convention: world = R @ body. Consistent with faces_<part>.json faces[].R; the inferred yaw is composed onto the registry rest rotation R_face.",
+            "items": { "type": "number" },
+            "minItems": 9,
+            "maxItems": 9
+          },
+          "t_world": {
+            "type": "array",
+            "description": "Translation of the part body origin in world coordinates [x, y, z] in meters, relative to the table-plane null-point.",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Face-classifier confidence for this instance, 0..1.",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "bbox_2d": {
+            "type": "array",
+            "description": "Axis-aligned 2D bounding box in source-image pixels [x0, y0, x1, y1], integer, with x0<=x1 and y0<=y1.",
+            "items": { "type": "integer", "minimum": 0 },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "upright": {
+            "type": "boolean",
+            "description": "True if the part stands on its head / upright (Kopf steht hochkant), derived from the registry face tilt. Lets the viewer flag non-flat rest poses."
+          }
+        }
+      }
+    }
+  }
+}
