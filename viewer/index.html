@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>POSE — 3D Pose Viewer</title>
+    <link rel="stylesheet" href="./src/style.css" />
+
+    <!--
+      Three.js via ES-module CDN import map. No build step needed.
+      Pinned version so the viewer is reproducible. To vendor locally instead,
+      drop three's build/ + examples/jsm/ next to this file and repoint the map.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+
+      <!-- HUD: top-left meta strip -->
+      <header id="hud" class="hud">
+        <h1 class="hud__title">POSE <span class="hud__sub">3D Pose Viewer</span></h1>
+        <dl id="meta" class="hud__meta" aria-live="polite">
+          <div class="hud__row"><dt>Quelle</dt><dd id="meta-source">–</dd></div>
+          <div class="hud__row"><dt>Teile</dt><dd id="meta-count">–</dd></div>
+          <div class="hud__row"><dt>Einheit</dt><dd id="meta-units">–</dd></div>
+        </dl>
+      </header>
+
+      <!-- Legend: bottom-left -->
+      <aside id="legend" class="legend" aria-label="Legende">
+        <span class="legend__item"><i class="legend__swatch legend__swatch--flat"></i>liegend</span>
+        <span class="legend__item"><i class="legend__swatch legend__swatch--upright"></i>steht hochkant</span>
+        <span class="legend__item"><i class="legend__swatch legend__swatch--origin"></i>Nullpunkt</span>
+      </aside>
+
+      <!-- Click-info panel: right overlay, hidden until a part is picked -->
+      <section id="info-panel" class="info-panel" hidden aria-live="polite">
+        <button id="info-close" class="info-panel__close" aria-label="Schließen">&times;</button>
+        <h2 id="info-title" class="info-panel__title">–</h2>
+        <dl class="info-panel__list">
+          <div class="info-panel__row"><dt>Instanz</dt><dd id="info-instance">–</dd></div>
+          <div class="info-panel__row"><dt>Face</dt><dd id="info-face">–</dd></div>
+          <div class="info-panel__row"><dt>Position rel. Nullpunkt</dt><dd id="info-pos">–</dd></div>
+          <div class="info-panel__row"><dt>Confidence</dt><dd id="info-conf">–</dd></div>
+          <div class="info-panel__row"><dt>Ausrichtung</dt><dd id="info-upright">–</dd></div>
+        </dl>
+      </section>
+
+      <!-- Status / error toast -->
+      <div id="status" class="status" hidden></div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
