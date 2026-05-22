@@ -5,32 +5,35 @@
     python project/e2e_infer.py --image project/input/scene_0000.png --out out.json
     python project/e2e_infer.py --image project/input/scene_0000.png --serve
 
-Selbst-enthalten: die gesamte Pipeline-Logik ist INLINE (kein Import auf
-Projektmodule). Bewusst dupliziert mit setup.ipynb / infer.ipynb — damit dieses
-eine Skript für sich allein lauffähig und weitergebbar ist.
+Selbst-enthalten: die Pipeline-Logik ist INLINE (kein Import auf Projektmodule),
+damit dieses eine Skript für sich allein lauffähig und weitergebbar ist.
 
 Pipeline:
-  1. Teile finden        — echter OBB-Detektor (models/detector.pt, YOLOv8-OBB via
-                           ultralytics) liefert orientierte Boxen + Klasse. Fallback:
-                           SDG-Annotator-Boxen (bbox_2d_<idx>.json), dann Dummy-Box.
-  2. Crop                — achsenparalleler Ausschnitt der OBB-Hülle pro Detection.
-  3. Face klassifizieren — models/<part>.pt (CNN, lazy torch), sonst
-                           Nearest-Template-Fallback gegen die Registry-Templates.
-  4. 6D-Alignment        — Yaw aus dem OBB-Winkel (180°-Flip per Template-MSE
-                           aufgelöst; ohne OBB Vollsuche), R_world = Rz(yaw)·R_face,
-                           Backprojection des BBox-Zentrums auf die Tisch-Ebene.
-  5. pose_result         — gegen den Contract validiert (stdlib immer; jsonschema
-                           wenn verfügbar), dann geschrieben. Schema-valide oder
-                           es wird nichts geschrieben.
+  1. Teile finden   — echter OBB-Detektor (models/detector.pt, YOLOv8-OBB via
+                      ultralytics) liefert orientierte Boxen + Klasse. Fallback:
+                      SDG-Annotator-Boxen (bbox_2d_<idx>.json), dann Dummy-Box.
+  2. Crop           — achsenparalleler Ausschnitt der OBB-Hülle pro Detection.
+  3. 6D-Pose        — GDRNPP (BOP-SOTA, siehe ADR-018): liefert pro Detektion
+                      R_world + t_world. Aktuell STUB (Anbindung in W2/W3).
+  4. pose_result    — gegen den Contract validiert (stdlib immer; jsonschema wenn
+                      verfügbar), dann geschrieben. Schema-valide oder es wird
+                      nichts geschrieben.
 
 Mit --serve startet das Skript danach einen localhost-Server (ab project/) und
 öffnet den 3D-Viewer (frontend/) auf das erzeugte pose_result.
 
+Hinweis (ADR-018, BOP-Pivot): Der alte Eigenbau-Pose-Mittelteil (Face-Atlas /
+faces_<part>.json-Registry / Template-Bank-Render-and-Compare / Face-Classifier /
+template-MSE-Yaw / Eigenbau-Backprojection) ist BEWUSST entfernt ("für die
+Tonne"). An seiner Stelle steht GDRNPP — bis dessen Inferenz angebunden ist
+(W2/W3), ist Stufe 3 ein Stub, der keine Posen liefert; der Contract bleibt
+unverändert und schema-valide.
+
 Konvention (eingefroren): Z-up Welt, world = R @ body (Spaltenkonvention),
 Ursprung = Tisch-Nullpunkt, Einheit Meter.
 
-Abhängigkeiten: numpy, scipy, PIL (Pflicht). torch + ultralytics nur für die
-trainierten Checkpoints (sonst Fallback). jsonschema optional (Bonus-Gate).
+Abhängigkeiten: numpy, PIL (Pflicht). torch + ultralytics nur für den Detektor-
+Checkpoint (sonst Fallback). jsonschema optional (Bonus-Gate).
 """
 from __future__ import annotations
 
@@ -41,130 +44,56 @@ import pathlib
 
 import numpy as np
 from PIL import Image
-from scipy import ndimage
 
 # ── Pfade (relativ zu diesem Skript, CWD-unabhängig) ──────────────────────────
 HERE = pathlib.Path(__file__).resolve().parent          # project/
 MODELS = HERE / "models"
-REGISTRY = MODELS / "registry"
-TEMPLATES = MODELS / "templates"        # Template-Banken (bank.npz pro Teil)
 # pose_result-Contract (in project/ committet; ältere docs/-Lage als Fallback).
 SCHEMA_FILE = next((p for p in (HERE / "pose_result.schema.json",
                                 HERE.parent / "docs" / "pose_result.schema.json")
                     if p.exists()), HERE / "pose_result.schema.json")
 
 SCHEMA_VERSION = "1.0.0"
-COORD_CONVENTION = ("Z-up world; column rotation world = R @ body (same as "
-                    "faces_<part>.json registry); origin = table-plane null-point")
-IMG_SIZE = TMPL_SIZE = 96
-YAW_STEP_DEG = 5.0
-UPRIGHT_TILT_DEG = 60.0
+COORD_CONVENTION = ("Z-up world; column rotation world = R @ body; "
+                    "origin = table-plane null-point")
 
-# top-down Default-Intrinsics (entspricht render_dataset.py)
-DEFAULT_CAM_H, DEFAULT_FOCAL_MM, DEFAULT_SENSOR_MM = 0.16, 24.0, 20.955
-
-# ── ECHTE Zivid-Kamera der GST_Scene (aus GST_Scene.usd ausgelesen) ───────────
-# Die Multi-Part-Zellen-Renders kommen von dieser Kamera. Mit echten Intrinsics +
-# Extrinsics wird die Backprojection metrisch korrekt: jeder Pixel-Strahl wird auf
-# die Tisch-Ebene (z=0, Welt) geschnitten -> Teile landen an der richtigen Stelle
-# statt zentrumsnah geclustert.
-#   focalLength=15.5mm, horiz/vertAperture=15.0mm, Render 1280x720
-#   Kamera-Welt-Pose: t=(0.45, 0.08807, 1.1), leicht nach -Y/-Z gekippt.
-ZIVID = {
-    "focal_mm": 15.5, "aperture_h_mm": 15.0, "aperture_v_mm": 15.0,
-    "render_w": 1280, "render_h": 720,
-    "cam_t": (0.45, 0.08807, 1.1),
-    # Welt-aus-Kamera Rotationsmatrix (Zeilen), aus ComputeLocalToWorldTransform.
-    "R_wc": ((-0.99939, -0.00666, 0.03426),
-             (0.0,      -0.98163, -0.19081),
-             (0.0349,   -0.19069, 0.98103)),
-}
-# Tray-/Spawn-Grenzen (datagenerationscript.py SPAWN_BOUNDS) — als Plausi-Klemme
-# falls ein Strahl knapp daneben trifft.
-SCENE_TRAY_BOUNDS = {"x": (0.057, 0.783), "y": (0.042, 0.537)}  # Meter, Welt
+# Tisch-Nullpunkt = Tray-Arbeitsfläche (Welt, Meter), x/y = GST-Welt-Ursprung,
+# damit die Teile mit dem cell.glb (echtes CAD, Welt-Frame) fluchten.
+TABLE_ORIGIN_SCENE = (0.0, 0.0, 0.08)
 
 
-# ── Registry-Loader ───────────────────────────────────────────────────────────
-class Face:
-    def __init__(self, name, prob, tilt_deg, R_face, template_path, index):
-        self.name = name; self.prob = prob; self.tilt_deg = tilt_deg
-        self.R_face = R_face; self.template_path = template_path; self.index = index
+def available_parts():
+    """Teile-Namen aus models/part_meta.json (post-ADR-018). Fallback: Liste."""
+    pm = MODELS / "part_meta.json"
+    if pm.exists():
+        try:
+            data = json.load(open(pm))
+            names = list(data.get("parts", data)) if isinstance(data, (dict, list)) else []
+            if names:
+                return sorted(str(n) for n in names)
+        except Exception:
+            pass
+    return ["Anker_Lang", "Anker_Kurz", "Zahnrad", "Poltopf_kurz_centered",
+            "Getriebegehaeuse_typ4", "Buerstenhalter_2polig"]
 
 
-class PartRegistry:
-    def __init__(self, part, convention, faces):
-        self.part = part; self.convention = convention; self.faces = faces
-
-    def resolve_face(self, classifier_face):
-        if not self.faces:
-            return None
-        for f in self.faces:
-            if f.name == classifier_face:
-                return f
-        norm = classifier_face.strip().lower().replace("face", "").replace("_", "").replace(" ", "")
-        if norm.isdigit():
-            for f in self.faces:
-                if f.index == int(norm):
-                    return f
-        return max(self.faces, key=lambda f: f.prob)
+def _canonical_parts():
+    return {p.lower(): p for p in available_parts()}
 
 
-def load_part_registry(part, root=REGISTRY):
-    pdir = pathlib.Path(root) / part
-    jp = pdir / f"faces_{part}.json"
-    if not jp.exists():
-        return None
-    data = json.load(open(jp))
-    faces = []
-    for k, fc in enumerate(data.get("faces", []), start=1):
-        R = np.asarray(fc.get("R", []), float)
-        R = R.reshape(3, 3) if R.size == 9 else np.eye(3)
-        tp = pdir / f"tmpl_Face{k}.png"
-        faces.append(Face(str(fc.get("name", f"Face {k}")), float(fc.get("prob", 0.0)),
-                          float(fc.get("tilt_deg", 0.0)), R, str(tp) if tp.exists() else None, k))
-    return PartRegistry(data.get("part", part),
-                        data.get("convention", "world = R @ body (column)"), faces)
-
-
-def load_template(face, size=TMPL_SIZE):
-    if not face or not face.template_path or not os.path.exists(face.template_path):
-        return None
-    img = np.asarray(Image.open(face.template_path).convert("L").resize((size, size)))
-    return img.astype(np.float32) / 255.0
-
-
-def available_parts(root=REGISTRY):
-    root = pathlib.Path(root)
-    if not root.is_dir():
-        return []
-    return sorted(d.name for d in root.iterdir()
-                  if d.is_dir() and (d / f"faces_{d.name}.json").exists())
+def canonical_part(raw, canon):
+    return canon.get(raw.strip().lower(), raw)
 
 
 # ── Stufe 1: Detections (OBB-Detektor, sonst SDG-BBoxes, sonst Dummy) ─────────
 # Drei Quellen, in dieser Priorität, jede ein sauberer Fallback der vorigen:
 #   1. models/detector.pt  — echt trainierter YOLOv8-OBB-Detektor (ultralytics).
-#      Findet Teile in beliebigen Szenen als orientierte Boxen + Klasse.
 #   2. bbox_2d_<idx>.json   — SDG-Annotator-Boxen neben dem Bild (Sim-Ground-Truth).
 #   3. Dummy                — eine ganze-Bild-Box, damit die Kette nie hart bricht.
 DETECTOR_FILE = MODELS / "detector.pt"
-# Der neue YOLOv8s-OBB (5 Klassen, mAP50≈0.99) ist deutlich konfidenter — höhere
-# conf filtert die Doppel-/Geister-Boxen, die der alte 2-Klassen-Detektor lieferte.
 DETECTOR_CONF = 0.40
 DETECTOR_IMGSZ = 1280
 _DETECTOR_CACHE: dict = {}
-
-
-def _canonical_parts():
-    parts = available_parts()
-    if parts:
-        return {p.lower(): p for p in parts}
-    return {n.lower(): n for n in ["Anker_Lang", "Anker_Kurz", "Zahnrad",
-            "Poltopf_kurz_centered", "Getriebegehaeuse_typ4", "Buerstenhalter_2polig"]}
-
-
-def canonical_part(raw, canon):
-    return canon.get(raw.strip().lower(), raw)
 
 
 def _load_detector():
@@ -191,7 +120,7 @@ def _obb_to_aabb(corners, W, H):
 
 
 def _obb_angle_deg(corners):
-    """In-plane Winkel der langen OBB-Achse (Grad), zum Seeden der Yaw-Suche."""
+    """In-plane Winkel der langen OBB-Achse (Grad), als Yaw-Prior fürs Pose-Backend."""
     p = np.asarray(corners, float)
     e01 = p[1] - p[0]; e12 = p[2] - p[1]
     long_edge = e01 if np.hypot(*e01) >= np.hypot(*e12) else e12
@@ -275,379 +204,30 @@ def detections_for(img_path, warn=print):
         part = available_parts()[0] if available_parts() else "Anker_Lang"
         dets = [{"instance_id": 0, "part": part, "bbox_2d": [0, 0, W, H],
                  "raw_label": part, "occlusion": 0.0}]
-        warn(f"[detect] DUMMY: eine ganze-Bild-BBox als '{part}' (OBB-Detektor TODO)")
+        warn(f"[detect] DUMMY: eine ganze-Bild-BBox als '{part}'")
     return rgb, dets
 
 
-# ── Stufe 3: Face-Classifier (Checkpoint, sonst Nearest-Template) ─────────────
-_MODEL_CACHE: dict = {}
-_REF_CACHE: dict = {}
+# === BOP pose pipeline (GDRNPP — siehe ADR-018), wird in W2/W3 eingesetzt ======
+# Stufe 3 (6D-Pose) ist hier ein STUB. Der alte Eigenbau-Mittelteil (Face-Atlas,
+# Template-Bank, Face-Classifier, template-MSE-Yaw, Eigenbau-Backprojection) ist
+# bewusst entfernt. Sobald GDRNPP angebunden ist, liefert estimate_poses() pro
+# Detektion einen Eintrag mit:
+#   {instance_id, part, face_name, R_world(9 floats), t_world(3 floats),
+#    confidence(0..1), bbox_2d(4 ints), upright(bool)}
+# und build_pose_result() giesst das schema-valide in pose_result.json.
+def estimate_poses(rgb, dets, warn=print):
+    """6D-Pose pro Detektion via GDRNPP (BOP-SOTA). STUB bis W2/W3-Anbindung.
+
+    Erwartete Eingabe: das RGB + die OBB-Detektionen aus Stufe 1 (Crop + OBB-
+    Winkel als Prior). Erwartete Ausgabe: Liste 'aligned' (s. Format oben).
+    Bis GDRNPP läuft -> leere Liste (keine Posen)."""
+    warn(f"[pose] GDRNPP-Stub: {len(dets)} Detektion(en), 0 Posen "
+         f"(BOP-Pipeline wird in W2/W3 angebunden — ADR-018)")
+    return []
 
 
-def _prep(crop, size=IMG_SIZE):
-    a = np.asarray(crop)
-    if a.ndim == 2:
-        a = np.stack([a] * 3, -1)
-    if a.dtype != np.uint8:
-        a = np.clip(a, 0, 255).astype(np.uint8)
-    h, w = a.shape[:2]
-    sd = max(h, w)
-    sq = np.full((sd, sd, 3), 128, np.uint8)
-    sq[(sd - h) // 2:(sd - h) // 2 + h, (sd - w) // 2:(sd - w) // 2 + w] = a[:, :, :3]
-    return np.asarray(Image.fromarray(sq).resize((size, size), Image.BILINEAR))
-
-
-def _build_net(n_classes):
-    import torch.nn as nn
-
-    def block(c, o):
-        return nn.Sequential(nn.Conv2d(c, o, 3, padding=1), nn.BatchNorm2d(o), nn.ReLU(True),
-                             nn.Conv2d(o, o, 3, padding=1), nn.BatchNorm2d(o), nn.ReLU(True),
-                             nn.MaxPool2d(2))
-
-    class Net(nn.Module):
-        def __init__(self, n):
-            super().__init__()
-            self.f = nn.Sequential(block(3, 16), block(16, 32), block(32, 64), block(64, 64))
-            self.h = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(),
-                                   nn.Dropout(0.2), nn.Linear(64, n))
-
-        def forward(self, x):
-            return self.h(self.f(x))
-
-    return Net(n_classes)
-
-
-def _load_model(part):
-    if part in _MODEL_CACHE:
-        return _MODEL_CACHE[part]
-    ckpt = MODELS / f"{part}.pt"
-    if not ckpt.exists():
-        _MODEL_CACHE[part] = None
-        return None
-    try:
-        import torch
-        state = torch.load(ckpt, map_location="cpu")
-        classes = state["classes"]
-        net = _build_net(len(classes))
-        net.load_state_dict(state["model"])
-        net.eval()
-        _MODEL_CACHE[part] = (net, classes)
-    except Exception:
-        _MODEL_CACHE[part] = None
-    return _MODEL_CACHE[part]
-
-
-def _infer_model(crop, part):
-    loaded = _load_model(part)
-    if loaded is None:
-        return None
-    net, classes = loaded
-    import torch
-    x = _prep(crop).astype(np.float32) / 255.0
-    x = torch.from_numpy(x.transpose(2, 0, 1))[None]
-    with torch.no_grad():
-        probs = torch.softmax(net(x), 1)[0].numpy()
-    k = int(np.argmax(probs))
-    return {"face": classes[k], "confidence": float(probs[k])}
-
-
-def _grey(img):
-    a = np.asarray(img).astype(np.float32)
-    return a.mean(2) / 255.0 if a.ndim == 3 else a / 255.0
-
-
-def _ncc_rot_mirror(a, b, step=10):
-    best = -1.0
-    for src in (a, a[:, ::-1]):
-        for ang in range(0, 360, step):
-            ar = ndimage.rotate(src, ang, reshape=False, order=1)
-            m = (ar > 0.02) | (b > 0.02)
-            if m.sum() < 20:
-                continue
-            x = ar[m] - ar[m].mean(); y = b[m] - b[m].mean()
-            d = np.linalg.norm(x) * np.linalg.norm(y) + 1e-9
-            best = max(best, float((x @ y) / d))
-    return best
-
-
-def _load_refs(part):
-    if part in _REF_CACHE:
-        return _REF_CACHE[part]
-    reg = load_part_registry(part)
-    refs = {}
-    if reg:
-        for f in reg.faces:
-            if f.template_path:
-                refs[f"face_{f.index}"] = _grey(_prep(np.asarray(
-                    Image.open(f.template_path).convert("RGB"))))
-    _REF_CACHE[part] = refs
-    return refs
-
-
-def _infer_fallback(crop, part):
-    refs = _load_refs(part)
-    reg = load_part_registry(part)
-    classes = [f"face_{f.index}" for f in reg.faces] if reg else []
-    if not refs:
-        return {"face": classes[0] if classes else "face_1", "confidence": 0.0}
-    q = _grey(_prep(crop))
-    scores = {c: _ncc_rot_mirror(q, r) for c, r in refs.items()}
-    items = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
-    best_cls, best = items[0]
-    conf = (best - items[1][1]) / (abs(best) + 1e-6) if len(items) > 1 else best
-    return {"face": best_cls, "confidence": float(np.clip(conf, 0.0, 1.0))}
-
-
-def infer(crop, part):
-    """Face-Klassifikation. Checkpoint wenn vorhanden, sonst Nearest-Template."""
-    out = _infer_model(crop, part)
-    return out if out is not None else _infer_fallback(crop, part)
-
-
-def backend(part):
-    return "checkpoint" if _load_model(part) is not None else "fallback"
-
-
-# ── Stufe 4: 6D-Alignment + Backprojection ────────────────────────────────────
-def _rz(theta):
-    c, s = np.cos(theta), np.sin(theta)
-    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
-
-
-def _silhouette(crop, size=TMPL_SIZE):
-    a = np.asarray(crop)
-    g = a.astype(np.float32).mean(2) if a.ndim == 3 else a.astype(np.float32)
-    h, w = g.shape[:2]
-    sd = max(h, w)
-    sq = np.full((sd, sd), 128.0, np.float32)
-    sq[(sd - h) // 2:(sd - h) // 2 + h, (sd - w) // 2:(sd - w) // 2 + w] = g
-    img = np.asarray(Image.fromarray(sq.astype(np.uint8)).resize((size, size),
-                     Image.BILINEAR)).astype(np.float32)
-    sig = np.abs(img - 128.0)
-    m = sig.max()
-    return sig / m if m > 1e-6 else sig
-
-
-# ── Template-Bank Render-and-Compare (DIE Pose-Quelle) ────────────────────────
-# Statt aus einem CNN zu *raten*, wird der Crop deterministisch gegen eine pro
-# Teil aus dem ECHTEN CAD gerenderte Bank gematcht: {stabile Ruhelagen} x {Yaw
-# 0..360 in 5°}. Jedes Template = top-down Tiefen-/Silhouetten-Bild der Mesh in
-# Lage Rz(yaw)·R_face. Bester Match -> exakte Ruhelage (Face) + exakter Yaw ->
-# volle R_world direkt aus der Bank. Planar-eingeschränktes Render-and-Compare
-# (CosyPose/MegaPose-Idee). Die OBB liefert (x,y) + groben Yaw-Seed (Suchfenster).
-_BANK_CACHE: dict = {}
-
-
-def load_template_bank(part):
-    """bank.npz für ein Teil laden (gecached). None wenn keine Bank da."""
-    if part in _BANK_CACHE:
-        return _BANK_CACHE[part]
-    bp = TEMPLATES / part / "bank.npz"
-    bank = None
-    if bp.exists():
-        try:
-            d = np.load(bp)
-            bank = {"depth": d["depth"].astype(np.float32), "sil": d["sil"].astype(np.float32),
-                    "face_idx": d["face_idx"], "yaw": d["yaw"].astype(np.float32),
-                    "R_world": d["R_world"].astype(np.float32),
-                    "size": int(d["size"]), "yaw_step": float(d["yaw_step"])}
-        except Exception:
-            bank = None
-    _BANK_CACHE[part] = bank
-    return bank
-
-
-def _query_relief(crop, size):
-    """Crop -> Form-Signal (0..1), das mit der Template-Tiefe vergleichbar ist:
-    quadrat-gepaddete, normierte Abweichung vom Neutralgrau. Trägt die Silhouette
-    + grobe Binnenstruktur des Teils auch aus reinem RGB."""
-    a = np.asarray(crop)
-    g = a.astype(np.float32).mean(2) if a.ndim == 3 else a.astype(np.float32)
-    h, w = g.shape[:2]
-    sd = max(h, w, 1)
-    sq = np.full((sd, sd), 128.0, np.float32)
-    sq[(sd - h) // 2:(sd - h) // 2 + h, (sd - w) // 2:(sd - w) // 2 + w] = g
-    img = np.asarray(Image.fromarray(sq.astype(np.uint8)).resize((size, size),
-                     Image.BILINEAR)).astype(np.float32)
-    sig = np.abs(img - 128.0)
-    m = sig.max()
-    return sig / m if m > 1e-6 else sig
-
-
-def _yaw_window_mask(yaws, obb_angle_deg, half_window=25.0):
-    """Boolean-Maske: nur Yaws im Fenster um den OBB-Winkel + 180°-Flip. Verkleinert
-    die Suche und nutzt den Detektor-Prior. None -> ganze Bank durchsuchen."""
-    if obb_angle_deg is None:
-        return np.ones(len(yaws), bool)
-    base = obb_angle_deg % 360.0
-    mask = np.zeros(len(yaws), bool)
-    for b in (base, (base + 180.0) % 360.0):
-        dd = np.abs((yaws - b + 180.0) % 360.0 - 180.0)
-        mask |= dd <= half_window
-    return mask if mask.any() else np.ones(len(yaws), bool)
-
-
-def match_template_bank(crop, part, obb_angle_deg=None, registry=None):
-    """Crop gegen die Template-Bank matchen -> (face_idx, yaw, R_world, score, ...).
-
-    Score = Korrelation (NCC) zwischen Query-Relief und Template-Tiefe, gewichtet
-    mit Silhouetten-IoU. Sucht über alle Faces; pro Face nur Yaws im OBB-Fenster.
-    Liefert None wenn keine Bank vorhanden (Aufrufer fällt auf Yaw-Suche zurück)."""
-    bank = load_template_bank(part)
-    if bank is None:
-        return None
-    size = bank["size"]
-    q = _query_relief(crop, size)
-    qf = q.ravel(); qf = qf - qf.mean()
-    qn = np.linalg.norm(qf) + 1e-9
-    qsil = (q > 0.12).astype(np.float32)
-
-    depth = bank["depth"]; sil = bank["sil"]; yaws = bank["yaw"]
-    win = _yaw_window_mask(yaws, obb_angle_deg)
-    idxs = np.nonzero(win)[0]
-    best_i, best_score = -1, -np.inf
-    for i in idxs:
-        t = depth[i].ravel(); t = t - t.mean()
-        ncc = float((qf @ t) / (qn * (np.linalg.norm(t) + 1e-9)))
-        inter = float((qsil * sil[i]).sum()); union = float(((qsil + sil[i]) > 0).sum()) + 1e-9
-        iou = inter / union
-        score = 0.6 * ncc + 0.4 * iou
-        if score > best_score:
-            best_score, best_i = score, i
-    face_k = int(bank["face_idx"][best_i])
-    R = bank["R_world"][best_i].reshape(3, 3)
-    yaw = float(yaws[best_i])
-    # Face-Name + Aufrecht-Flag aus der Registry (sonst generisch).
-    face_name = f"Face {face_k}"; upright = False
-    if registry and registry.faces:
-        for f in registry.faces:
-            if f.index == face_k:
-                face_name = f.name
-                upright = bool(f.tilt_deg >= UPRIGHT_TILT_DEG)
-                break
-    # Match-Confidence: Score auf 0..1 geklemmt (NCC kann negativ werden).
-    conf = float(np.clip((best_score + 0.2) / 1.0, 0.0, 1.0))
-    return {"face_idx": face_k, "face_name": face_name, "yaw_deg": yaw,
-            "R_world": R, "score": best_score, "confidence": conf, "upright": upright,
-            "template_idx": int(best_i)}
-
-
-def estimate_yaw(crop, template, step_deg=YAW_STEP_DEG):
-    """Fallback (keine Bank): Yaw via Silhouetten-MSE über ein einzelnes Template."""
-    if template is None:
-        return 0.0
-    q = _silhouette(crop)
-    best_ang, best_mse = 0.0, float("inf")
-    for ang in np.arange(0.0, 360.0, step_deg):
-        rt = ndimage.rotate(template, ang, reshape=False, order=1, mode="constant", cval=0.0)
-        m = float(np.mean((rt - q) ** 2))
-        if m < best_mse:
-            best_mse, best_ang = m, float(ang)
-    return best_ang
-
-
-def align_detection(part, classifier_face, crop, registry, step_deg=YAW_STEP_DEG,
-                    obb_angle_deg=None):
-    """6D-Pose eines Crops. PRIMÄR: Template-Bank Render-and-Compare (Face + Yaw +
-    R_world deterministisch aus der Bank). FALLBACK (keine Bank): Registry-R_face +
-    Yaw-Suche über das Face-Template."""
-    # 1) Template-Bank-Match — die Pose-Quelle.
-    m = match_template_bank(crop, part, obb_angle_deg=obb_angle_deg, registry=registry)
-    if m is not None:
-        return {"R_world": [float(v) for v in m["R_world"].flatten()],
-                "yaw_deg": m["yaw_deg"], "upright": m["upright"],
-                "face_name": m["face_name"], "rest_height": 0.0,
-                "match_score": float(m["score"]), "match_conf": m["confidence"],
-                "template_idx": m["template_idx"], "pose_source": "template_bank"}
-    # 2) Fallback: Registry-R_face + Yaw-Suche (kein Bank-NPZ vorhanden).
-    face = registry.resolve_face(classifier_face) if registry else None
-    if face is None:
-        return {"R_world": list(np.eye(3).flatten()), "yaw_deg": 0.0, "upright": False,
-                "face_name": classifier_face or "Face 1", "rest_height": 0.0,
-                "pose_source": "identity"}
-    template = load_template(face, size=TMPL_SIZE)
-    yaw = estimate_yaw(crop, template, step_deg)
-    R_world = _rz(np.radians(yaw)) @ face.R_face
-    return {"R_world": [float(v) for v in R_world.flatten()], "yaw_deg": yaw,
-            "upright": bool(face.tilt_deg >= UPRIGHT_TILT_DEG),
-            "face_name": face.name, "rest_height": 0.0, "pose_source": "registry_yaw"}
-
-
-class Intrinsics:
-    def __init__(self, width, height, cam_h=DEFAULT_CAM_H, focal_mm=DEFAULT_FOCAL_MM,
-                 sensor_mm=DEFAULT_SENSOR_MM, table_origin=(0.0, 0.0, 0.0)):
-        self.width = width; self.height = height; self.cam_h = cam_h
-        self.table_origin = table_origin
-        self.cx = width / 2.0; self.cy = height / 2.0
-        self.fx = focal_mm / sensor_mm * width
-        self.fy = focal_mm / sensor_mm * height
-
-
-class SceneIntrinsics:
-    """Metrische Backprojection für die Multi-Part-Zellen-View mit den ECHTEN
-    Zivid-Intrinsics + Extrinsics aus GST_Scene.usd. Jeder BBox-Zentrums-Pixel
-    wird zu einem Welt-Strahl (Kamera-Ursprung + Richtung) und gegen die Tisch-
-    Ebene z = table_origin[2] + rest_height geschnitten. Ergebnis ist metrisch in
-    Welt-Koordinaten — Teile liegen an der RICHTIGEN Stelle (nicht geclustert).
-
-    USD-Kamera-Konvention: blickt entlang lokal -Z, +Y oben, +X rechts. fx/fy aus
-    focalLength/aperture. Pixel (u,v) (v wächst nach unten) -> lokaler Strahl ->
-    mit R_wc (Welt-aus-Kamera) nach Welt gedreht."""
-
-    def __init__(self, width, height, table_origin=(0.0, 0.0, 0.0), zivid=ZIVID,
-                 tray=SCENE_TRAY_BOUNDS):
-        self.width = width; self.height = height; self.table_origin = table_origin
-        self.tray = tray
-        # Intrinsics auf die TATSÄCHLICHE Render-Auflösung skalieren.
-        sx = width / zivid["render_w"]; sy = height / zivid["render_h"]
-        self.fx = zivid["focal_mm"] / zivid["aperture_h_mm"] * zivid["render_w"] * sx
-        self.fy = zivid["focal_mm"] / zivid["aperture_v_mm"] * zivid["render_h"] * sy
-        self.cx = width / 2.0; self.cy = height / 2.0
-        self.cam_t = np.asarray(zivid["cam_t"], float)
-        self.R_wc = np.asarray(zivid["R_wc"], float)            # Zeilen-Konvention
-
-    def _ray_dir_world(self, u, v):
-        # Pixel -> lokale Kamera-Richtung (USD: -Z vorwärts, +Y oben).
-        dx = (u - self.cx) / self.fx
-        dy = -(v - self.cy) / self.fy        # v wächst nach unten -> +Y oben
-        d_cam = np.array([dx, dy, -1.0])
-        # Welt-Richtung: USD row-vector -> d_world = d_cam @ R_wc.
-        d_world = d_cam @ self.R_wc
-        n = np.linalg.norm(d_world)
-        return d_world / n if n > 1e-9 else d_world
-
-    def to_world(self, bbox, rest_height=0.0):
-        x0, y0, x1, y1 = bbox
-        u, v = (x0 + x1) / 2.0, (y0 + y1) / 2.0
-        d = self._ray_dir_world(u, v)
-        z_plane = self.table_origin[2] + rest_height
-        # Strahl cam_t + s*d schneidet z = z_plane.
-        if abs(d[2]) < 1e-9:
-            s = 0.0
-        else:
-            s = (z_plane - self.cam_t[2]) / d[2]
-        p = self.cam_t + max(s, 0.0) * d
-        x = p[0] - self.table_origin[0]; y = p[1] - self.table_origin[1]
-        # Plausi-Klemme auf die (leicht erweiterten) Tray-Grenzen.
-        tx, ty = self.tray["x"], self.tray["y"]
-        mx = (tx[1] - tx[0]) * 0.15; my = (ty[1] - ty[0]) * 0.15
-        x = float(np.clip(x, tx[0] - mx - self.table_origin[0], tx[1] + mx - self.table_origin[0]))
-        y = float(np.clip(y, ty[0] - my - self.table_origin[1], ty[1] + my - self.table_origin[1]))
-        return [x, y, float(z_plane)]
-
-
-def bbox_center_to_world(bbox, intr, rest_height=0.0):
-    if isinstance(intr, SceneIntrinsics):
-        return intr.to_world(bbox, rest_height)
-    x0, y0, x1, y1 = bbox
-    u, v = (x0 + x1) / 2.0, (y0 + y1) / 2.0
-    x = (u - intr.cx) * intr.cam_h / intr.fx + intr.table_origin[0]
-    y = -(v - intr.cy) * intr.cam_h / intr.fy + intr.table_origin[1]
-    return [float(x), float(y), float(intr.table_origin[2] + rest_height)]
-
-
-# ── Stufe 5: pose_result + Contract-Gate ──────────────────────────────────────
+# ── Stufe 4: pose_result + Contract-Gate ──────────────────────────────────────
 def _is_num(x):
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
@@ -724,10 +304,10 @@ def jsonschema_available():
         return False
 
 
-def build_pose_result(img_path, aligned, intr):
+def build_pose_result(img_path, aligned, table_origin=TABLE_ORIGIN_SCENE):
     return {
         "meta": {"source_image": str(img_path),
-                 "table_origin": [float(v) for v in intr.table_origin],
+                 "table_origin": [float(v) for v in table_origin],
                  "units": "m", "coordinate_convention": COORD_CONVENTION,
                  "schema_version": SCHEMA_VERSION},
         "results": [{"instance_id": int(a["instance_id"]), "part": a["part"],
@@ -740,58 +320,15 @@ def build_pose_result(img_path, aligned, intr):
     }
 
 
-# Tisch-Nullpunkt in Welt: die Arbeitsfläche der Zelle, auf der die Teile ruhen
-# (Tray-Referenzhöhe _REF_Z der SDG-Pipeline). x/y = Welt-Ursprung der GST_Scene,
-# damit die platzierten Teile mit dem cell.glb (echtes CAD, Welt-Frame) fluchten.
-TABLE_ORIGIN_SCENE = (0.0, 0.0, 0.08)
-
-
 # ── Orchestrierung ────────────────────────────────────────────────────────────
 def run(image, out_path, warn=print):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
 
-    Pose-Quelle ist die Template-Bank (Render-and-Compare): Face + Yaw + R_world
-    kommen aus dem Bank-Match, NICHT aus dem Face-Classifier. Der Classifier läuft
-    nur noch als optionaler Schnell-Vorfilter (Log/Vis)."""
+    Detektor (Stufe 1) -> GDRNPP (Stufe 3, Stub) -> pose_result (Stufe 4). Solange
+    GDRNPP nicht angebunden ist, sind 'results' leer — der Contract bleibt valide."""
     rgb, dets = detections_for(image, warn=warn)
-    H, W = rgb.shape[:2]
-    # Zellen-View (Multi-Part-Szene) -> echte Zivid-Intrinsics, metrische Backprojection;
-    # sonst top-down Faceset-Intrinsics. Heuristik: breite Szene (>=1000px) = Zellen-View.
-    if W >= 1000:
-        intr = SceneIntrinsics(W, H, table_origin=TABLE_ORIGIN_SCENE)
-    else:
-        intr = Intrinsics(W, H)
-    known = set(available_parts())
-    reg_cache: dict = {}
-    aligned = []
-    for d in dets:
-        if known and d["part"] not in known:
-            warn(f"[infer] unbekanntes Teil '{d['raw_label']}' (canonical "
-                 f"'{d['part']}') — kein Modell/Registry, skip #{d['instance_id']}")
-            continue
-        x0, y0, x1, y1 = d["bbox_2d"]
-        crop = rgb[y0:y1, x0:x1].copy()
-        res = infer(crop, d["part"])                      # optionaler Vorfilter
-        if d["part"] not in reg_cache:
-            reg_cache[d["part"]] = load_part_registry(d["part"])
-        a = align_detection(d["part"], res["face"], crop, reg_cache[d["part"]],
-                            obb_angle_deg=d.get("obb_angle_deg"))
-        t_world = bbox_center_to_world(d["bbox_2d"], intr, rest_height=a["rest_height"])
-        # Confidence aus der Pose-Quelle: Template-Bank-Match-Score wenn vorhanden,
-        # sonst die (schwächere) Face-Classifier-Confidence.
-        conf = a.get("match_conf", res["confidence"])
-        aligned.append({"instance_id": d["instance_id"], "part": d["part"],
-                        "confidence": conf, "bbox_2d": d["bbox_2d"],
-                        "t_world": t_world, "clf_face": res["face"],
-                        "clf_conf": res["confidence"], **a})
-        src = a.get("pose_source", "?")
-        sc = a.get("match_score")
-        sc_s = f"score={sc:+.2f} " if sc is not None else ""
-        warn(f"[infer] #{d['instance_id']:>2} {d['part']:<22} {a['face_name']:<8} "
-             f"conf={conf:.2f} [{src}] {sc_s}"
-             f"yaw={a['yaw_deg']:5.1f}° upright={a['upright']} "
-             f"(clf {res['face']}/{res['confidence']:.2f})")
-    doc = build_pose_result(image, aligned, intr)
+    aligned = estimate_poses(rgb, dets, warn=warn)      # GDRNPP (Stub bis W2/W3)
+    doc = build_pose_result(image, aligned, table_origin=TABLE_ORIGIN_SCENE)
     errors = check_pose_result(doc) + _check_with_jsonschema(doc)
     if errors:
         raise ValueError("pose_result NICHT contract-valid:\n  - " + "\n  - ".join(errors))
