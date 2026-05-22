@@ -36,6 +36,13 @@ async function boot() {
   try {
     const { meta, results } = await loadPose(url);
 
+    // Echtes Anlagen-CAD laden (Tisch/Wagen + Roboterarm + Trays). Asynchron —
+    // die Teile werden unabhängig davon platziert.
+    viewer.loadCell("./assets/cell.glb", (ok) => {
+      window.__POSE_CELL_LOADED__ = ok;
+      if (!ok) showStatus("Zelle (cell.glb) nicht geladen — Referenz-Tisch.", false);
+    });
+
     // Null-point marker on the table (default = meta.table_origin).
     const origin = createOriginMarker(viewer, meta.table_origin);
 

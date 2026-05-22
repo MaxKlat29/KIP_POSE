@@ -52,6 +52,9 @@ project/models/_train_summary.json
 # Detektor-Trainings-Artefakte (Kurven-Plot + CSV; via setup.ipynb erzeugbar).
 project/models/detector.curves.png
 project/models/*.results.csv
+# Template-Banken (Render-and-Compare; groß, via setup.ipynb/build_template_bank
+# erzeugbar). bank.npz pro Teil — gitignored.
+project/models/templates/
 # Beispiel-Eingaben (Bilder werden lokal abgelegt, nicht committed).
 project/input/*
 !project/input/.gitkeep

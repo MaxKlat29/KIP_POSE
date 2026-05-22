@@ -7,6 +7,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { rotationToMatrix4 } from "./loadPose.js";
 import { sizeForPart, isKnownPart } from "./partRegistry.js";
 
@@ -15,6 +16,12 @@ const COLOR_UPRIGHT = 0xf5b942;
 const COLOR_TABLE = 0x1b2230;
 const COLOR_GRID = 0x2f3a4d;
 const COLOR_GRID_CENTER = 0x44506a;
+
+// Work-surface (Tray-Referenzhöhe) in der GST-Welt, wo die Teile ruhen. Muss zu
+// TABLE_ORIGIN_SCENE in e2e_infer.py passen.
+const WORK_Z = 0.08;
+// Mitte der Spawn-Region (Tray) für Kamera-Fokus + Grid-Position.
+const WORK_CENTER = [0.42, 0.29, WORK_Z];
 
 export function createViewer(canvas) {
   // ── Renderer ────────────────────────────────────────────────
@@ -30,50 +37,76 @@ export function createViewer(canvas) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0e1116);
 
-  // ── Camera (Z-up world) ─────────────────────────────────────
+  // ── Camera (Z-up world) — auf die Tray-Arbeitsfläche der Zelle blickend ──
   const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 100);
   camera.up.set(0, 0, 1); // Z-up
-  camera.position.set(0.45, -0.55, 0.4);
+  camera.position.set(WORK_CENTER[0] + 0.05, WORK_CENTER[1] - 0.85, WORK_CENTER[2] + 0.55);
 
   // ── Lights — soft, readable; key + fill + ambient ───────────
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const key = new THREE.DirectionalLight(0xffffff, 1.0);
-  key.position.set(0.6, -0.4, 1.0);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(WORK_CENTER[0] + 0.6, WORK_CENTER[1] - 0.4, 1.4);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0x9fb4ff, 0.35);
-  fill.position.set(-0.5, 0.6, 0.4);
+  const fill = new THREE.DirectionalLight(0x9fb4ff, 0.4);
+  fill.position.set(WORK_CENTER[0] - 0.5, WORK_CENTER[1] + 0.6, 0.8);
   scene.add(fill);
 
-  // ── Table plane + grid (XY plane at z=0, since world is Z-up) ─
+  // ── Table reference: subtle work-surface plane + grid at WORK_Z ──────────
+  // Das echte Tisch/Anlagen-CAD kommt als cell.glb (loadCell). Diese Ebene ist
+  // nur eine dezente Referenz + Raycast-Ziel für den Nullpunkt.
   const tableGroup = new THREE.Group();
+  tableGroup.position.set(WORK_CENTER[0], WORK_CENTER[1], WORK_Z);
   scene.add(tableGroup);
 
-  const TABLE_SIZE = 0.8; // metres
+  const TABLE_SIZE = 0.85; // metres
   const tableGeo = new THREE.PlaneGeometry(TABLE_SIZE, TABLE_SIZE);
   const tableMat = new THREE.MeshStandardMaterial({
     color: COLOR_TABLE,
     roughness: 0.95,
     metalness: 0.0,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.25,
   });
   const tableMesh = new THREE.Mesh(tableGeo, tableMat);
-  // PlaneGeometry lies in XY by default — perfect for a Z-up world (no rotate).
   tableMesh.position.z = -0.0005; // nudge below grid to avoid z-fighting
   tableGroup.add(tableMesh);
 
-  // GridHelper is built in the XZ plane (Y-up); rotate it into XY for Z-up.
-  const grid = new THREE.GridHelper(TABLE_SIZE, 16, COLOR_GRID_CENTER, COLOR_GRID);
+  const grid = new THREE.GridHelper(TABLE_SIZE, 17, COLOR_GRID_CENTER, COLOR_GRID);
   grid.rotation.x = Math.PI / 2;
+  grid.material.opacity = 0.35;
+  grid.material.transparent = true;
   tableGroup.add(grid);
 
-  // ── Controls ────────────────────────────────────────────────
+  // ── Cell CAD (echtes Anlagen-CAD: Tisch/Wagen + Roboterarm + Trays) ──────
+  const cellGroup = new THREE.Group();
+  scene.add(cellGroup);
+  let cellLoaded = false;
+  function loadCell(url = "./assets/cell.glb", onDone) {
+    new GLTFLoader().load(
+      url,
+      (gltf) => {
+        // glb ist im selben Z-up-Welt-Frame wie die Pose-Pipeline (1:1 Meter).
+        cellGroup.add(gltf.scene);
+        cellLoaded = true;
+        onDone?.(true);
+      },
+      undefined,
+      (err) => {
+        console.warn("[cell] cell.glb nicht geladen — nur Referenz-Tisch:", err?.message ?? err);
+        // Sichtbares Fallback: Tisch-Ebene kräftiger zeichnen.
+        tableMat.opacity = 0.85;
+        onDone?.(false);
+      }
+    );
+  }
+
+  // ── Controls — auf die Arbeitsfläche zentriert ──────────────
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.minDistance = 0.05;
-  controls.maxDistance = 5;
-  controls.target.set(0, 0, 0.02);
+  controls.minDistance = 0.1;
+  controls.maxDistance = 8;
+  controls.target.set(WORK_CENTER[0], WORK_CENTER[1], WORK_Z + 0.02);
 
   // ── Parts group (populated by setParts) ─────────────────────
   const partsGroup = new THREE.Group();
@@ -133,8 +166,9 @@ export function createViewer(canvas) {
       );
       mesh.add(edges);
 
-      // Small body-frame axes helper (sized to the part) — makes R legible.
-      const axes = new THREE.AxesHelper(Math.max(sx, sy, sz) * 0.9);
+      // Small body-frame axes helper (kompakt, damit der Box-Körper lesbar
+      // bleibt statt als Kreuz zu erscheinen) — macht R legible.
+      const axes = new THREE.AxesHelper(Math.max(sx, sy, sz) * 0.55);
       mesh.add(axes);
 
       mesh.userData.result = r; // for raycast info panel
@@ -170,6 +204,9 @@ export function createViewer(canvas) {
     partsGroup,
     tableGroup,
     tableMesh, // the solid plane (raycast target for null-point placement)
+    cellGroup,
+    loadCell,
+    isCellLoaded: () => cellLoaded,
     pickables,
     setParts,
     resize,

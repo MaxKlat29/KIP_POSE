@@ -47,6 +47,7 @@ from scipy import ndimage
 HERE = pathlib.Path(__file__).resolve().parent          # project/
 MODELS = HERE / "models"
 REGISTRY = MODELS / "registry"
+TEMPLATES = MODELS / "templates"        # Template-Banken (bank.npz pro Teil)
 # pose_result-Contract (in project/ committet; ältere docs/-Lage als Fallback).
 SCHEMA_FILE = next((p for p in (HERE / "pose_result.schema.json",
                                 HERE.parent / "docs" / "pose_result.schema.json")
@@ -62,15 +63,25 @@ UPRIGHT_TILT_DEG = 60.0
 # top-down Default-Intrinsics (entspricht render_dataset.py)
 DEFAULT_CAM_H, DEFAULT_FOCAL_MM, DEFAULT_SENSOR_MM = 0.16, 24.0, 20.955
 
-# Szenen-Backprojection (Multi-Part-Zellen-View, GST_Scene + Zivid/_DRCam):
-# Die Kamera schaut leicht schräg von ~0.9 m auf das Tray. Statt einer exakten
-# (nicht verfügbaren) metrischen Inversen mappen wir die sichtbare Tray-Fläche auf
-# die kalibrierten realen Tray-Grenzen — Teile streuen so realistisch über den
-# Tisch (für den Viewer) statt in einem Pixel-Klumpen zu kollabieren. Die Werte
-# stammen aus den SPAWN_BOUNDS der SDG-Pipeline (datagenerationscript.py).
+# ── ECHTE Zivid-Kamera der GST_Scene (aus GST_Scene.usd ausgelesen) ───────────
+# Die Multi-Part-Zellen-Renders kommen von dieser Kamera. Mit echten Intrinsics +
+# Extrinsics wird die Backprojection metrisch korrekt: jeder Pixel-Strahl wird auf
+# die Tisch-Ebene (z=0, Welt) geschnitten -> Teile landen an der richtigen Stelle
+# statt zentrumsnah geclustert.
+#   focalLength=15.5mm, horiz/vertAperture=15.0mm, Render 1280x720
+#   Kamera-Welt-Pose: t=(0.45, 0.08807, 1.1), leicht nach -Y/-Z gekippt.
+ZIVID = {
+    "focal_mm": 15.5, "aperture_h_mm": 15.0, "aperture_v_mm": 15.0,
+    "render_w": 1280, "render_h": 720,
+    "cam_t": (0.45, 0.08807, 1.1),
+    # Welt-aus-Kamera Rotationsmatrix (Zeilen), aus ComputeLocalToWorldTransform.
+    "R_wc": ((-0.99939, -0.00666, 0.03426),
+             (0.0,      -0.98163, -0.19081),
+             (0.0349,   -0.19069, 0.98103)),
+}
+# Tray-/Spawn-Grenzen (datagenerationscript.py SPAWN_BOUNDS) — als Plausi-Klemme
+# falls ein Strahl knapp daneben trifft.
 SCENE_TRAY_BOUNDS = {"x": (0.057, 0.783), "y": (0.042, 0.537)}  # Meter, Welt
-# Pixel-Region des Trays im 1280x720-Render (grob kalibriert am Zivid/_DRCam-Frame).
-SCENE_PIX_REGION = {"u": (250, 1080), "v": (40, 560)}
 
 
 # ── Registry-Loader ───────────────────────────────────────────────────────────
@@ -137,8 +148,10 @@ def available_parts(root=REGISTRY):
 #   2. bbox_2d_<idx>.json   — SDG-Annotator-Boxen neben dem Bild (Sim-Ground-Truth).
 #   3. Dummy                — eine ganze-Bild-Box, damit die Kette nie hart bricht.
 DETECTOR_FILE = MODELS / "detector.pt"
-DETECTOR_CONF = 0.25
-DETECTOR_IMGSZ = 960
+# Der neue YOLOv8s-OBB (5 Klassen, mAP50≈0.99) ist deutlich konfidenter — höhere
+# conf filtert die Doppel-/Geister-Boxen, die der alte 2-Klassen-Detektor lieferte.
+DETECTOR_CONF = 0.40
+DETECTOR_IMGSZ = 1280
 _DETECTOR_CACHE: dict = {}
 
 
@@ -416,7 +429,112 @@ def _silhouette(crop, size=TMPL_SIZE):
     return sig / m if m > 1e-6 else sig
 
 
+# ── Template-Bank Render-and-Compare (DIE Pose-Quelle) ────────────────────────
+# Statt aus einem CNN zu *raten*, wird der Crop deterministisch gegen eine pro
+# Teil aus dem ECHTEN CAD gerenderte Bank gematcht: {stabile Ruhelagen} x {Yaw
+# 0..360 in 5°}. Jedes Template = top-down Tiefen-/Silhouetten-Bild der Mesh in
+# Lage Rz(yaw)·R_face. Bester Match -> exakte Ruhelage (Face) + exakter Yaw ->
+# volle R_world direkt aus der Bank. Planar-eingeschränktes Render-and-Compare
+# (CosyPose/MegaPose-Idee). Die OBB liefert (x,y) + groben Yaw-Seed (Suchfenster).
+_BANK_CACHE: dict = {}
+
+
+def load_template_bank(part):
+    """bank.npz für ein Teil laden (gecached). None wenn keine Bank da."""
+    if part in _BANK_CACHE:
+        return _BANK_CACHE[part]
+    bp = TEMPLATES / part / "bank.npz"
+    bank = None
+    if bp.exists():
+        try:
+            d = np.load(bp)
+            bank = {"depth": d["depth"].astype(np.float32), "sil": d["sil"].astype(np.float32),
+                    "face_idx": d["face_idx"], "yaw": d["yaw"].astype(np.float32),
+                    "R_world": d["R_world"].astype(np.float32),
+                    "size": int(d["size"]), "yaw_step": float(d["yaw_step"])}
+        except Exception:
+            bank = None
+    _BANK_CACHE[part] = bank
+    return bank
+
+
+def _query_relief(crop, size):
+    """Crop -> Form-Signal (0..1), das mit der Template-Tiefe vergleichbar ist:
+    quadrat-gepaddete, normierte Abweichung vom Neutralgrau. Trägt die Silhouette
+    + grobe Binnenstruktur des Teils auch aus reinem RGB."""
+    a = np.asarray(crop)
+    g = a.astype(np.float32).mean(2) if a.ndim == 3 else a.astype(np.float32)
+    h, w = g.shape[:2]
+    sd = max(h, w, 1)
+    sq = np.full((sd, sd), 128.0, np.float32)
+    sq[(sd - h) // 2:(sd - h) // 2 + h, (sd - w) // 2:(sd - w) // 2 + w] = g
+    img = np.asarray(Image.fromarray(sq.astype(np.uint8)).resize((size, size),
+                     Image.BILINEAR)).astype(np.float32)
+    sig = np.abs(img - 128.0)
+    m = sig.max()
+    return sig / m if m > 1e-6 else sig
+
+
+def _yaw_window_mask(yaws, obb_angle_deg, half_window=25.0):
+    """Boolean-Maske: nur Yaws im Fenster um den OBB-Winkel + 180°-Flip. Verkleinert
+    die Suche und nutzt den Detektor-Prior. None -> ganze Bank durchsuchen."""
+    if obb_angle_deg is None:
+        return np.ones(len(yaws), bool)
+    base = obb_angle_deg % 360.0
+    mask = np.zeros(len(yaws), bool)
+    for b in (base, (base + 180.0) % 360.0):
+        dd = np.abs((yaws - b + 180.0) % 360.0 - 180.0)
+        mask |= dd <= half_window
+    return mask if mask.any() else np.ones(len(yaws), bool)
+
+
+def match_template_bank(crop, part, obb_angle_deg=None, registry=None):
+    """Crop gegen die Template-Bank matchen -> (face_idx, yaw, R_world, score, ...).
+
+    Score = Korrelation (NCC) zwischen Query-Relief und Template-Tiefe, gewichtet
+    mit Silhouetten-IoU. Sucht über alle Faces; pro Face nur Yaws im OBB-Fenster.
+    Liefert None wenn keine Bank vorhanden (Aufrufer fällt auf Yaw-Suche zurück)."""
+    bank = load_template_bank(part)
+    if bank is None:
+        return None
+    size = bank["size"]
+    q = _query_relief(crop, size)
+    qf = q.ravel(); qf = qf - qf.mean()
+    qn = np.linalg.norm(qf) + 1e-9
+    qsil = (q > 0.12).astype(np.float32)
+
+    depth = bank["depth"]; sil = bank["sil"]; yaws = bank["yaw"]
+    win = _yaw_window_mask(yaws, obb_angle_deg)
+    idxs = np.nonzero(win)[0]
+    best_i, best_score = -1, -np.inf
+    for i in idxs:
+        t = depth[i].ravel(); t = t - t.mean()
+        ncc = float((qf @ t) / (qn * (np.linalg.norm(t) + 1e-9)))
+        inter = float((qsil * sil[i]).sum()); union = float(((qsil + sil[i]) > 0).sum()) + 1e-9
+        iou = inter / union
+        score = 0.6 * ncc + 0.4 * iou
+        if score > best_score:
+            best_score, best_i = score, i
+    face_k = int(bank["face_idx"][best_i])
+    R = bank["R_world"][best_i].reshape(3, 3)
+    yaw = float(yaws[best_i])
+    # Face-Name + Aufrecht-Flag aus der Registry (sonst generisch).
+    face_name = f"Face {face_k}"; upright = False
+    if registry and registry.faces:
+        for f in registry.faces:
+            if f.index == face_k:
+                face_name = f.name
+                upright = bool(f.tilt_deg >= UPRIGHT_TILT_DEG)
+                break
+    # Match-Confidence: Score auf 0..1 geklemmt (NCC kann negativ werden).
+    conf = float(np.clip((best_score + 0.2) / 1.0, 0.0, 1.0))
+    return {"face_idx": face_k, "face_name": face_name, "yaw_deg": yaw,
+            "R_world": R, "score": best_score, "confidence": conf, "upright": upright,
+            "template_idx": int(best_i)}
+
+
 def estimate_yaw(crop, template, step_deg=YAW_STEP_DEG):
+    """Fallback (keine Bank): Yaw via Silhouetten-MSE über ein einzelnes Template."""
     if template is None:
         return 0.0
     q = _silhouette(crop)
@@ -429,40 +547,31 @@ def estimate_yaw(crop, template, step_deg=YAW_STEP_DEG):
     return best_ang
 
 
-def refine_yaw_with_obb(crop, template, obb_angle_deg, step_deg=YAW_STEP_DEG):
-    """Yaw aus dem OBB-Winkel ableiten + die 180°-Ambiguität per Template-MSE
-    auflösen. Der OBB-Detektor liefert die Lang-Achse bis auf Flip — das Template
-    entscheidet, welches Ende vorn ist. Robuster und schneller als die Vollsuche."""
-    if template is None:
-        return float(obb_angle_deg % 360.0)
-    q = _silhouette(crop)
-    best_ang, best_mse = float(obb_angle_deg % 360.0), float("inf")
-    # Feinraster um den OBB-Winkel + den 180°-Flip
-    for base in (obb_angle_deg, obb_angle_deg + 180.0):
-        for d in np.arange(-step_deg, step_deg + 1e-6, step_deg / 2.0):
-            ang = float((base + d) % 360.0)
-            rt = ndimage.rotate(template, ang, reshape=False, order=1, mode="constant", cval=0.0)
-            m = float(np.mean((rt - q) ** 2))
-            if m < best_mse:
-                best_mse, best_ang = m, ang
-    return best_ang
-
-
 def align_detection(part, classifier_face, crop, registry, step_deg=YAW_STEP_DEG,
                     obb_angle_deg=None):
+    """6D-Pose eines Crops. PRIMÄR: Template-Bank Render-and-Compare (Face + Yaw +
+    R_world deterministisch aus der Bank). FALLBACK (keine Bank): Registry-R_face +
+    Yaw-Suche über das Face-Template."""
+    # 1) Template-Bank-Match — die Pose-Quelle.
+    m = match_template_bank(crop, part, obb_angle_deg=obb_angle_deg, registry=registry)
+    if m is not None:
+        return {"R_world": [float(v) for v in m["R_world"].flatten()],
+                "yaw_deg": m["yaw_deg"], "upright": m["upright"],
+                "face_name": m["face_name"], "rest_height": 0.0,
+                "match_score": float(m["score"]), "match_conf": m["confidence"],
+                "template_idx": m["template_idx"], "pose_source": "template_bank"}
+    # 2) Fallback: Registry-R_face + Yaw-Suche (kein Bank-NPZ vorhanden).
     face = registry.resolve_face(classifier_face) if registry else None
     if face is None:
         return {"R_world": list(np.eye(3).flatten()), "yaw_deg": 0.0, "upright": False,
-                "face_name": classifier_face or "Face 1", "rest_height": 0.0}
+                "face_name": classifier_face or "Face 1", "rest_height": 0.0,
+                "pose_source": "identity"}
     template = load_template(face, size=TMPL_SIZE)
-    if obb_angle_deg is not None:
-        yaw = refine_yaw_with_obb(crop, template, obb_angle_deg, step_deg)   # Detektor-Prior
-    else:
-        yaw = estimate_yaw(crop, template, step_deg)                          # Vollsuche
+    yaw = estimate_yaw(crop, template, step_deg)
     R_world = _rz(np.radians(yaw)) @ face.R_face
     return {"R_world": [float(v) for v in R_world.flatten()], "yaw_deg": yaw,
             "upright": bool(face.tilt_deg >= UPRIGHT_TILT_DEG),
-            "face_name": face.name, "rest_height": 0.0}
+            "face_name": face.name, "rest_height": 0.0, "pose_source": "registry_yaw"}
 
 
 class Intrinsics:
@@ -476,31 +585,56 @@ class Intrinsics:
 
 
 class SceneIntrinsics:
-    """Backprojection für die Multi-Part-Zellen-View: linear vom Tray-Pixel-Bereich
-    auf die realen Tray-Grenzen, zentriert auf den Tisch-Nullpunkt. Nicht exakt
-    metrisch (Kamera schräg, keine echten Intrinsics), aber gibt eine realistische
-    Streuung über den Tisch — genau was der Viewer für die Rekonstruktion braucht."""
+    """Metrische Backprojection für die Multi-Part-Zellen-View mit den ECHTEN
+    Zivid-Intrinsics + Extrinsics aus GST_Scene.usd. Jeder BBox-Zentrums-Pixel
+    wird zu einem Welt-Strahl (Kamera-Ursprung + Richtung) und gegen die Tisch-
+    Ebene z = table_origin[2] + rest_height geschnitten. Ergebnis ist metrisch in
+    Welt-Koordinaten — Teile liegen an der RICHTIGEN Stelle (nicht geclustert).
 
-    def __init__(self, width, height, table_origin=(0.0, 0.0, 0.0),
-                 tray=SCENE_TRAY_BOUNDS, pix=SCENE_PIX_REGION):
+    USD-Kamera-Konvention: blickt entlang lokal -Z, +Y oben, +X rechts. fx/fy aus
+    focalLength/aperture. Pixel (u,v) (v wächst nach unten) -> lokaler Strahl ->
+    mit R_wc (Welt-aus-Kamera) nach Welt gedreht."""
+
+    def __init__(self, width, height, table_origin=(0.0, 0.0, 0.0), zivid=ZIVID,
+                 tray=SCENE_TRAY_BOUNDS):
         self.width = width; self.height = height; self.table_origin = table_origin
-        # Tray-Mittelpunkt in Welt -> auf den Nullpunkt legen, damit Teile um den
-        # Tisch-Ursprung zentriert erscheinen.
-        self.wx0, self.wx1 = tray["x"]; self.wy0, self.wy1 = tray["y"]
-        self.u0, self.u1 = pix["u"]; self.v0, self.v1 = pix["v"]
-        self.wcx = (self.wx0 + self.wx1) / 2.0; self.wcy = (self.wy0 + self.wy1) / 2.0
+        self.tray = tray
+        # Intrinsics auf die TATSÄCHLICHE Render-Auflösung skalieren.
+        sx = width / zivid["render_w"]; sy = height / zivid["render_h"]
+        self.fx = zivid["focal_mm"] / zivid["aperture_h_mm"] * zivid["render_w"] * sx
+        self.fy = zivid["focal_mm"] / zivid["aperture_v_mm"] * zivid["render_h"] * sy
+        self.cx = width / 2.0; self.cy = height / 2.0
+        self.cam_t = np.asarray(zivid["cam_t"], float)
+        self.R_wc = np.asarray(zivid["R_wc"], float)            # Zeilen-Konvention
+
+    def _ray_dir_world(self, u, v):
+        # Pixel -> lokale Kamera-Richtung (USD: -Z vorwärts, +Y oben).
+        dx = (u - self.cx) / self.fx
+        dy = -(v - self.cy) / self.fy        # v wächst nach unten -> +Y oben
+        d_cam = np.array([dx, dy, -1.0])
+        # Welt-Richtung: USD row-vector -> d_world = d_cam @ R_wc.
+        d_world = d_cam @ self.R_wc
+        n = np.linalg.norm(d_world)
+        return d_world / n if n > 1e-9 else d_world
 
     def to_world(self, bbox, rest_height=0.0):
         x0, y0, x1, y1 = bbox
         u, v = (x0 + x1) / 2.0, (y0 + y1) / 2.0
-        fu = (u - self.u0) / max(1e-6, (self.u1 - self.u0))   # 0..1 über Tray-Breite
-        fv = (v - self.v0) / max(1e-6, (self.v1 - self.v0))   # 0..1 über Tray-Höhe
-        wx = self.wx0 + fu * (self.wx1 - self.wx0)
-        wy = self.wy0 + fv * (self.wy1 - self.wy0)
-        # auf Tray-Mitte zentrieren + Tisch-Ursprung
-        x = (wx - self.wcx) + self.table_origin[0]
-        y = -(wy - self.wcy) + self.table_origin[1]            # Bild-v wächst nach unten
-        return [float(x), float(y), float(self.table_origin[2] + rest_height)]
+        d = self._ray_dir_world(u, v)
+        z_plane = self.table_origin[2] + rest_height
+        # Strahl cam_t + s*d schneidet z = z_plane.
+        if abs(d[2]) < 1e-9:
+            s = 0.0
+        else:
+            s = (z_plane - self.cam_t[2]) / d[2]
+        p = self.cam_t + max(s, 0.0) * d
+        x = p[0] - self.table_origin[0]; y = p[1] - self.table_origin[1]
+        # Plausi-Klemme auf die (leicht erweiterten) Tray-Grenzen.
+        tx, ty = self.tray["x"], self.tray["y"]
+        mx = (tx[1] - tx[0]) * 0.15; my = (ty[1] - ty[0]) * 0.15
+        x = float(np.clip(x, tx[0] - mx - self.table_origin[0], tx[1] + mx - self.table_origin[0]))
+        y = float(np.clip(y, ty[0] - my - self.table_origin[1], ty[1] + my - self.table_origin[1]))
+        return [x, y, float(z_plane)]
 
 
 def bbox_center_to_world(bbox, intr, rest_height=0.0):
@@ -606,14 +740,27 @@ def build_pose_result(img_path, aligned, intr):
     }
 
 
+# Tisch-Nullpunkt in Welt: die Arbeitsfläche der Zelle, auf der die Teile ruhen
+# (Tray-Referenzhöhe _REF_Z der SDG-Pipeline). x/y = Welt-Ursprung der GST_Scene,
+# damit die platzierten Teile mit dem cell.glb (echtes CAD, Welt-Frame) fluchten.
+TABLE_ORIGIN_SCENE = (0.0, 0.0, 0.08)
+
+
 # ── Orchestrierung ────────────────────────────────────────────────────────────
 def run(image, out_path, warn=print):
-    """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json."""
+    """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
+
+    Pose-Quelle ist die Template-Bank (Render-and-Compare): Face + Yaw + R_world
+    kommen aus dem Bank-Match, NICHT aus dem Face-Classifier. Der Classifier läuft
+    nur noch als optionaler Schnell-Vorfilter (Log/Vis)."""
     rgb, dets = detections_for(image, warn=warn)
     H, W = rgb.shape[:2]
-    # Zellen-View (Multi-Part-Szene) -> Tray-kalibrierte Backprojection; sonst die
-    # top-down Faceset-Intrinsics. Heuristik: breite Szene (>=1000px) = Zellen-View.
-    intr = SceneIntrinsics(W, H) if W >= 1000 else Intrinsics(W, H)
+    # Zellen-View (Multi-Part-Szene) -> echte Zivid-Intrinsics, metrische Backprojection;
+    # sonst top-down Faceset-Intrinsics. Heuristik: breite Szene (>=1000px) = Zellen-View.
+    if W >= 1000:
+        intr = SceneIntrinsics(W, H, table_origin=TABLE_ORIGIN_SCENE)
+    else:
+        intr = Intrinsics(W, H)
     known = set(available_parts())
     reg_cache: dict = {}
     aligned = []
@@ -624,18 +771,26 @@ def run(image, out_path, warn=print):
             continue
         x0, y0, x1, y1 = d["bbox_2d"]
         crop = rgb[y0:y1, x0:x1].copy()
-        res = infer(crop, d["part"])
+        res = infer(crop, d["part"])                      # optionaler Vorfilter
         if d["part"] not in reg_cache:
             reg_cache[d["part"]] = load_part_registry(d["part"])
         a = align_detection(d["part"], res["face"], crop, reg_cache[d["part"]],
                             obb_angle_deg=d.get("obb_angle_deg"))
         t_world = bbox_center_to_world(d["bbox_2d"], intr, rest_height=a["rest_height"])
+        # Confidence aus der Pose-Quelle: Template-Bank-Match-Score wenn vorhanden,
+        # sonst die (schwächere) Face-Classifier-Confidence.
+        conf = a.get("match_conf", res["confidence"])
         aligned.append({"instance_id": d["instance_id"], "part": d["part"],
-                        "confidence": res["confidence"], "bbox_2d": d["bbox_2d"],
-                        "t_world": t_world, **a})
+                        "confidence": conf, "bbox_2d": d["bbox_2d"],
+                        "t_world": t_world, "clf_face": res["face"],
+                        "clf_conf": res["confidence"], **a})
+        src = a.get("pose_source", "?")
+        sc = a.get("match_score")
+        sc_s = f"score={sc:+.2f} " if sc is not None else ""
         warn(f"[infer] #{d['instance_id']:>2} {d['part']:<22} {a['face_name']:<8} "
-             f"conf={res['confidence']:.2f} ({backend(d['part'])}) "
-             f"yaw={a['yaw_deg']:5.1f}° upright={a['upright']}")
+             f"conf={conf:.2f} [{src}] {sc_s}"
+             f"yaw={a['yaw_deg']:5.1f}° upright={a['upright']} "
+             f"(clf {res['face']}/{res['confidence']:.2f})")
     doc = build_pose_result(image, aligned, intr)
     errors = check_pose_result(doc) + _check_with_jsonschema(doc)
     if errors:

@@ -1,22 +1,26 @@
 // partRegistry.js — placeholder geometry for parts.
 //
-// Real CAD comes from USD assets (data/usd/) which are NOT web-loadable. The
-// viewer therefore renders a coarse PLACEHOLDER BOX per part, sized to roughly
-// match the real part's bounding box (in metres, the world unit). A missing or
-// unknown part falls back to a generic small box — never a crash.
+// Real CAD comes from USD assets which are not web-loadable per part; the cell
+// (table + arm + trays) loads as cell.glb, but the reconstructed parts render as
+// coarse BOXES sized to the real part bounding box (in metres, the world unit).
+// The box extents are body-frame [x, y, z] (pre-rotation) — the viewer applies
+// R_world. A missing/unknown part falls back to a generic box — never a crash.
 //
-// Sizes are body-frame extents [x, y, z] in metres. The long axis of the
-// anchors is +Z (body), matching the upright/face semantics in the registry.
+// Extents were measured from the part meshes (USD) and converted to metres, so
+// the boxes have consistent, real-world sizes per part.
 
-const DEFAULT_SIZE = [0.05, 0.05, 0.05];
+const DEFAULT_SIZE = [0.04, 0.04, 0.04];
 
 const PART_SIZES = {
-  // Long, slender anchor: long axis along body +Z.
-  Anker_Lang: [0.018, 0.018, 0.085],
-  // Shorter anchor variant.
-  Anker_Kurz: [0.018, 0.018, 0.045],
-  // Flat-ish gear/disc: wider in x/y, thin in z.
-  Zahnrad_Typ7: [0.055, 0.055, 0.014],
+  // body-frame extents [x, y, z] in metres (gemessen aus den Part-Meshes).
+  Anker_Lang: [0.0239, 0.139, 0.0239],
+  Anker_Kurz: [0.0241, 0.124, 0.0241],
+  Zahnrad: [0.0486, 0.034, 0.0486],
+  Poltopf_kurz_centered: [0.033, 0.0534, 0.075],
+  Getriebegehaeuse_typ4: [0.0719, 0.0403, 0.0938],
+  Buerstenhalter_2polig: [0.056, 0.0323, 0.0298],
+  // Alias / Roh-Detektor-Label.
+  Zahnrad_Typ7: [0.0486, 0.034, 0.0486],
 };
 
 /** Box extents [x,y,z] in metres for a part name (falls back to a generic box). */
