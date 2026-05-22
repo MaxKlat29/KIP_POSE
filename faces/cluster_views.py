@@ -110,6 +110,10 @@ def _height_rgb(dep, msk):
 def deskew(rgb, dep, msk):
     """Axis-align the object and crop it tight. Robust to degenerate inputs.
 
+    ``rgb`` is accepted for backward compatibility but ignored — templates are
+    rendered from the depth height map, which carries the shape even when the
+    colour frame is featureless grey (pass ``None``).
+
     Renders from the depth-derived height map (see ``_height_rgb``) so the part
     is always visible even when the RGB frame is featureless grey. Any failure
     (empty/whole-frame mask, singular PCA, empty crop) falls back to the
@@ -157,15 +161,86 @@ def _grey_square(sz=96):
     return np.full((sz, sz, 3), 128, np.uint8)
 
 
+def rep_img(c, deps, msks, descs):
+    """96×96 square height-map of a cluster's medoid (for shape matching)."""
+    med = c[int(np.argmin(np.linalg.norm(descs[c] - descs[c].mean(0), axis=1)))]
+    h = height_map(deps[med], msks[med])
+    ys, xs = np.nonzero(np.asarray(msks[med]).astype(bool))
+    h = h[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    sd = max(h.shape); sq = np.zeros((sd, sd))
+    sq[(sd - h.shape[0]) // 2:(sd - h.shape[0]) // 2 + h.shape[0],
+       (sd - h.shape[1]) // 2:(sd - h.shape[1]) // 2 + h.shape[1]] = h
+    return np.asarray(Image.fromarray((sq * 255).astype(np.uint8)).resize((96, 96))) / 255.0
+
+
+def rot_match(a, b, step=6):
+    """Top-view NCC over a 360° rotation search, returned for two variants.
+
+    Returns ``(no_mirror, mirror)``:
+      * ``no_mirror`` — best NCC rotating ``a`` against ``b``. Two rests that
+        look the same from above (same yaw-free silhouette) score high here.
+      * ``mirror``    — best NCC rotating the *mirror* of ``a`` against ``b``.
+
+    The ``mirror`` term is the symmetry probe. A part that is symmetric about a
+    horizontal axis (a plain rod) flipped 180° appears mirrored from above, so
+    ``mirror`` jumps well above ``no_mirror`` — a true symmetry flip. A part with
+    a one-sided feature (a gear's hub) flipped top/bottom looks essentially the
+    same from above whether mirrored or not (``mirror ≈ no_mirror``); the flip is
+    a genuinely different face. The *gain* ``mirror - no_mirror`` therefore tells
+    a symmetric flip apart from a real one — see the merge rule in ``main``.
+    """
+    def best_over_rot(src):
+        best = -1.0
+        for ang in range(0, 360, step):
+            ar = ndimage.rotate(src, ang, reshape=False, order=1)
+            m = (ar > 0.02) | (b > 0.02)
+            if m.sum() < 20:
+                continue
+            x = ar[m] - ar[m].mean(); y = b[m] - b[m].mean()
+            d = np.linalg.norm(x) * np.linalg.norm(y) + 1e-9
+            best = max(best, float((x @ y) / d))
+        return best
+    return best_over_rot(a), best_over_rot(a[:, ::-1])
+
+
+# ── appearance-merge thresholds (named constants, overridable via CLI) ────────
+# Two g_body clusters become one face based on how their top-views match:
+#
+#   SAME orientation (g_body not opposed):
+#     merge if the best top-view NCC >= MATCH_WEAK. Pure in-plane re-orientations
+#     of one resting side collapse into one face.
+#
+#   FLIP (g_body opposed, dot < FLIP_GUARD):  IMAGE EVIDENCE DOMINATES, but only
+#     a *true symmetry* flip is merged. We merge iff the mirrored top-view match
+#     is strong (>= MATCH_STRONG) AND the mirror gives a real lift over the
+#     un-mirrored match (gain >= MIRROR_GAIN). That is the symmetric-rod case (a
+#     lying Anker flipped about its long axis: mirror match 0.91, gain +0.09 ->
+#     one face). A gear flipped hub-up/hub-down looks the same from above mirror
+#     or not (gain ~0) -> the flip is a genuinely different side, stays apart.
+#
+# Thresholds tuned on the rendered facesets (see check_face_counts.py).
+MATCH_STRONG = 0.90
+MATCH_WEAK = 0.85
+MIRROR_GAIN = 0.03   # min mirror-vs-no-mirror NCC lift that marks a symmetry flip
+FLIP_GUARD = -0.5    # g_body dot below this == top/bottom flip
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dataset")
     ap.add_argument("--part-name", default=None)
     ap.add_argument("--deg", type=float, default=28.0, help="g_body grouping angle")
-    ap.add_argument("--match", type=float, default=0.90,
-                    help="rotation-search image NCC above which two views are the same shape")
-    ap.add_argument("--flip-guard", type=float, default=-0.5,
-                    help="merge only if mean g_body dot > this (blocks top/bottom flips)")
+    ap.add_argument("--match-strong", type=float, default=MATCH_STRONG,
+                    help="mirrored top-view NCC required to merge a g_body FLIP pair "
+                         "(symmetric-rod case; image evidence beats the flip-guard)")
+    ap.add_argument("--match-weak", type=float, default=MATCH_WEAK,
+                    help="top-view NCC required to merge a SAME-orientation pair "
+                         "(pure in-plane re-orientation of one side)")
+    ap.add_argument("--mirror-gain", type=float, default=MIRROR_GAIN,
+                    help="min mirror-vs-no-mirror NCC lift that flags a true symmetry "
+                         "flip; keeps an asymmetric flip (gear hub-up/down) apart")
+    ap.add_argument("--flip-guard", type=float, default=FLIP_GUARD,
+                    help="g_body dot below this counts as a top/bottom flip")
     ap.add_argument("--min-prob", type=float, default=0.02)
     args = ap.parse_args()
 
@@ -185,42 +260,27 @@ def main():
     _, lab1 = connected_components(g @ g.T >= np.cos(np.radians(args.deg)), directed=False)
     g_clusters = [np.where(lab1 == c)[0] for c in range(lab1.max() + 1)]
 
-    # stage 2: deterministic appearance merge. Rotate one cluster's planar
-    # top-view through 360° and check if it matches another (>match), BUT only
-    # merge if they are NOT a top/bottom flip — i.e. the raw 3D orientation
-    # (g_body) is not opposed. So pure in-plane re-orientations of the same side
-    # collapse, while genuinely different sides (look alike, flipped) stay apart.
-    def rep_img(c):                                          # height-map of the medoid, 96x96 square
-        med = c[int(np.argmin(np.linalg.norm(descs[c] - descs[c].mean(0), axis=1)))]
-        h = height_map(deps[med], msks[med])
-        ys, xs = np.nonzero(msks[med])
-        h = h[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
-        sd = max(h.shape); sq = np.zeros((sd, sd))
-        sq[(sd - h.shape[0]) // 2:(sd - h.shape[0]) // 2 + h.shape[0],
-           (sd - h.shape[1]) // 2:(sd - h.shape[1]) // 2 + h.shape[1]] = h
-        return np.asarray(Image.fromarray((sq * 255).astype(np.uint8)).resize((96, 96))) / 255.0
-
-    def rot_match(a, b, step=6):                             # best NCC over 360° in-plane rotation
-        best = -1.0
-        for ang in range(0, 360, step):
-            ar = ndimage.rotate(a, ang, reshape=False, order=1)
-            m = (ar > 0.02) | (b > 0.02)
-            if m.sum() < 20:
-                continue
-            x = ar[m] - ar[m].mean(); y = b[m] - b[m].mean()
-            d = np.linalg.norm(x) * np.linalg.norm(y) + 1e-9
-            best = max(best, float((x @ y) / d))
-        return best
-
+    # stage 2: deterministic appearance merge — IMAGE EVIDENCE DOMINATES.
+    #   * SAME orientation -> merge if the top-view matches (>= match_weak).
+    #   * FLIP (g_body opposed) -> merge ONLY for a true symmetry flip: the
+    #     mirrored match must be strong (>= match_strong) AND lift over the
+    #     un-mirrored match by >= mirror_gain. A symmetric rod flipped about its
+    #     long axis qualifies (one face); a gear flipped hub-up/down does not
+    #     (mirror gives no lift -> two faces).
     K = len(g_clusters)
-    reps = [rep_img(c) for c in g_clusters]
+    reps = [rep_img(c, deps, msks, descs) for c in g_clusters]
     gmean = [g[c].mean(0) / (np.linalg.norm(g[c].mean(0)) + 1e-9) for c in g_clusters]
     Adj = np.eye(K, dtype=bool)
     for i in range(K):
         for j in range(i + 1, K):
-            if gmean[i] @ gmean[j] > args.flip_guard:        # not a top/bottom flip
-                if rot_match(reps[i], reps[j]) >= args.match:
-                    Adj[i, j] = Adj[j, i] = True
+            nm, mr = rot_match(reps[i], reps[j])
+            is_flip = gmean[i] @ gmean[j] < args.flip_guard
+            if is_flip:
+                merge = mr >= args.match_strong and (mr - nm) >= args.mirror_gain
+            else:
+                merge = max(nm, mr) >= args.match_weak
+            if merge:
+                Adj[i, j] = Adj[j, i] = True
     _, lab2 = connected_components(Adj, directed=False)
 
     merged = {}
@@ -243,13 +303,11 @@ def main():
         fdir = os.path.join(out, fname.replace(" ", "_")); os.makedirs(fdir, exist_ok=True)
         n_ok = 0
         for j in f:
-            rgb = np.asarray(Image.open(os.path.join(ds, rows[j]["rgb"])).convert("RGB"))
-            crop, cok = deskew(rgb, deps[j], msks[j])
+            crop, cok = deskew(None, deps[j], msks[j])
             n_ok += int(cok)
             Image.fromarray(crop).save(os.path.join(fdir, f"{rows[j]['i']:04d}.png"))
         ax = np.atleast_1d(axs)[k]
-        rgb = np.asarray(Image.open(os.path.join(ds, rows[med]["rgb"])).convert("RGB"))
-        tmpl, tmpl_ok = deskew(rgb, deps[med], msks[med])
+        tmpl, tmpl_ok = deskew(None, deps[med], msks[med])
         Image.fromarray(tmpl).save(os.path.join(out, f"tmpl_{fname.replace(' ', '')}.png"))
         # health log: every face must yield a non-blank template
         print(f"[health] {fname}: n_crops={len(f)} crops_ok={n_ok}/{len(f)} "
