@@ -225,6 +225,59 @@ MIRROR_GAIN = 0.03   # min mirror-vs-no-mirror NCC lift that marks a symmetry fl
 FLIP_GUARD = -0.5    # g_body dot below this == top/bottom flip
 
 
+def load_faceset(ds):
+    """Read a faceset's manifest and arrays. Returns (rows, deps, msks, g)."""
+    rows = [json.loads(l) for l in open(os.path.join(ds, "manifest.jsonl")) if l.strip()]
+    g = np.array([r["g_body"] for r in rows], float)
+    g /= np.linalg.norm(g, axis=1, keepdims=True)
+    deps = [np.load(os.path.join(ds, r["dep"])) for r in rows]
+    msks = [np.load(os.path.join(ds, r["msk"])) for r in rows]
+    return rows, deps, msks, g
+
+
+def cluster_faces(rows, deps, msks, g, deg=28.0, match_strong=MATCH_STRONG,
+                  match_weak=MATCH_WEAK, mirror_gain=MIRROR_GAIN,
+                  flip_guard=FLIP_GUARD, min_prob=0.02):
+    """Pure clustering: views -> physical face-views. No file I/O.
+
+    Returns ``(keep, rare_n, descs, n_g_clusters, n_faces)`` where ``keep`` is a
+    list of index-arrays (one per kept face, prob >= min_prob, largest first),
+    and ``descs`` are the per-view radial descriptors (for medoid selection).
+    The single source of truth for the face partition — both ``main`` (render +
+    registry) and ``extract_snippets`` consume it, so labels never drift.
+    """
+    n = len(rows)
+    descs = np.array([radial_desc(deps[i], msks[i]) for i in range(n)])
+
+    # stage 1: g_body single-linkage (orientation up to yaw)
+    _, lab1 = connected_components(g @ g.T >= np.cos(np.radians(deg)), directed=False)
+    g_clusters = [np.where(lab1 == c)[0] for c in range(lab1.max() + 1)]
+
+    # stage 2: appearance merge (see main() / module docstring for the rule)
+    K = len(g_clusters)
+    reps = [rep_img(c, deps, msks, descs) for c in g_clusters]
+    gmean = [g[c].mean(0) / (np.linalg.norm(g[c].mean(0)) + 1e-9) for c in g_clusters]
+    Adj = np.eye(K, dtype=bool)
+    for i in range(K):
+        for j in range(i + 1, K):
+            nm, mr = rot_match(reps[i], reps[j])
+            is_flip = gmean[i] @ gmean[j] < flip_guard
+            merge = (mr >= match_strong and (mr - nm) >= mirror_gain) if is_flip \
+                else (max(nm, mr) >= match_weak)
+            if merge:
+                Adj[i, j] = Adj[j, i] = True
+    _, lab2 = connected_components(Adj, directed=False)
+
+    merged = {}
+    for gi, m in enumerate(lab2):
+        merged.setdefault(m, []).extend(g_clusters[gi].tolist())
+    faces = [np.array(sorted(v)) for v in merged.values()]
+    faces.sort(key=len, reverse=True)
+    keep = [f for f in faces if len(f) / n >= min_prob]
+    rare_n = sum(len(f) for f in faces if len(f) / n < min_prob)
+    return keep, rare_n, descs, len(g_clusters), len(faces)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dataset")
@@ -248,50 +301,14 @@ def main():
     name = args.part_name or os.path.basename(ds.rstrip("/")).replace("faceset_", "")
     out = os.path.join(ds, "faces"); os.makedirs(out, exist_ok=True)
 
-    rows = [json.loads(l) for l in open(os.path.join(ds, "manifest.jsonl")) if l.strip()]
+    rows, deps, msks, g = load_faceset(ds)
     n = len(rows)
-    g = np.array([r["g_body"] for r in rows], float)
-    g /= np.linalg.norm(g, axis=1, keepdims=True)
-    deps = [np.load(os.path.join(ds, r["dep"])) for r in rows]
-    msks = [np.load(os.path.join(ds, r["msk"])) for r in rows]
-    descs = np.array([radial_desc(deps[i], msks[i]) for i in range(n)])
-
-    # stage 1: g_body single-linkage
-    _, lab1 = connected_components(g @ g.T >= np.cos(np.radians(args.deg)), directed=False)
-    g_clusters = [np.where(lab1 == c)[0] for c in range(lab1.max() + 1)]
-
-    # stage 2: deterministic appearance merge — IMAGE EVIDENCE DOMINATES.
-    #   * SAME orientation -> merge if the top-view matches (>= match_weak).
-    #   * FLIP (g_body opposed) -> merge ONLY for a true symmetry flip: the
-    #     mirrored match must be strong (>= match_strong) AND lift over the
-    #     un-mirrored match by >= mirror_gain. A symmetric rod flipped about its
-    #     long axis qualifies (one face); a gear flipped hub-up/down does not
-    #     (mirror gives no lift -> two faces).
-    K = len(g_clusters)
-    reps = [rep_img(c, deps, msks, descs) for c in g_clusters]
-    gmean = [g[c].mean(0) / (np.linalg.norm(g[c].mean(0)) + 1e-9) for c in g_clusters]
-    Adj = np.eye(K, dtype=bool)
-    for i in range(K):
-        for j in range(i + 1, K):
-            nm, mr = rot_match(reps[i], reps[j])
-            is_flip = gmean[i] @ gmean[j] < args.flip_guard
-            if is_flip:
-                merge = mr >= args.match_strong and (mr - nm) >= args.mirror_gain
-            else:
-                merge = max(nm, mr) >= args.match_weak
-            if merge:
-                Adj[i, j] = Adj[j, i] = True
-    _, lab2 = connected_components(Adj, directed=False)
-
-    merged = {}
-    for gi, m in enumerate(lab2):
-        merged.setdefault(m, []).extend(g_clusters[gi].tolist())
-    faces = [np.array(sorted(v)) for v in merged.values()]
-    faces.sort(key=len, reverse=True)
-    keep = [f for f in faces if len(f) / n >= args.min_prob]
-    rare = sum(len(f) for f in faces if len(f) / n < args.min_prob)
-    print(f"[cluster] {n} views: g_body->{len(g_clusters)} clusters, "
-          f"appearance-merge->{len(faces)} faces, {len(keep)} >= {args.min_prob:.0%}")
+    keep, rare, descs, n_gc, n_faces = cluster_faces(
+        rows, deps, msks, g, deg=args.deg, match_strong=args.match_strong,
+        match_weak=args.match_weak, mirror_gain=args.mirror_gain,
+        flip_guard=args.flip_guard, min_prob=args.min_prob)
+    print(f"[cluster] {n} views: g_body->{n_gc} clusters, "
+          f"appearance-merge->{n_faces} faces, {len(keep)} >= {args.min_prob:.0%}")
 
     reg = {"part": name, "n_views": n, "convention": "world = R @ body (column)", "faces": []}
     fig, axs = plt.subplots(1, max(2, len(keep)), figsize=(2.8 * max(2, len(keep)), 3.2))
