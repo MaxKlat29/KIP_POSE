@@ -62,6 +62,16 @@ UPRIGHT_TILT_DEG = 60.0
 # top-down Default-Intrinsics (entspricht render_dataset.py)
 DEFAULT_CAM_H, DEFAULT_FOCAL_MM, DEFAULT_SENSOR_MM = 0.16, 24.0, 20.955
 
+# Szenen-Backprojection (Multi-Part-Zellen-View, GST_Scene + Zivid/_DRCam):
+# Die Kamera schaut leicht schräg von ~0.9 m auf das Tray. Statt einer exakten
+# (nicht verfügbaren) metrischen Inversen mappen wir die sichtbare Tray-Fläche auf
+# die kalibrierten realen Tray-Grenzen — Teile streuen so realistisch über den
+# Tisch (für den Viewer) statt in einem Pixel-Klumpen zu kollabieren. Die Werte
+# stammen aus den SPAWN_BOUNDS der SDG-Pipeline (datagenerationscript.py).
+SCENE_TRAY_BOUNDS = {"x": (0.057, 0.783), "y": (0.042, 0.537)}  # Meter, Welt
+# Pixel-Region des Trays im 1280x720-Render (grob kalibriert am Zivid/_DRCam-Frame).
+SCENE_PIX_REGION = {"u": (250, 1080), "v": (40, 560)}
+
 
 # ── Registry-Loader ───────────────────────────────────────────────────────────
 class Face:
@@ -465,7 +475,37 @@ class Intrinsics:
         self.fy = focal_mm / sensor_mm * height
 
 
+class SceneIntrinsics:
+    """Backprojection für die Multi-Part-Zellen-View: linear vom Tray-Pixel-Bereich
+    auf die realen Tray-Grenzen, zentriert auf den Tisch-Nullpunkt. Nicht exakt
+    metrisch (Kamera schräg, keine echten Intrinsics), aber gibt eine realistische
+    Streuung über den Tisch — genau was der Viewer für die Rekonstruktion braucht."""
+
+    def __init__(self, width, height, table_origin=(0.0, 0.0, 0.0),
+                 tray=SCENE_TRAY_BOUNDS, pix=SCENE_PIX_REGION):
+        self.width = width; self.height = height; self.table_origin = table_origin
+        # Tray-Mittelpunkt in Welt -> auf den Nullpunkt legen, damit Teile um den
+        # Tisch-Ursprung zentriert erscheinen.
+        self.wx0, self.wx1 = tray["x"]; self.wy0, self.wy1 = tray["y"]
+        self.u0, self.u1 = pix["u"]; self.v0, self.v1 = pix["v"]
+        self.wcx = (self.wx0 + self.wx1) / 2.0; self.wcy = (self.wy0 + self.wy1) / 2.0
+
+    def to_world(self, bbox, rest_height=0.0):
+        x0, y0, x1, y1 = bbox
+        u, v = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        fu = (u - self.u0) / max(1e-6, (self.u1 - self.u0))   # 0..1 über Tray-Breite
+        fv = (v - self.v0) / max(1e-6, (self.v1 - self.v0))   # 0..1 über Tray-Höhe
+        wx = self.wx0 + fu * (self.wx1 - self.wx0)
+        wy = self.wy0 + fv * (self.wy1 - self.wy0)
+        # auf Tray-Mitte zentrieren + Tisch-Ursprung
+        x = (wx - self.wcx) + self.table_origin[0]
+        y = -(wy - self.wcy) + self.table_origin[1]            # Bild-v wächst nach unten
+        return [float(x), float(y), float(self.table_origin[2] + rest_height)]
+
+
 def bbox_center_to_world(bbox, intr, rest_height=0.0):
+    if isinstance(intr, SceneIntrinsics):
+        return intr.to_world(bbox, rest_height)
     x0, y0, x1, y1 = bbox
     u, v = (x0 + x1) / 2.0, (y0 + y1) / 2.0
     x = (u - intr.cx) * intr.cam_h / intr.fx + intr.table_origin[0]
@@ -571,7 +611,9 @@ def run(image, out_path, warn=print):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json."""
     rgb, dets = detections_for(image, warn=warn)
     H, W = rgb.shape[:2]
-    intr = Intrinsics(W, H)
+    # Zellen-View (Multi-Part-Szene) -> Tray-kalibrierte Backprojection; sonst die
+    # top-down Faceset-Intrinsics. Heuristik: breite Szene (>=1000px) = Zellen-View.
+    intr = SceneIntrinsics(W, H) if W >= 1000 else Intrinsics(W, H)
     known = set(available_parts())
     reg_cache: dict = {}
     aligned = []
