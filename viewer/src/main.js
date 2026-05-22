@@ -1,9 +1,12 @@
 // main.js — entry point. Boots the scene, loads the pose document, renders the
-// parts, and fills the HUD.
+// parts, and fills the HUD. (Null-point marker + click-info panel are wired in
+// origin.js / infoPanel.js, imported below.)
 
 import * as THREE from "three";
 import { createViewer } from "./scene.js";
 import { loadPose, resolvePoseUrl } from "./loadPose.js";
+import { createOriginMarker } from "./origin.js";
+import { createInfoPanel } from "./infoPanel.js";
 
 const canvas = document.getElementById("scene");
 const viewer = createViewer(canvas);
@@ -33,9 +36,16 @@ async function boot() {
   try {
     const { meta, results } = await loadPose(url);
 
-    // Render parts (empty results -> just the table, no crash).
+    // Null-point marker on the table (default = meta.table_origin).
+    const origin = createOriginMarker(viewer, meta.table_origin);
+
+    // Render parts (empty results -> just table + origin, no crash).
     viewer.setParts(results);
     fillMeta(meta, results.length);
+
+    // Click-to-inspect: raycast against the part meshes, show info relative to
+    // the (possibly moved) null-point.
+    createInfoPanel(viewer, origin);
 
     // Debug hook for smoke tests (projects part world positions to screen px).
     window.__POSE_DEBUG__ = {
@@ -55,7 +65,7 @@ async function boot() {
     };
 
     if (results.length === 0) {
-      showStatus("Keine Teile in results[] — nur Tisch.");
+      showStatus("Keine Teile in results[] — nur Tisch + Nullpunkt.");
     } else {
       hideStatus();
     }
