@@ -41,6 +41,8 @@ Face-Atlas         Registry              Classifier        Alignment            
 
 - Schema: [`docs/pose_result.schema.json`](../pose_result.schema.json) (JSON-Schema Draft 2020-12)
 - Example: [`data/examples/pose_result.example.json`](../../data/examples/pose_result.example.json) — validates against the schema; serves as Lena's dummy input.
+- Produced end-to-end by [`scripts/run_e2e.sh`](../../scripts/run_e2e.sh) (pipeline →
+  `data/output/pose_result.json`, schema-gated before write).
 - **One file per scene image.**
 
 ```
@@ -117,6 +119,43 @@ trained.
 - **+** Fallback path means no checkpoint is a hard blocker for E2E wiring.
 - **−** Changing any frozen invariant is a contract break → bump major
   `schema_version` and notify both sides.
+
+## End-to-end wiring & going live
+
+[`scripts/run_e2e.sh`](../../scripts/run_e2e.sh) runs the whole chain on the
+bundled dummy scene with **no trained model**: pipeline → schema-gated
+`data/output/pose_result.json` (12 instances) → viewer hint. Three steps take it
+from the fallback to trained models, with no code change and the same
+`run_e2e.sh` (full commands in the repo `README.md` § *So geht Max live* and
+[`faces/classifier/README.md`](../../faces/classifier/README.md)):
+
+1. **Simulate data** — `sim_code/render_dataset.py` per part → faceset;
+   `faces/cluster_views.py` → `faces_<part>.json` + `tmpl_Face*.png` into
+   `registry/<part>/`; `faces/extract_snippets.py` + `faces/build_manifest.py`
+   → training data.
+2. **Train** — `faces/classifier/train.py --part Anker_Lang` (→ `lang.pt`) and
+   `--part Anker_Kurz` (→ `kurz.pt`), checkpoints at the canonical path
+   `faces/classifier/checkpoints/<model>.pt`.
+3. **Plug in** — drop the `.pt` at that path; `infer` auto-switches
+   fallback → CNN on the next call. Nothing else to wire.
+
+## Open points / known limitations
+
+- **`registry/Anker_Kurz/` is missing.** Five parts have a committed registry
+  (`Anker_Lang`, `Buerstenhalter_2polig`, `Getriebegehaeuse_typ4`,
+  `Poltopf_kurz_centered`, `Zahnrad`); `Anker_Kurz` does not. In the E2E run its
+  instances resolve via the fallback (identity `R_face`, default face) — contract
+  stays valid, pose is not yet faithful. Closing it = step 1 above for
+  `Anker_Kurz` (render faceset → cluster → copy into `registry/Anker_Kurz/`).
+- **The dummy scene is a Zivid-camera capture, not the canonical top-down
+  `render_dataset` view.** Back-projection (`pipeline/backproject.py`) uses the
+  documented top-down pinhole intrinsics, so the resulting `(x, y)` are a
+  *plausible* table layout for wiring/preview, **not metric ground truth**. The
+  contract and the rotation convention are exact; metric accuracy needs the real
+  camera pose/intrinsics, which plug into `backproject.Intrinsics`.
+- **No trained checkpoints yet.** The E2E run is green on the fallback
+  (`confidence = 0.0`); confidences become real once `lang.pt` / `kurz.pt` (and
+  the multi-class parts) land at the canonical checkpoint path.
 
 ## Self-check
 
