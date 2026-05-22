@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-21T09:57:20Z",
+  "updated": "2026-05-22T09:43:19Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 13,
+  "next_id": 28,
   "tickets": [
     {
       "id": "T-001",
@@ -528,6 +528,609 @@
         {
           "ts": "2026-05-21T09:57:20Z",
           "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-013",
+      "title": "S-001: Leere Face-Templates fixen (Poltopf/Getriebegehaeuse) — deskew/medoid-Fallback",
+      "description": "",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-1",
+        "faces"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T06:57:42Z",
+      "started_at": "2026-05-22T06:23:08Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T06:23:08Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T06:23:09Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "ML-Track gestartet in worktree .worktrees/ml"
+        },
+        {
+          "ts": "2026-05-22T06:25:57Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Worktree baseline imported (a31e6ee) + faces/ rsynced to GPU box; reproducing IST face-counts"
+        },
+        {
+          "ts": "2026-05-22T06:40:35Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "T-013 fix commit 1853076: depth-mode object_mask + height-map templates + per-face health-log + layered fallback. Poltopf/Getriebe blanks -> visible dome height-maps, Anker/Zahnrad templates stay tight. Verified on GPU box."
+        },
+        {
+          "ts": "2026-05-22T06:57:42Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-014",
+      "title": "S-002: Anker_Lang Über-Split fixen — Bild-Rotations-Match dominant, Flip-Guard nur Tiebreaker",
+      "description": "",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-1",
+        "faces"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T06:57:42Z",
+      "started_at": "2026-05-22T06:23:09Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T06:23:09Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T06:57:41Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "T-014 fix commit 9ef5be2: rot_match returns (no_mirror,mirror); flip pairs merge only on true symmetry (mirror match >=0.90 AND mirror_gain >=0.03). Anker_Lang 4->1, Zahnrad stays 2 (flat vs on-edge), Poltopf/Getriebe 1, Buerstenhalter 2. Thresholds = named constants + CLI flags."
+        },
+        {
+          "ts": "2026-05-22T06:57:42Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-015",
+      "title": "S-003: Cluster-Count-Regression-Check ueber >=5 Teile + sauberes face_grid",
+      "description": "",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-1",
+        "faces"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T08:19:00Z",
+      "started_at": "2026-05-22T06:23:09Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T06:23:09Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T08:18:59Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "T-015 commit bfc4eb9: check_face_counts.py 5/5 PASS exit 0 (Anker_Lang=1, Zahnrad=2, Poltopf=1, Getriebe=1, Buerstenhalter=2). Blank-guard inspects actual tmpl PNG. face_grid.png regenerated, no empty tiles, fetched to faces_out/."
+        },
+        {
+          "ts": "2026-05-22T08:19:00Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-016",
+      "title": "S-004: Snippet-Extraktion aus render_dataset (gelabelt nach Face-ID)",
+      "description": "",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-1",
+        "dataset"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T08:25:20Z",
+      "started_at": "2026-05-22T06:23:09Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T06:23:09Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T08:25:20Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "T-016 commit 556ac25: extract_snippets.py -> data/snippets/<part>/<face_id>/*.png, 96x96 square depth height-maps, label=folder. 5 parts, 8 face classes, 637 snippets, no blanks. Shares cluster_faces() with registry so labels never drift. Verified on box."
+        },
+        {
+          "ts": "2026-05-22T08:25:20Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-017",
+      "title": "S-005: Train/Val-Split + manifest + Augmentations-Hooks",
+      "description": "",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-1",
+        "dataset"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T08:26:18Z",
+      "started_at": "2026-05-22T06:23:09Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T06:23:09Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T08:26:18Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "T-017 commit 8ac4ae6: build_manifest.py -> data/snippets/<part>/manifest.json, stratified-per-face deterministic split (seed=1234, val_frac=0.2), items [{path,face_id,split}], augment hooks (rotate/flip/brightness) all OFF by default + --enable-augment. Verified deterministic on box; rare classes keep val examples."
+        },
+        {
+          "ts": "2026-05-22T08:26:18Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-018",
+      "title": "S-006: CONTRACT pose_result.json-Schema (entkoppelt D<->E) + infer-Signatur",
+      "description": "",
+      "column": "in_review",
+      "assignee": "viktor-lead",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-1",
+        "contract"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T06:26:54Z",
+      "started_at": "2026-05-22T06:23:08Z",
+      "completed_at": null,
+      "comments": [
+        {
+          "ts": "2026-05-22T06:26:54Z",
+          "author": "viktor-lead",
+          "text": "Brain ADR-017 (pose-result-contract) gespiegelt."
+        }
+      ],
+      "logs": [
+        {
+          "ts": "2026-05-22T06:23:08Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T06:23:09Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "Contract S-006 gestartet (pose_result.json-Schema)"
+        },
+        {
+          "ts": "2026-05-22T06:24:30Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "Registry-Konvention verifiziert in faces/cluster_views.py:152-176 — faces_<part>.json = {part,n_views,convention='world = R @ body (column)',faces:[{name='Face N',prob,count,tilt_deg,R[9]}]}. R_world im Schema bindet daran."
+        },
+        {
+          "ts": "2026-05-22T06:25:35Z",
+          "agent": "viktor-lead",
+          "level": "success",
+          "msg": "Schema + Beispiel fertig & validiert: docs/pose_result.schema.json (Draft 2020-12) + data/examples/pose_result.example.json. jsonschema-Check grün, alle R_world det=1, bboxes geordnet. Lena hat Dummy-Input."
+        },
+        {
+          "ts": "2026-05-22T06:26:53Z",
+          "agent": "viktor-lead",
+          "level": "success",
+          "msg": "Contract committed: bbbc6e0 (3 files, Max-author, no co-author). docs/pose_result.schema.json + data/examples/pose_result.example.json (valid) + docs/adr/adr-pose-pipeline.md. infer(crop,part)->{face,confidence} im ADR fixiert. D<->E entkoppelt."
+        },
+        {
+          "ts": "2026-05-22T06:26:53Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-019",
+      "title": "S-007: 2 Face-Classifier vorbereiten (nicht trainieren) + nearest-template-Fallback",
+      "description": "",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-1",
+        "classifier"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T08:30:56Z",
+      "started_at": "2026-05-22T06:23:09Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T06:23:09Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T08:30:56Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "T-019 commit 7cf4791: faces/classifier/ — infer(crop,part)->{face:str,confidence:float} stable contract, checkpoint+nearest-template fallback (89% val-acc, no torch/no ckpt, never crashes). model.py CNN, train.py (class-weighted+early-stop+best-ckpt, NOT run), registry.py mapping Anker_Lang->lang.pt / Anker_Kurz->kurz.pt, README. All smoke-import without torch verified on box."
+        },
+        {
+          "ts": "2026-05-22T08:30:56Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-020",
+      "title": "S-008: Inferenz-Pipeline SDG-Bild+BBoxes -> Face-ID pro Crop",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "jonas-backend",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-1",
+        "pipeline"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T09:29:45Z",
+      "started_at": "2026-05-22T09:27:44Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T09:27:44Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T09:29:45Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "Pipeline-Track gestartet (worktree .worktrees/pipeline)"
+        }
+      ]
+    },
+    {
+      "id": "T-021",
+      "title": "S-009: CAD-Alignment -> 6D-Pose (Mask-MSE-Yaw + Backprojection) -> pose_result.json",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "jonas-backend",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-1",
+        "pipeline"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T09:27:44Z",
+      "started_at": "2026-05-22T09:27:44Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T09:27:44Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        }
+      ]
+    },
+    {
+      "id": "T-022",
+      "title": "S-010: Three.js-Viewer Tisch+CAD-Teile an 6D-Pose, Orbit/Zoom",
+      "description": "",
+      "column": "in_review",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-1",
+        "viewer"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:44Z",
+      "updated": "2026-05-22T09:43:19Z",
+      "started_at": "2026-05-22T09:27:44Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T09:27:44Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T09:29:45Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Viewer-Track gestartet (worktree .worktrees/viewer)"
+        },
+        {
+          "ts": "2026-05-22T09:31:18Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Contract gelesen (schema+example). Worktree .worktrees/viewer bestaetigt. Baue viewer/ static Three.js (index.html + scene.js + loadPose.js). R-Konvention: row-major flach, world=R@body -> Matrix4.set direkt in obere 3x3, kein Transpose. Verifiziere mit Anker_Kurz (90deg-X) + Zahnrad (45deg-Z)."
+        },
+        {
+          "ts": "2026-05-22T09:40:33Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "S-010 commit 37e8203. rotation.test.mjs 9/9 gruen (R-Konvention verifiziert, kein Transpose). Playwright headless: 3 Teile an plausiblen Posen, console+page-errors clean, leeres results[] + 404 sauber gehandhabt."
+        },
+        {
+          "ts": "2026-05-22T09:43:19Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-023",
+      "title": "S-011: Viewer Nullpunkt setzen/markieren + Klick->Info-Panel",
+      "description": "",
+      "column": "in_review",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-1",
+        "viewer"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:45Z",
+      "updated": "2026-05-22T09:43:19Z",
+      "started_at": "2026-05-22T09:27:44Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T09:27:44Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T09:31:18Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Geplant nach S-010: origin.js (Nullpunkt-Marker = meta.table_origin) + infoPanel.js (Raycast-Klick -> Teil-Info relativ zum Nullpunkt)."
+        },
+        {
+          "ts": "2026-05-22T09:43:18Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "S-011 commit e1adcc1. Headless verifiziert: jedes Teil resolvt korrekt, Pos rel. Nullpunkt = t_world, upright-Badge korrekt, Nullpunkt-Move shiftet rel-Pos live, empty-Klick schliesst. Bug gefunden+gefixt: Three.js Line-Raycast-Threshold (1m) in Meter-Szene -> nur Meshes picken (recursive=false)."
+        },
+        {
+          "ts": "2026-05-22T09:43:19Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-024",
+      "title": "S-012: E2E-Wiring SDG-Bild+BBoxes -> Pipeline -> Viewer (Dummy-gruen)",
+      "description": "",
+      "column": "backlog",
+      "assignee": "jonas-backend",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-1",
+        "e2e"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:45Z",
+      "updated": "2026-05-22T06:22:45Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-025",
+      "title": "S-013: README+ADR E2E-Pipeline + Max-Anleitung (simulieren/trainieren/einstecken)",
+      "description": "",
+      "column": "backlog",
+      "assignee": "viktor-lead",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-1",
+        "docs"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T06:22:45Z",
+      "updated": "2026-05-22T06:22:45Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-026",
+      "title": "S-008 Inferenz-Pipeline: SDG-Bild+BBoxes -> Face-ID pro Crop",
+      "description": "pipeline/crop.py + inference.py: SDG-Bild + bbox_2d + labels -> Crop pro Box -> infer(crop,part) Routing per Label -> Zwischenliste. Fallback ohne Checkpoint, leeres Bild -> leere valide Liste.",
+      "column": "in_review",
+      "assignee": "jonas-backend",
+      "instance": "worktree-pipeline",
+      "priority": "P0",
+      "tags": [
+        "sprint-pose",
+        "pipeline",
+        "backend"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T09:32:05Z",
+      "updated": "2026-05-22T09:39:09Z",
+      "started_at": "2026-05-22T09:32:17Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T09:32:17Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T09:32:17Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "Worktree at .worktrees/pipeline. Contract+ADR+infer/registry gelesen. GPU-Box UP, hole registry+dummy-scene per rsync."
+        },
+        {
+          "ts": "2026-05-22T09:35:30Z",
+          "agent": "jonas-backend",
+          "level": "success",
+          "msg": "S-008 commit 4da5141. crop.py+inference.py+registry_paths.py. Smoke gegen dummy_scene: 12 Detektionen, Routing per Label OK, unknown->skip, empty->[] verifiziert. registry/ (5 Teile) + dummy_scene committed."
+        },
+        {
+          "ts": "2026-05-22T09:39:09Z",
+          "agent": "jonas-backend",
+          "level": "success",
+          "msg": "Tests/Verifikation grün: E2E 12 Detektionen, empty->[], unknown->skip. Story-File S-008.md geschrieben. Commit 4da5141, status in_review."
+        },
+        {
+          "ts": "2026-05-22T09:39:09Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-027",
+      "title": "S-009 CAD-Alignment -> 6D-Pose -> pose_result.json",
+      "description": "pipeline/alignment.py (Yaw via Template-MSE-Min, R_world=Rz(yaw)@R_face), backproject.py (bbox-center -> Tischebene, Default-Intrinsics cam_h=0.16 focal=24), run_pipeline.py schreibt schema-valides pose_result.json. world=R@body durchgaengig.",
+      "column": "in_review",
+      "assignee": "jonas-backend",
+      "instance": "worktree-pipeline",
+      "priority": "P0",
+      "tags": [
+        "sprint-pose",
+        "pipeline",
+        "backend"
+      ],
+      "session": "2026-05-22-pose-e2e-pipeline",
+      "created": "2026-05-22T09:32:05Z",
+      "updated": "2026-05-22T09:39:09Z",
+      "started_at": "2026-05-22T09:32:17Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T09:32:17Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T09:35:30Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "Starte S-009 Alignment: Yaw via Template-MSE-Min, R_world=Rz(yaw)@R_face (world=R@body), backproject cam_h=0.16 focal=24 res=900, run_pipeline + Schema-Gate."
+        },
+        {
+          "ts": "2026-05-22T09:39:09Z",
+          "agent": "jonas-backend",
+          "level": "success",
+          "msg": "E2E grün: 12 parts, schema gate PASS (stdlib + jsonschema), alle R_world det=1 orthonormal, world=R@body durchgaengig. Yaw-MSE recovert known rotation exakt. Backproject Default-Intrinsics cam_h=0.16/focal=24. pose_result.json @ data/output/. Commit 607eef7, status in_review."
+        },
+        {
+          "ts": "2026-05-22T09:39:09Z",
+          "agent": "jonas-backend",
           "level": "info",
           "msg": "moved: in_progress → in_review"
         }

@@ -35,3 +35,6 @@ data/SDG/
 # ── Isaac Sim / run logs ──────────────────────────────────────
 *.log
 kit/
+
+# ── git worktrees (managed by `git worktree`, never commit) ────
+.worktrees/
