@@ -59,18 +59,102 @@ def radial_desc(dep, msk):
     return np.concatenate([prof, [aspect]])
 
 
+def object_mask(dep, msk):
+    """Real object footprint.
+
+    The renderer sometimes hands us a mask that covers the *whole* frame
+    (frac≈1.0) — useless for cropping. When that happens we recover the object
+    from the depth: pixels whose depth deviates from the dominant background
+    plane. Falls back to the given mask if depth is flat/degenerate, so a part
+    rendered against a true cut-out background still works unchanged.
+    """
+    m = np.asarray(msk).astype(bool)
+    if m.sum() and m.mean() < 0.85:
+        return m                                   # given mask is a real cut-out
+    fin = np.isfinite(dep)
+    dv = dep[fin]
+    if dv.size == 0 or np.ptp(dv) < 1e-6:
+        return m if m.any() else np.ones_like(dep, bool)
+    # Background = the table plane = the *mode* of the depth (most common value).
+    # The part rests on the table so it is NEARER the overhead camera = smaller
+    # depth. Object = pixels meaningfully closer than the table plane. This is
+    # robust whether the part is a tiny diagonal rod (few px) or a wide dome
+    # (most of the frame) — no per-part tuning.
+    hist, edges = np.histogram(dv, bins=64)
+    bg = 0.5 * (edges[int(np.argmax(hist))] + edges[int(np.argmax(hist)) + 1])
+    ptp = float(np.ptp(dv)) + 1e-9
+    obj = fin & ((bg - dep) > 0.08 * ptp)           # nearer than table by ≥8 %
+    if m.any():
+        obj &= m
+    if obj.sum() < 20:                              # depth gave nothing usable
+        return m if m.any() else np.ones_like(dep, bool)
+    # keep the largest connected blob — drops speckle noise
+    lab, n = ndimage.label(obj)
+    if n > 1:
+        sizes = ndimage.sum(np.ones_like(lab), lab, range(1, n + 1))
+        obj = lab == (int(np.argmax(sizes)) + 1)
+    return obj
+
+
+def _height_rgb(dep, msk):
+    """Colourised height map (viridis) of the object — the depth carries the
+    shape even when the rendered RGB is a flat grey, so templates are built from
+    this, not from the (often featureless) colour image."""
+    h = height_map(dep, msk)
+    from matplotlib import cm
+    img = (cm.viridis(h)[:, :, :3] * 255).astype(np.uint8)
+    img[~msk] = 128                                 # neutral grey outside object
+    return img
+
+
 def deskew(rgb, dep, msk):
-    ys, xs = np.nonzero(msk)
+    """Axis-align the object and crop it tight. Robust to degenerate inputs.
+
+    Renders from the depth-derived height map (see ``_height_rgb``) so the part
+    is always visible even when the RGB frame is featureless grey. Any failure
+    (empty/whole-frame mask, singular PCA, empty crop) falls back to the
+    un-deskewed tight crop, and finally to a centred grey square — never an
+    all-grey 'blank' template.
+
+    Returns ``(template_rgb_uint8, ok_bool)`` — ``ok`` is False when a fallback
+    branch was taken (surfaced in the per-face health log).
+    """
+    om = object_mask(dep, msk)
+    base = _height_rgb(dep, om)
+    ys, xs = np.nonzero(om)
+    if ys.size < 20:                                # no object at all
+        return _grey_square(), False
+
+    def _tight(img, mask):
+        yy, xx = np.nonzero(mask)
+        return img[yy.min():yy.max() + 1, xx.min():xx.max() + 1]
+
+    # PCA major-axis angle; guard against a singular / round covariance.
     pts = np.stack([xs, ys], 1).astype(float); c = pts.mean(0)
-    ev, evec = np.linalg.eigh(np.cov((pts - c).T))
-    major = evec[:, int(np.argmax(ev))]
-    ang = np.degrees(np.arctan2(major[1], major[0]))
-    rr = ndimage.rotate(rgb, ang, reshape=True, order=1, mode="constant", cval=128)
-    mm = ndimage.rotate(msk.astype(np.uint8), ang, reshape=True, order=0) > 0
-    if mm.sum() > 20:
-        ys2, xs2 = np.nonzero(mm)
-        rr = rr[ys2.min():ys2.max() + 1, xs2.min():xs2.max() + 1]
-    return rr
+    cov = np.cov((pts - c).T)
+    ok = True
+    try:
+        ev, evec = np.linalg.eigh(cov)
+        if not np.all(np.isfinite(ev)) or ev.max() <= 1e-6 or ev[0] / (ev[1] + 1e-9) > 0.92:
+            raise ValueError("near-isotropic / singular")
+        major = evec[:, int(np.argmax(ev))]
+        ang = np.degrees(np.arctan2(major[1], major[0]))
+        rr = ndimage.rotate(base, ang, reshape=True, order=1, mode="constant", cval=128)
+        mm = ndimage.rotate(om.astype(np.uint8), ang, reshape=True, order=0) > 0
+        if mm.sum() <= 20:
+            raise ValueError("rotation lost the object")
+        crop = _tight(rr, mm)
+    except Exception:
+        ok = False                                  # fall back to un-deskewed crop
+        crop = _tight(base, om)
+
+    if crop.size == 0 or min(crop.shape[:2]) < 2:   # last-ditch guard
+        return _grey_square(), False
+    return crop.astype(np.uint8), ok
+
+
+def _grey_square(sz=96):
+    return np.full((sz, sz, 3), 128, np.uint8)
 
 
 def main():
@@ -157,17 +241,22 @@ def main():
         gm = g[f].mean(0); gm /= np.linalg.norm(gm) + 1e-9
         tilt = float(np.degrees(np.arccos(np.clip(abs(gm[2]), 0, 1))))
         fdir = os.path.join(out, fname.replace(" ", "_")); os.makedirs(fdir, exist_ok=True)
+        n_ok = 0
         for j in f:
             rgb = np.asarray(Image.open(os.path.join(ds, rows[j]["rgb"])).convert("RGB"))
-            Image.fromarray(deskew(rgb, deps[j], msks[j]).astype(np.uint8)).save(
-                os.path.join(fdir, f"{rows[j]['i']:04d}.png"))
-        reg["faces"].append({"name": fname, "prob": round(len(f) / n, 4), "count": int(len(f)),
-                             "tilt_deg": round(tilt, 1),
-                             "R": [round(v, 6) for v in rows[med]["R"]]})
+            crop, cok = deskew(rgb, deps[j], msks[j])
+            n_ok += int(cok)
+            Image.fromarray(crop).save(os.path.join(fdir, f"{rows[j]['i']:04d}.png"))
         ax = np.atleast_1d(axs)[k]
         rgb = np.asarray(Image.open(os.path.join(ds, rows[med]["rgb"])).convert("RGB"))
-        tmpl = deskew(rgb, deps[med], msks[med]).astype(np.uint8)
+        tmpl, tmpl_ok = deskew(rgb, deps[med], msks[med])
         Image.fromarray(tmpl).save(os.path.join(out, f"tmpl_{fname.replace(' ', '')}.png"))
+        # health log: every face must yield a non-blank template
+        print(f"[health] {fname}: n_crops={len(f)} crops_ok={n_ok}/{len(f)} "
+              f"tmpl_ok={tmpl_ok} tmpl_shape={tmpl.shape[:2]}")
+        reg["faces"].append({"name": fname, "prob": round(len(f) / n, 4), "count": int(len(f)),
+                             "tilt_deg": round(tilt, 1), "tmpl_ok": bool(tmpl_ok),
+                             "R": [round(v, 6) for v in rows[med]["R"]]})
         ax.imshow(tmpl)
         ax.set_title(f"{fname}\n{len(f)/n*100:.0f}% (n={len(f)}) tilt {tilt:.0f}°", fontsize=10)
         ax.set_axis_off()
