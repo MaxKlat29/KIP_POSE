@@ -1,0 +1,25 @@
+{
+  "part": "Anker_Kurz",
+  "n_views": 160,
+  "convention": "world = R @ body (column)",
+  "faces": [
+    {
+      "name": "Face 1",
+      "prob": 1.0,
+      "count": 160,
+      "tilt_deg": 54.5,
+      "tmpl_ok": false,
+      "R": [
+        5e-06,
+        0.000538,
+        1.0,
+        -7.7e-05,
+        -1.0,
+        0.000538,
+        1.0,
+        -7.7e-05,
+        -5e-06
+      ]
+    }
+  ]
+}

@@ -1,5 +1,0 @@
-# Trained checkpoints land here (see registry.checkpoint_path / README).
-# Keep the dir, ignore the weights — they are large binary training artefacts.
-*.pt
-*.pth
-!.gitignore

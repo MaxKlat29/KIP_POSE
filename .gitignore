@@ -8,6 +8,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .venv-faces/
+.venv-verify/
 venv/
 env/
 *.egg-info/
@@ -38,3 +39,21 @@ kit/
 
 # ── git worktrees (managed by `git worktree`, never commit) ────
 .worktrees/
+
+# ── project/ generated artifacts (large; regenerable via setup.ipynb) ──────────
+# Facesets (RGB+Tiefe+Maske) und Snippets sind generierte Trainingsdaten.
+project/training_data/
+# Scratch/Zwischenstände (Previews, Render-/Train-Skripte, pose_result-Outputs).
+project/temp/
+# Trainierte Checkpoints + Metriken (groß; via setup.ipynb erzeugbar).
+project/models/*.pt
+project/models/*.metrics.json
+project/models/_train_summary.json
+# Detektor-Trainings-Artefakte (Kurven-Plot + CSV; via setup.ipynb erzeugbar).
+project/models/detector.curves.png
+project/models/*.results.csv
+# Beispiel-Eingaben (Bilder werden lokal abgelegt, nicht committed).
+project/input/*
+!project/input/.gitkeep
+# committet bleibt: project/models/registry/ (wertvolle Face-Registries),
+# die ipynbs, e2e_infer.py, frontend/, cad_input/-Struktur (.usd selbst gitignored).
