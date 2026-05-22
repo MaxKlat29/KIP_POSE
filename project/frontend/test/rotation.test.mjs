@@ -18,10 +18,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Frozen synthetic fixture (identity / +45deg yaw / -90deg-about-X) at the repo
 // root data/examples/. It pins the R-convention regardless of live inference
 // output; the viewer's runtime default is project/temp/pose_result.json instead.
-const examplePath = resolve(
-  __dirname,
-  "../../../data/examples/pose_result.example.json"
-);
+// Frozen R-convention fixture, co-located with the test (the old repo-root
+// data/examples/ path went away in the inline refactor). Pins identity / +45°
+// yaw / -90°-about-X regardless of live inference output.
+const examplePath = resolve(__dirname, "pose_result.example.json");
 
 // Apply a row-major 9-float R to a 3-vector: (R @ v).
 function applyR(R, v) {

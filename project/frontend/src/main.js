@@ -46,8 +46,10 @@ async function boot() {
     // Null-point marker on the table (default = meta.table_origin).
     const origin = createOriginMarker(viewer, meta.table_origin);
 
-    // Render parts (empty results -> just table + origin, no crash).
-    viewer.setParts(results);
+    // Render parts (empty results -> just table + origin, no crash). ECHTE CAD-
+    // Meshes pro Teil werden async nachgeladen.
+    const meshStats = await viewer.setParts(results);
+    window.__POSE_MESH_STATS__ = meshStats; // {total, real} für Smoke-Tests
     fillMeta(meta, results.length);
 
     // Click-to-inspect: raycast against the part meshes, show info relative to
