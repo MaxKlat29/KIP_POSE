@@ -25,8 +25,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("part")
     ap.add_argument("--out", default=None)
-    ap.add_argument("--g-merge-deg", type=float, default=35.0)
-    ap.add_argument("--sig-tol", type=float, default=0.10)
+    ap.add_argument("--link-tol", type=float, default=0.22,
+                    help="contact-descriptor distance (normal + body centroid) to merge settles into one face")
     ap.add_argument("--min-prob", type=float, default=0.02)
     ap.add_argument("--max-faces", type=int, default=8)
     ap.add_argument("--n-samples", type=int, default=12)
@@ -49,19 +49,17 @@ def main():
     Rs = [np.asarray(T)[:3, :3] for T in transforms]
     print(f"[atlas] {len(probs)} raw stable poses")
 
-    faces, rare, n_g, n_sym = core.cluster_and_merge(
-        Rs, np.asarray(probs), mesh, args.g_merge_deg, args.sig_tol,
-        args.min_prob, prob_tol=0.25)
-    print(f"[atlas] g-merge -> {n_g} | symmetry-merge -> {n_sym} | "
-          f"{len(faces)} faces >= {args.min_prob:.0%}" +
+    faces, rare, n_raw, _ = core.cluster_and_merge(
+        Rs, np.asarray(probs), mesh, link_tol=args.link_tol, min_prob=args.min_prob)
+    print(f"[atlas] {n_raw} contact-clusters | {len(faces)} faces >= {args.min_prob:.0%}" +
           (f" | {rare['n_faces']} seltene gefaltet ({rare['prob']*100:.1f}%)"
            if rare["n_faces"] else ""))
 
     core.render_atlas(
         mesh, faces, rare,
         f"Stable-Face-Atlas — {name}",
-        f"{len(probs)} rohe Ruhelagen  →  {len(faces)} physische Faces "
-        f"(analytisch, trimesh; g-merge {args.g_merge_deg:.0f}° · sym-merge · floor {args.min_prob:.0%})",
+        f"{len(probs)} rohe Ruhelagen  →  {len(faces)} Faces "
+        f"(analytisch, trimesh; Kontaktpunkt-Cluster · floor {args.min_prob:.0%})",
         out, max_faces=args.max_faces, min_prob=args.min_prob)
     print(f"[atlas] wrote {out}")
 

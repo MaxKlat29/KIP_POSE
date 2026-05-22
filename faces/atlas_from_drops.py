@@ -27,8 +27,8 @@ def main():
     ap.add_argument("part")
     ap.add_argument("drops")
     ap.add_argument("--out", default=None)
-    ap.add_argument("--g-merge-deg", type=float, default=35.0)
-    ap.add_argument("--sig-tol", type=float, default=0.10)
+    ap.add_argument("--link-tol", type=float, default=0.22,
+                    help="contact-descriptor distance (normal + body centroid) to merge settles into one face")
     ap.add_argument("--min-prob", type=float, default=0.02)
     ap.add_argument("--max-faces", type=int, default=8)
     args = ap.parse_args()
@@ -52,22 +52,34 @@ def main():
     if n == 0:
         raise SystemExit("no drops in file")
 
-    faces, rare, n_g, n_sym = core.cluster_and_merge(
-        Rs, np.ones(n), mesh, args.g_merge_deg, args.sig_tol,
-        args.min_prob, prob_tol=0.25)
-    print(f"[atlas] g-merge -> {n_g} | symmetry-merge -> {n_sym} | "
-          f"{len(faces)} faces >= {args.min_prob:.0%}: " +
-          ", ".join(f'{f["name"]} {f["prob"]*100:.1f}% (n={f["count"]})' for f in faces) +
+    faces, rare, n_raw, _ = core.cluster_and_merge(
+        Rs, np.ones(n), mesh, link_tol=args.link_tol, min_prob=args.min_prob)
+    print(f"[atlas] {n_raw} clusters | {len(faces)} faces >= {args.min_prob:.0%}: " +
+          ", ".join(f'{f["name"]}/{f["tag"]}/diag{f["diag_deg"]:.0f} {f["prob"]*100:.1f}% (n={f["count"]})' for f in faces) +
           (f" | {rare['n_faces']} seltene gefaltet ({rare['prob']*100:.1f}%, n={rare['count']})"
            if rare["n_faces"] else ""))
 
     core.render_atlas(
         mesh, faces, rare,
         f"Stable-Face-Atlas — {name}  (empirisch)",
-        f"{n} Isaac-Sim Physik-Drops  →  {len(faces)} physische Faces "
-        f"(g-merge {args.g_merge_deg:.0f}° · sym-merge · floor {args.min_prob:.0%})",
+        f"{n} Isaac-Sim Physik-Drops  →  {len(faces)} Faces "
+        f"(orientation-up-to-yaw · floor {args.min_prob:.0%})",
         out, max_faces=args.max_faces, min_prob=args.min_prob)
     print(f"[atlas] wrote {out}")
+
+    # registration table: Face N <-> canonical body->world rotation R_face.
+    # At inference: detected Face N gives R_face (out-of-plane orientation); the
+    # OBB yaw + (x,y) back-projection complete the 6D pose -> CAD placement.
+    reg = {"part": name, "n_drops": n, "convention": "world = R @ body (column)",
+           "faces": [{"name": f["name"], "prob": round(f["prob"], 4),
+                      "count": f["count"], "tag": f["tag"],
+                      "diag_deg": round(f["diag_deg"], 1),
+                      "R": [round(v, 6) for v in np.asarray(f["R"]).flatten().tolist()]}
+                     for f in faces]}
+    reg_path = os.path.join(os.path.dirname(out), f"faces_{name}.json")
+    with open(reg_path, "w") as fh:
+        json.dump(reg, fh, indent=2)
+    print(f"[atlas] registration -> {reg_path}")
 
 
 if __name__ == "__main__":
