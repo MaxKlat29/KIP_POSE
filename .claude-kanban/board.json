@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-22T09:43:19Z",
+  "updated": "2026-05-22T09:49:32Z",
   "columns": [
     {
       "id": "backlog",
@@ -846,7 +846,7 @@
       "id": "T-020",
       "title": "S-008: Inferenz-Pipeline SDG-Bild+BBoxes -> Face-ID pro Crop",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P0",
@@ -856,9 +856,9 @@
       ],
       "session": "2026-05-22-pose-e2e-pipeline",
       "created": "2026-05-22T06:22:44Z",
-      "updated": "2026-05-22T09:29:45Z",
+      "updated": "2026-05-22T09:49:32Z",
       "started_at": "2026-05-22T09:27:44Z",
-      "completed_at": null,
+      "completed_at": "2026-05-22T09:49:31Z",
       "comments": [],
       "logs": [
         {
@@ -872,6 +872,18 @@
           "agent": "jonas-backend",
           "level": "info",
           "msg": "Pipeline-Track gestartet (worktree .worktrees/pipeline)"
+        },
+        {
+          "ts": "2026-05-22T09:49:31Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "Duplikat von S-008, siehe T-026 (echte Story, gemergt → main als 638adb4). Dieses Ticket war die leere Dublette."
         }
       ]
     },
@@ -879,7 +891,7 @@
       "id": "T-021",
       "title": "S-009: CAD-Alignment -> 6D-Pose (Mask-MSE-Yaw + Backprojection) -> pose_result.json",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P0",
@@ -889,9 +901,9 @@
       ],
       "session": "2026-05-22-pose-e2e-pipeline",
       "created": "2026-05-22T06:22:44Z",
-      "updated": "2026-05-22T09:27:44Z",
+      "updated": "2026-05-22T09:49:32Z",
       "started_at": "2026-05-22T09:27:44Z",
-      "completed_at": null,
+      "completed_at": "2026-05-22T09:49:32Z",
       "comments": [],
       "logs": [
         {
@@ -899,6 +911,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "Duplikat von S-009, siehe T-027 (echte Story, gemergt → main als 638adb4). Dieses Ticket war die leere Dublette."
         }
       ]
     },
@@ -906,7 +930,7 @@
       "id": "T-022",
       "title": "S-010: Three.js-Viewer Tisch+CAD-Teile an 6D-Pose, Orbit/Zoom",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P1",
@@ -916,9 +940,9 @@
       ],
       "session": "2026-05-22-pose-e2e-pipeline",
       "created": "2026-05-22T06:22:44Z",
-      "updated": "2026-05-22T09:43:19Z",
+      "updated": "2026-05-22T09:49:32Z",
       "started_at": "2026-05-22T09:27:44Z",
-      "completed_at": null,
+      "completed_at": "2026-05-22T09:49:32Z",
       "comments": [],
       "logs": [
         {
@@ -950,6 +974,18 @@
           "agent": "lena-frontend",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged → main as 7a955c3 (no-ff merge of team/.../viewer). viewer/{index.html,src/*}. Headless Playwright-Smoke: 12 Teile gerendert, three.js geladen, 0 JS-Errors."
         }
       ]
     },
@@ -957,7 +993,7 @@
       "id": "T-023",
       "title": "S-011: Viewer Nullpunkt setzen/markieren + Klick->Info-Panel",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P1",
@@ -967,9 +1003,9 @@
       ],
       "session": "2026-05-22-pose-e2e-pipeline",
       "created": "2026-05-22T06:22:45Z",
-      "updated": "2026-05-22T09:43:19Z",
+      "updated": "2026-05-22T09:49:32Z",
       "started_at": "2026-05-22T09:27:44Z",
-      "completed_at": null,
+      "completed_at": "2026-05-22T09:49:32Z",
       "comments": [],
       "logs": [
         {
@@ -995,6 +1031,18 @@
           "agent": "lena-frontend",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged → main as 7a955c3 (no-ff merge of team/.../viewer). origin.js Nullpunkt-Marker + infoPanel.js Klick-Inspektion. rotation.test.mjs grün 9/9."
         }
       ]
     },
@@ -1002,7 +1050,7 @@
       "id": "T-024",
       "title": "S-012: E2E-Wiring SDG-Bild+BBoxes -> Pipeline -> Viewer (Dummy-gruen)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P1",
@@ -1012,11 +1060,24 @@
       ],
       "session": "2026-05-22-pose-e2e-pipeline",
       "created": "2026-05-22T06:22:45Z",
-      "updated": "2026-05-22T06:22:45Z",
+      "updated": "2026-05-22T09:49:32Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-05-22T09:49:32Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        },
+        {
+          "ts": "2026-05-22T09:49:32Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "E2E-Wiring fertig: scripts/run_e2e.sh + validate_pose_result.py, commit 56c375f. Ein Befehl: dummy_scene → pipeline → schema-valides data/output/pose_result.json (12 Teile, stdlib-Gate PASS) → Viewer-Anleitung. Idempotent + CWD-invariant. Viewer-Smoke headless grün (12 Teile, 0 JS-Errors)."
+        }
+      ]
     },
     {
       "id": "T-025",
@@ -1042,7 +1103,7 @@
       "id": "T-026",
       "title": "S-008 Inferenz-Pipeline: SDG-Bild+BBoxes -> Face-ID pro Crop",
       "description": "pipeline/crop.py + inference.py: SDG-Bild + bbox_2d + labels -> Crop pro Box -> infer(crop,part) Routing per Label -> Zwischenliste. Fallback ohne Checkpoint, leeres Bild -> leere valide Liste.",
-      "column": "in_review",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "worktree-pipeline",
       "priority": "P0",
@@ -1053,9 +1114,9 @@
       ],
       "session": "2026-05-22-pose-e2e-pipeline",
       "created": "2026-05-22T09:32:05Z",
-      "updated": "2026-05-22T09:39:09Z",
+      "updated": "2026-05-22T09:49:23Z",
       "started_at": "2026-05-22T09:32:17Z",
-      "completed_at": null,
+      "completed_at": "2026-05-22T09:49:23Z",
       "comments": [],
       "logs": [
         {
@@ -1087,6 +1148,18 @@
           "agent": "jonas-backend",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-22T09:49:23Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-22T09:49:23Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged → main as 638adb4 (no-ff merge of team/.../pipeline). Files: pipeline/{crop,inference,registry_paths,...}.py, registry/ (5 parts), data/examples/dummy_scene/."
         }
       ]
     },
@@ -1094,7 +1167,7 @@
       "id": "T-027",
       "title": "S-009 CAD-Alignment -> 6D-Pose -> pose_result.json",
       "description": "pipeline/alignment.py (Yaw via Template-MSE-Min, R_world=Rz(yaw)@R_face), backproject.py (bbox-center -> Tischebene, Default-Intrinsics cam_h=0.16 focal=24), run_pipeline.py schreibt schema-valides pose_result.json. world=R@body durchgaengig.",
-      "column": "in_review",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "worktree-pipeline",
       "priority": "P0",
@@ -1105,9 +1178,9 @@
       ],
       "session": "2026-05-22-pose-e2e-pipeline",
       "created": "2026-05-22T09:32:05Z",
-      "updated": "2026-05-22T09:39:09Z",
+      "updated": "2026-05-22T09:49:24Z",
       "started_at": "2026-05-22T09:32:17Z",
-      "completed_at": null,
+      "completed_at": "2026-05-22T09:49:24Z",
       "comments": [],
       "logs": [
         {
@@ -1133,6 +1206,18 @@
           "agent": "jonas-backend",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-22T09:49:24Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-22T09:49:24Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged → main as 638adb4 (no-ff merge of team/.../pipeline). Files: pipeline/{alignment,backproject,schema,run_pipeline}.py — yaw/MSE align + backproject + schema gate."
         }
       ]
     }
