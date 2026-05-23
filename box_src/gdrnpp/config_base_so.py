@@ -23,7 +23,15 @@ OUTPUT_DIR = "output/gdrn/poseIsaacPbrSO/base_so"
 INPUT = dict(
     DZI_PAD_SCALE=1.5,
     TRUNCATE_FG=True,
-    CHANGE_BG_PROB=0.5,
+    # [T-068] CHANGE_BG_PROB=0.0: our Isaac-PBR renders ALREADY contain a
+    # realistic full scene (robot arm occluder + clutter + table). The GDRNPP
+    # default 0.5 pastes random VOC2012 images behind the object, which (a)
+    # requires the 2GB VOCdevkit download (the loader asserts BG ROOT exists ->
+    # AssertionError "datasets/VOCdevkit/VOC2012/ does not exist") and (b) is the
+    # WRONG augmentation for us — it would destroy the arm/clutter context that
+    # is the whole point of the arm-visible dataset (ADR-018). Backgrounds stay
+    # as rendered.
+    CHANGE_BG_PROB=0.0,
     COLOR_AUG_PROB=0.8,
     MIN_SIZE_TRAIN=720,
     MAX_SIZE_TRAIN=1280,

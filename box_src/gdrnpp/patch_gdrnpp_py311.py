@@ -76,7 +76,27 @@ def patch_egl_iostream():
     return "egl iostream: WARN anchor not found"
 
 
+def patch_eval_python_exe():
+    # core/gdrn_modeling/engine/test_utils.py launches the BOP eval script with
+    # subprocess.call(["python", ...]). The box has no bare `python` on PATH
+    # (only python3 / the venv binary) -> FileNotFoundError: 'python' at the END
+    # of training (post-train do_test), AFTER checkpoints are already written.
+    # Use sys.executable so the eval runs in the same venv. `import sys` already
+    # present in test_utils.py. (T-068)
+    p = os.path.join(GDRN, "core/gdrn_modeling/engine/test_utils.py")
+    s = open(p).read()
+    old = '        eval_cmd = [\n            "python",\n'
+    new = '        eval_cmd = [\n            sys.executable,  # [T-068] not bare "python"\n'
+    n = s.count(old)
+    if 'sys.executable,  # [T-068]' in s:
+        return "eval python exe: already patched"
+    if n == 0:
+        return "eval python exe: WARN anchor not found"
+    open(p, "w").write(s.replace(old, new))
+    return f"eval python exe: patched ({n} call sites)"
+
+
 if __name__ == "__main__":
-    for fn in (patch_collections, patch_is_binary, patch_egl_iostream):
+    for fn in (patch_collections, patch_is_binary, patch_egl_iostream, patch_eval_python_exe):
         print("  ", fn())
     print("PATCH_GDRNPP_PY311_DONE")
