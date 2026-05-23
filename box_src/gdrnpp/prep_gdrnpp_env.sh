@@ -38,10 +38,12 @@ echo "[prep] 3) pin PL 1.9.0 + numpy 1.23.5 + scipy 1.10.1 + fairscale + pyassim
 $PIP install "pytorch-lightning==1.9.0" "numpy==1.23.5" "scipy==1.10.1" \
              fairscale "pyassimp==4.1.4" 2>&1 | tail -2
 
-echo "[prep] 4) GDRNPP source patches (collections.abc, is_binary_file, egl iostream)"
+echo "[prep] 4) GDRNPP source patches (collections.abc, is_binary_file, egl iostream, eval python exe)"
 $PY "$SRC/patch_gdrnpp_py311.py"
-echo "[prep] 4b) PL 1.9 _LiteModule -> _FabricModule"
+echo "[prep] 4b) PL 1.9 compat (_LiteModule->_FabricModule, _precision_plugin->_strategy.precision)"
 $PY "$SRC/patch_pl19_compat.py"
+echo "[prep] 4c) EGL renderer mesh fix (calc_normals indexed-mesh + pyassimp material bypass) [T-068]"
+$PY "$SRC/patch_egl_calc_normals.py"
 
 echo "[prep] 5) build CppEGLRenderer if missing"
 if [ -z "$(find "$GDRN/lib/egl_renderer" -maxdepth 1 -name 'CppEGLRenderer*.so' 2>/dev/null)" ]; then
