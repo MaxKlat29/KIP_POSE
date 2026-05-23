@@ -10,16 +10,21 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { rotationToMatrix4 } from "./loadPose.js";
 import { sizeForPart, isKnownPart } from "./partRegistry.js";
+import { getPartMesh, hasRealMesh } from "./partMeshes.js";
 
-const COLOR_FLAT = 0x5b8def;
-const COLOR_UPRIGHT = 0xf5b942;
+const COLOR_FLAT = 0x53b9ff;     // helleres Cyan-Blau — hebt die kleinen Metallteile
+const COLOR_UPRIGHT = 0xffc23d;  // kräftiges Amber für stehende Teile
+const PARTS_BASE_URL = "./assets/parts";
 const COLOR_TABLE = 0x1b2230;
 const COLOR_GRID = 0x2f3a4d;
 const COLOR_GRID_CENTER = 0x44506a;
 
 // Work-surface (Tray-Referenzhöhe) in der GST-Welt, wo die Teile ruhen. Muss zu
 // TABLE_ORIGIN_SCENE in e2e_infer.py passen.
-const WORK_Z = 0.08;
+// Echte Wagen-Tischplatte (GST_Scene.usd: Anker_Tray/Poltopf_Tray zmin=-0.007 m).
+// Muss zu TABLE_Z_SCENE in e2e_infer.py + infer.ipynb passen, damit die Teile
+// mit cell.glb (echtes CAD im selben Welt-Frame) fluchten.
+const WORK_Z = -0.007;
 // Mitte der Spawn-Region (Tray) für Kamera-Fokus + Grid-Position.
 const WORK_CENTER = [0.42, 0.29, WORK_Z];
 
@@ -115,12 +120,37 @@ export function createViewer(canvas) {
   /** A registry of the pickable part meshes -> their source result. */
   const pickables = [];
 
+  // Box-Fallback für ein Teil (echtes Mesh fehlt) — als Wrapper-Mesh mit Result.
+  function makeBoxFallback(r) {
+    const [sx, sy, sz] = sizeForPart(r.part);
+    const upright = r.upright === true;
+    const geo = new THREE.BoxGeometry(sx, sy, sz);
+    const mat = new THREE.MeshStandardMaterial({
+      color: upright ? COLOR_UPRIGHT : COLOR_FLAT,
+      roughness: 0.5,
+      metalness: 0.15,
+      transparent: !isKnownPart(r.part),
+      opacity: isKnownPart(r.part) ? 1 : 0.6,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({
+        color: upright ? 0xfff0c8 : 0xcdddff,
+        transparent: true,
+        opacity: 0.5,
+      })
+    );
+    mesh.add(edges);
+    return mesh;
+  }
+
   /**
-   * Render the parts from a validated pose document.
-   * Each part: a placeholder box at t_world, oriented by R_world, with a small
-   * body-axes helper. Upright parts are tinted amber + flagged.
+   * Render the parts from a validated pose document — ECHTE CAD-Meshes pro Teil
+   * (assets/parts/<part>.glb), an der vorhergesagten 6D-Pose. Box-Fallback wenn ein
+   * Mesh fehlt. Async, weil die glTFs nachgeladen werden; gibt ein Promise zurück.
    */
-  function setParts(results) {
+  async function setParts(results) {
     // Clear previous.
     while (partsGroup.children.length) {
       const child = partsGroup.children.pop();
@@ -132,49 +162,54 @@ export function createViewer(canvas) {
     }
     pickables.length = 0;
 
-    for (const r of results) {
-      const [sx, sy, sz] = sizeForPart(r.part);
+    // P4 — Stapelung: Teile in depth_order (0 = fern/unten zuerst) rendern.
+    const ordered = [...results].sort(
+      (a, b) => (a.depth_order ?? 0) - (b.depth_order ?? 0)
+    );
+
+    let realCount = 0;
+    for (let idx = 0; idx < ordered.length; idx++) {
+      const r = ordered[idx];
       const upright = r.upright === true;
+      const color = upright ? COLOR_UPRIGHT : COLOR_FLAT;
 
-      const geo = new THREE.BoxGeometry(sx, sy, sz);
-      const mat = new THREE.MeshStandardMaterial({
-        color: upright ? COLOR_UPRIGHT : COLOR_FLAT,
-        roughness: 0.5,
-        metalness: 0.15,
-        // unknown parts (generic fallback box) render slightly translucent so
-        // it's visually obvious the geometry is a guess.
-        transparent: !isKnownPart(r.part),
-        opacity: isKnownPart(r.part) ? 1 : 0.6,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
+      // Wrapper-Group trägt die 6D-Pose; das Mesh (echt oder Box) sitzt drin im
+      // body-frame (Schwerpunkt-zentriert) — t_world IST der Schwerpunkt.
+      const holder = new THREE.Group();
+      let inner = null;
+      if (hasRealMesh(r.part)) {
+        inner = await getPartMesh(r.part, PARTS_BASE_URL, color);
+      }
+      if (inner) {
+        realCount++;
+        holder.userData.real = true;
+      } else {
+        inner = makeBoxFallback(r);
+        holder.userData.real = false;
+      }
+      // body-frame Achsen-Helper (kompakt) — macht R lesbar.
+      const ext = sizeForPart(r.part);
+      const axes = new THREE.AxesHelper(Math.max(ext[0], ext[1], ext[2]) * 0.6);
+      inner.add(axes);
+      holder.add(inner);
 
-      // Apply 6D pose: rotation from R_world (column convention world=R@body),
-      // then translation t_world. matrixAutoUpdate off so our matrix sticks.
+      // 6D-Pose: R_world (column world=R@body) + t_world (Schwerpunkt, Meter).
       const m = rotationToMatrix4(r.R_world);
       m.setPosition(r.t_world[0], r.t_world[1], r.t_world[2]);
-      mesh.matrixAutoUpdate = false;
-      mesh.matrix.copy(m);
+      holder.matrixAutoUpdate = false;
+      holder.matrix.copy(m);
+      holder.renderOrder = r.depth_order ?? idx;
 
-      // Crisp edge outline so orientation reads clearly.
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(geo),
-        new THREE.LineBasicMaterial({
-          color: upright ? 0xfff0c8 : 0xcdddff,
-          transparent: true,
-          opacity: 0.5,
-        })
-      );
-      mesh.add(edges);
-
-      // Small body-frame axes helper (kompakt, damit der Box-Körper lesbar
-      // bleibt statt als Kreuz zu erscheinen) — macht R legible.
-      const axes = new THREE.AxesHelper(Math.max(sx, sy, sz) * 0.55);
-      mesh.add(axes);
-
-      mesh.userData.result = r; // for raycast info panel
-      partsGroup.add(mesh);
-      pickables.push(mesh);
+      holder.userData.result = r;
+      // Raycast soll auf das Mesh treffen und das Result finden.
+      inner.traverse((o) => {
+        if (o.isMesh) o.userData.result = r;
+      });
+      inner.userData.result = r;
+      partsGroup.add(holder);
+      pickables.push(holder);
     }
+    return { total: ordered.length, real: realCount };
   }
 
   // ── Resize handling ─────────────────────────────────────────

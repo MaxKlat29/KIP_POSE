@@ -7,15 +7,16 @@
     <link rel="stylesheet" href="./src/style.css" />
 
     <!--
-      Three.js via ES-module CDN import map. No build step needed.
-      Pinned version so the viewer is reproducible. To vendor locally instead,
-      drop three's build/ + examples/jsm/ next to this file and repoint the map.
+      Three.js VENDORED locally (vendor/three/, pinned 0.160.0). Kein CDN, kein
+      Build-Step — der Viewer läuft komplett offline + ist reproduzierbar. (Vorher
+      unpkg-CDN; lokal vendored damit `--serve` ohne Netz funktioniert + der
+      Playwright-Headless-Test deterministisch lädt.)
     -->
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          "three": "./vendor/three/build/three.module.js",
+          "three/addons/": "./vendor/three/examples/jsm/"
         }
       }
     </script>
