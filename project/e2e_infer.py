@@ -69,7 +69,12 @@ TABLE_ORIGIN_SCENE = (0.0, 0.0, 0.08)
 
 
 def available_parts():
-    """Teile-Namen aus models/part_meta.json (post-ADR-018). Fallback: Liste."""
+    """Teile-Namen — Single-Source = bop_adapter.OBJ_ID_TO_PART (§1.2, eingefroren).
+
+    Optionaler Override via models/part_meta.json (falls ein Cleanup sie wieder
+    hinlegt). Fehlt die Datei (Default seit ADR-018-Cleanup), wird die kanonische
+    obj_id->part-Map des Adapters benutzt — KEINE separate, driftende Liste mehr.
+    """
     pm = MODELS / "part_meta.json"
     if pm.exists():
         try:
@@ -79,8 +84,8 @@ def available_parts():
                 return sorted(str(n) for n in names)
         except Exception:
             pass
-    return ["Anker_Lang", "Anker_Kurz", "Zahnrad", "Poltopf_kurz_centered",
-            "Getriebegehaeuse_typ4", "Buerstenhalter_2polig"]
+    # Kanonisch aus dem Adapter (gleiche Quelle wie obj_id-Mapping, scene_gt, PLY).
+    return sorted(BOP.OBJ_ID_TO_PART.values())
 
 
 def _canonical_parts():
