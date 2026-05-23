@@ -162,7 +162,47 @@ def aabb_from_mask(mask):
     return [x0, y0, x1 - x0 + 1, y1 - y0 + 1]
 
 
-def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale):
+def load_bop_models(models_dir):
+    """Load each obj PLY (mm). Returns {obj_id: trimesh.Trimesh}."""
+    import trimesh
+    out = {}
+    for oid in OBJ_ID.values():
+        p = os.path.join(models_dir, f"obj_{oid:06d}.ply")
+        if os.path.exists(p):
+            out[oid] = trimesh.load(p, force="mesh")
+    return out
+
+
+def render_full_mask(mesh, K, R_m2c, t_m2c_mm, W, H):
+    """Rasterize the GT-posed mesh silhouette (occlusion-FREE full mask) by
+    filling the projected triangles. This is the BOP `mask` (the full silhouette
+    ignoring scene occlusion) used for px_count_all + visib_fract. Pure
+    PIL/numpy — no EGL/vispy renderer needed.
+    """
+    from PIL import Image as _I, ImageDraw as _D
+    Km = np.asarray(K, float).reshape(3, 3)
+    V = np.asarray(mesh.vertices, float)
+    Pc = (R_m2c @ V.T).T + t_m2c_mm
+    z = Pc[:, 2]
+    uv = (Km @ Pc.T).T
+    front = z > 1e-6
+    uv2 = np.full((len(V), 2), -1e6)
+    uv2[front] = uv[front, :2] / uv[front, 2:3]
+    im = _I.new("L", (W, H), 0); dr = _D.Draw(im)
+    F = mesh.faces
+    for f in F:
+        if not (front[f[0]] and front[f[1]] and front[f[2]]):
+            continue
+        tri = [tuple(uv2[i]) for i in f]
+        # skip degenerate / wildly out-of-frame
+        xs = [p[0] for p in tri]; ys = [p[1] for p in tri]
+        if max(xs) < 0 or min(xs) >= W or max(ys) < 0 or min(ys) >= H:
+            continue
+        dr.polygon(tri, fill=255)
+    return np.asarray(im) > 0
+
+
+def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale, models=None):
     idx = gt_raw["image_id"]
     W, H = gt_raw["width"], gt_raw["height"]
 
@@ -211,19 +251,30 @@ def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale):
         for cid in cand_ids:
             vis |= (inst == cid)
         px_visib = int(vis.sum())
-        if px_visib == 0:
-            # fully occluded by the arm/other parts — keep GT but mark visib 0
-            mask_visib = np.zeros((H, W), np.uint8)
-            bbox_visib = [0, 0, 0, 0]
+        mask_visib = (vis * 255).astype(np.uint8) if px_visib else np.zeros((H, W), np.uint8)
+        bbox_visib = aabb_from_mask(vis) if px_visib else [0, 0, 0, 0]
+
+        # FULL silhouette (occlusion-free) by rasterising the GT-posed mesh.
+        if models is not None and oid in models:
+            full = render_full_mask(models[oid], K, R_m2c, t_m2c_mm, W, H)
+            # the visible mask must be a SUBSET of the full silhouette; clip to be safe
+            vis_in_full = vis & full
+            px_all = int(full.sum())
+            px_vis_clip = int(vis_in_full.sum())
+            mask_full = (full * 255).astype(np.uint8)
+            bbox_obj = aabb_from_mask(full) if px_all else bbox_visib
+            visib_fract = (px_vis_clip / px_all) if px_all else 0.0
+            px_visib_eff = px_vis_clip
         else:
-            mask_visib = (vis * 255).astype(np.uint8)
-            bbox_visib = aabb_from_mask(vis)
+            mask_full = mask_visib
+            bbox_obj = bbox_visib
+            px_all = px_visib
+            visib_fract = 1.0 if px_visib else 0.0
+            px_visib_eff = px_visib
 
         Image.fromarray(mask_visib).save(
             os.path.join(bop_scene_dir, "mask_visib", f"{im_id:06d}_{gt_id:06d}.png"))
-        # provisional FULL mask = visible (bop_toolkit calc_gt_masks replaces this
-        # with the true projected silhouette; see vis_gt + calc_gt_info gate).
-        Image.fromarray(mask_visib).save(
+        Image.fromarray(mask_full).save(
             os.path.join(bop_scene_dir, "mask", f"{im_id:06d}_{gt_id:06d}.png"))
 
         gt_list.append({
@@ -231,14 +282,13 @@ def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale):
             "cam_R_m2c": [float(x) for x in R_m2c.reshape(-1)],
             "cam_t_m2c": [float(x) for x in t_m2c_mm],
         })
-        # provisional info; px_count_all == visible until calc_gt_info refines.
         info_list.append({
-            "bbox_obj": bbox_visib,
+            "bbox_obj": bbox_obj,
             "bbox_visib": bbox_visib,
-            "px_count_all": px_visib,
-            "px_count_valid": px_visib,
-            "px_count_visib": px_visib,
-            "visib_fract": 1.0 if px_visib > 0 else 0.0,
+            "px_count_all": px_all,
+            "px_count_valid": px_all,
+            "px_count_visib": px_visib_eff,
+            "visib_fract": round(float(visib_fract), 4),
         })
         gt_id += 1
 
@@ -254,6 +304,12 @@ def main():
     ap.add_argument("--start-im", type=int, default=0, help="first BOP image id in this scene")
     ap.add_argument("--depth-scale", type=float, default=DEPTH_SCALE)
     ap.add_argument("--limit", type=int, default=0, help="cap #frames (0=all)")
+    ap.add_argument("--frame-list", default="",
+                    help="comma-separated raw frame indices to put in THIS scene "
+                         "(e.g. 0,1,2,...); overrides the glob. Used by "
+                         "convert_full_to_bop.py to drive train/val multi-scene splits.")
+    ap.add_argument("--no-full-mask", action="store_true",
+                    help="skip GT-posed mesh rasterisation (mask=mask_visib, visib_fract provisional)")
     args = ap.parse_args()
 
     raw = args.raw_dir
@@ -261,7 +317,24 @@ def main():
     for sub in ("rgb", "depth", "mask", "mask_visib"):
         os.makedirs(os.path.join(scene_dir, sub), exist_ok=True)
 
-    gt_files = sorted(glob.glob(os.path.join(raw, "gt_raw_*.json")))
+    models = None
+    if not args.no_full_mask:
+        mdir = os.path.join(args.bop_root, "models")
+        if os.path.isdir(mdir):
+            models = load_bop_models(mdir)
+            print(f"[isaac_to_bop] loaded {len(models)} models for full-silhouette + visib_fract")
+        else:
+            print(f"[isaac_to_bop] WARN no models/ at {mdir} -> visib_fract provisional", file=sys.stderr)
+
+    if args.frame_list.strip():
+        idxs = [int(x) for x in args.frame_list.split(",") if x.strip() != ""]
+        gt_files = [os.path.join(raw, f"gt_raw_{i:04d}.json") for i in idxs]
+        missing = [f for f in gt_files if not os.path.exists(f)]
+        if missing:
+            print(f"[isaac_to_bop] {len(missing)} frame(s) in --frame-list have no gt_raw "
+                  f"(first: {missing[0]})", file=sys.stderr); sys.exit(1)
+    else:
+        gt_files = sorted(glob.glob(os.path.join(raw, "gt_raw_*.json")))
     if args.limit:
         gt_files = gt_files[:args.limit]
     if not gt_files:
@@ -272,7 +345,7 @@ def main():
     n_inst = 0
     for gf in gt_files:
         gt_raw = json.load(open(gf))
-        key, cam, gtl, info = convert_frame(raw, gt_raw, scene_dir, im_id, args.depth_scale)
+        key, cam, gtl, info = convert_frame(raw, gt_raw, scene_dir, im_id, args.depth_scale, models)
         scene_camera[key] = cam
         scene_gt[key] = gtl
         scene_gt_info[key] = info
@@ -284,8 +357,11 @@ def main():
     json.dump(scene_gt_info, open(os.path.join(scene_dir, "scene_gt_info.json"), "w"), indent=2)
     print(f"[isaac_to_bop] scene {args.scene_id:06d}: {im_id - args.start_im} frames, "
           f"{n_inst} GT instances -> {scene_dir}")
-    print("[isaac_to_bop] NOTE: mask/ is provisional (=mask_visib). Run bop_toolkit "
-          "calc_gt_masks.py + calc_gt_info.py to fill the true full silhouette + visib_fract.")
+    if models is not None:
+        print("[isaac_to_bop] mask/ = true full silhouette (GT-posed mesh raster), "
+              "mask_visib/ = arm-occluded visible, scene_gt_info.visib_fract computed.")
+    else:
+        print("[isaac_to_bop] NOTE: mask/ provisional (=mask_visib); no models loaded.")
 
 
 if __name__ == "__main__":
