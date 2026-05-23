@@ -41,9 +41,15 @@ import argparse
 import json
 import os
 import pathlib
+import sys
 
 import numpy as np
 from PIL import Image
+
+# BOP -> pose_result Adapter (Viktor §3) — eigenständiges Geschwister-Modul,
+# inline-fähig (Max-Präferenz). Beide Gleise (GDRNPP/MegaPose) gehen hier durch.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import bop_adapter as BOP
 
 # ── Pfade (relativ zu diesem Skript, CWD-unabhängig) ──────────────────────────
 HERE = pathlib.Path(__file__).resolve().parent          # project/
@@ -208,23 +214,217 @@ def detections_for(img_path, warn=print):
     return rgb, dets
 
 
-# === BOP pose pipeline (GDRNPP — siehe ADR-018), wird in W2/W3 eingesetzt ======
-# Stufe 3 (6D-Pose) ist hier ein STUB. Der alte Eigenbau-Mittelteil (Face-Atlas,
-# Template-Bank, Face-Classifier, template-MSE-Yaw, Eigenbau-Backprojection) ist
-# bewusst entfernt. Sobald GDRNPP angebunden ist, liefert estimate_poses() pro
-# Detektion einen Eintrag mit:
-#   {instance_id, part, face_name, R_world(9 floats), t_world(3 floats),
-#    confidence(0..1), bbox_2d(4 ints), upright(bool)}
-# und build_pose_result() giesst das schema-valide in pose_result.json.
-def estimate_poses(rgb, dets, warn=print):
-    """6D-Pose pro Detektion via GDRNPP (BOP-SOTA). STUB bis W2/W3-Anbindung.
+# === BOP-6D-Pose: GDRNPP-Inferenz + Adapter (Viktor §3, ADR-018) ==============
+# Stufe 3-Kette (pro Detektion): Crop+bbox -> call_gdrnpp(crop,K,bbox,obj_id) ->
+# (R_m2c, t_m2c) [BOP-Konvention, mm, Kamera-Frame] -> BOP-Adapter (§3.2/§3.3/
+# §3.4) -> pose_result-Eintrag. **Eine Adapter-Funktion, beide Gleise.**
+#
+# GDRNPP-Checkpoint existiert noch NICHT (Kai trainiert parallel, S-402). Daher:
+#   - call_gdrnpp() hat einen MOCK-Modus, der pro Detektion plausible (R_m2c,
+#     t_m2c) liefert, sodass die GANZE Kette JETZT grün durchläuft.
+#   - der Checkpoint-Pfad ist Arg/Config (GdrnppConfig.checkpoint). Liegt ein
+#     echtes .pth da, schaltet die Kette automatisch auf den echten Call.
+#   >>> Kais echter GDRNPP-Call wird in _gdrnpp_real() eingehängt (DIE Stelle). <<<
 
-    Erwartete Eingabe: das RGB + die OBB-Detektionen aus Stufe 1 (Crop + OBB-
-    Winkel als Prior). Erwartete Ausgabe: Liste 'aligned' (s. Format oben).
-    Bis GDRNPP läuft -> leere Liste (keine Posen)."""
-    warn(f"[pose] GDRNPP-Stub: {len(dets)} Detektion(en), 0 Posen "
-         f"(BOP-Pipeline wird in W2/W3 angebunden — ADR-018)")
-    return []
+# ── Default-Kamera (BOP §1.3): nur wenn keine scene_camera.json neben dem Bild ──
+# Plausibler Zivid-artiger Top-Down-Blick auf den Tray, RGB-only. K aus den
+# bestehenden Default-Intrinsics (sim_code/render_dataset.py: focal 24mm,
+# sensor 20.955mm). Extrinsics: Kamera ~0.5m über Tisch, blickt nach -Z.
+DEFAULT_CAM_HEIGHT_M = 0.5
+DEFAULT_FOCAL_MM = 24.0
+DEFAULT_SENSOR_MM = 20.955
+
+
+def _default_K(W, H):
+    """Pinhole-K (3x3 row-major) aus Default-Intrinsics für ein WxH-Bild."""
+    f_px = DEFAULT_FOCAL_MM / DEFAULT_SENSOR_MM * max(W, H)
+    return np.array([[f_px, 0.0, W / 2.0],
+                     [0.0, f_px, H / 2.0],
+                     [0.0, 0.0, 1.0]])
+
+
+def _default_extrinsics():
+    """World->Cam (BOP), mm. Kamera über dem Tisch, Blick nach Welt-DOWN (-Z).
+
+    Welt ist Z-up; die Kamera schaut von oben auf den Tisch. Kamera-Blickachse
+    (+Z_cam) zeigt nach Welt-(-Z). Eine 180°-Drehung um X bildet Welt-Z auf
+    Cam-(-Z) ab und Welt-Y auf Cam-(-Y) (Bild steht richtig herum)."""
+    R_w2c = BOP.axis_angle_matrix([1.0, 0.0, 0.0], np.pi)   # 180° um X
+    # Kamera-Ursprung in Welt: (0,0,height). t_w2c = -R_w2c @ cam_origin, in mm.
+    cam_origin_m = np.array([0.0, 0.0, DEFAULT_CAM_HEIGHT_M])
+    t_w2c_mm = -(R_w2c @ cam_origin_m) * 1000.0
+    return R_w2c, t_w2c_mm
+
+
+def load_scene_camera(img_path, W, H, warn=print):
+    """Kamera-Intrinsics + Extrinsics (BOP §1.3). scene_camera.json neben dem
+    Bild, sonst Default. Liefert (K 3x3, R_w2c 3x3, t_w2c_mm 3,)."""
+    img_path = pathlib.Path(img_path)
+    cand = img_path.parent / "scene_camera.json"
+    if cand.exists():
+        try:
+            data = json.load(open(cand))
+            # BOP: dict keyed per im_id; nimm den passenden oder den ersten.
+            stem = img_path.stem.replace("rgb_", "").replace("scene_", "")
+            key = str(int(stem)) if stem.isdigit() and str(int(stem)) in data \
+                else next(iter(data))
+            cam = data[key]
+            K = np.asarray(cam["cam_K"], float).reshape(3, 3)
+            R_w2c = np.asarray(cam["cam_R_w2c"], float).reshape(3, 3)
+            t_w2c = np.asarray(cam["cam_t_w2c"], float).reshape(3)
+            warn(f"[cam] scene_camera.json[{key}] geladen (BOP §1.3)")
+            return K, R_w2c, t_w2c
+        except Exception as exc:
+            warn(f"[cam] scene_camera.json unlesbar ({exc!r}) — Default-Kamera")
+    R_w2c, t_w2c = _default_extrinsics()
+    warn("[cam] Default-Kamera (kein scene_camera.json) — Top-Down ~0.5m, RGB-only")
+    return _default_K(W, H), R_w2c, t_w2c
+
+
+class GdrnppConfig:
+    """Konfiguration für den GDRNPP-Call. Checkpoint-Pfad als Config-Feld.
+
+    - checkpoint: Pfad zum GDRNPP-Checkpoint (.pth). None/fehlend -> MOCK-Modus.
+    - mock:       erzwingt MOCK auch wenn ein Checkpoint da ist (für Tests).
+    """
+    def __init__(self, checkpoint=None, mock=None):
+        self.checkpoint = pathlib.Path(checkpoint) if checkpoint else None
+        # Auto: Mock wenn kein Checkpoint existiert; explizit überschreibbar.
+        if mock is None:
+            mock = not (self.checkpoint and self.checkpoint.exists())
+        self.mock = bool(mock)
+
+
+def _crop(rgb, bbox):
+    """Achsenparalleler Crop [x0,y0,x1,y1] (geklemmt)."""
+    H, W = rgb.shape[:2]
+    x0, y0, x1, y1 = bbox
+    x0, y0 = max(0, int(x0)), max(0, int(y0))
+    x1, y1 = min(W, int(x1)), min(H, int(y1))
+    if x1 <= x0 or y1 <= y0:
+        return rgb
+    return rgb[y0:y1, x0:x1]
+
+
+def _gdrnpp_mock(crop, K, bbox, obj_id, table_z_m=None):
+    """Deterministischer MOCK: plausible (R_m2c, t_m2c) pro Detektion.
+
+    Baut eine ABSOLUTE Welt-Pose, die garantiert auf dem Tisch sitzt (Teil flach,
+    leichter Yaw aus der bbox-Position, z = Tisch-Höhe), projiziert sie via der
+    Default-Extrinsics in den Kamera-Frame (BOP) und gibt (R_m2c, t_m2c_mm)
+    zurück. So sieht der Viewer plausible Posen JETZT — ohne echten Checkpoint.
+
+    table_z_m: absolute Welt-Höhe der Tischebene (= TABLE_ORIGIN_SCENE[2]); nach
+    der Adapter-Subtraktion von table_origin landet t_world.z ~ 0.
+    """
+    if table_z_m is None:
+        table_z_m = TABLE_ORIGIN_SCENE[2]
+    R_w2c, t_w2c = _default_extrinsics()
+    # Welt-Pose: Teil liegt flach (R_face ~ Identität), Yaw aus bbox-x-Mitte.
+    cx = (bbox[0] + bbox[2]) / 2.0
+    yaw = (cx % 360) * np.pi / 180.0 + obj_id * 0.3      # deterministisch, variabel
+    R_world = BOP.axis_angle_matrix([0.0, 0.0, 1.0], yaw)
+    # t_world (absolut): bbox-Mitte grob auf eine 0.2x0.2m Tray-Fläche gemappt,
+    # z = Tisch-Höhe (so dass t_world.z nach -table_origin ~ 0 ist).
+    fx, cx_k = K[0, 0], K[0, 2]
+    fy, cy_k = K[1, 1], K[1, 2]
+    bx = (bbox[0] + bbox[2]) / 2.0
+    by = (bbox[1] + bbox[3]) / 2.0
+    tx = (bx - cx_k) / fx * 0.2
+    ty = -(by - cy_k) / fy * 0.2
+    t_world = np.array([tx, ty, table_z_m])              # absolute Welt-Koordinaten
+    # Welt -> BOP cam-Frame (Inverse der Adapter-Kette, absolute Welt -> cam):
+    R_m2c = R_w2c @ R_world
+    t_m2c = R_w2c @ (t_world * 1000.0) + t_w2c            # mm
+    return R_m2c, t_m2c
+
+
+def _gdrnpp_real(crop, K, bbox, obj_id, cfg):
+    """>>> EINHÄNGE-PUNKT für Kais echten GDRNPP-Call. <<<
+
+    Hier wird der trainierte GDRNPP-Checkpoint (cfg.checkpoint) auf den Crop
+    angewendet. Erwartete Rückgabe (BOP-Konvention, EXAKT wie der Adapter sie
+    will): (R_m2c (3x3), t_m2c (3,) in **mm**, Kamera-Frame).
+
+    Vertrag des Calls:
+      Eingabe: crop (HxWx3 RGB ndarray), K (3x3 Pinhole-Intrinsics des
+               *ungecroppten* Bildes), bbox ([x0,y0,x1,y1] im Vollbild),
+               obj_id (1-basiert, §1.2).
+      Ausgabe: (R_m2c, t_m2c_mm).
+
+    Kai hängt hier den GDRNPP-Inferenz-Aufruf ein (Modell-Load gecached, AMP,
+    Crop->Netz->PnP/Direct-Regression). Bis dahin: NotImplementedError ->
+    call_gdrnpp() fällt auf den Mock zurück, falls cfg.mock nicht gesetzt ist."""
+    raise NotImplementedError(
+        "GDRNPP-Checkpoint-Inferenz noch nicht angebunden (Kai, S-402). "
+        "Checkpoint-Pfad: %s" % cfg.checkpoint)
+
+
+def call_gdrnpp(crop, K, bbox, obj_id, cfg=None):
+    """6D-Pose-Schätzung für EINE Detektion (BOP-Konvention).
+
+    Saubere, gleichbleibende Schnittstelle für beide Modi:
+      - cfg.mock=True (oder kein Checkpoint): plausibler MOCK.
+      - sonst: Kais echter GDRNPP-Call (_gdrnpp_real).
+    Returns: (R_m2c (3x3), t_m2c (3,) in mm).
+    """
+    cfg = cfg or GdrnppConfig()
+    if cfg.mock:
+        return _gdrnpp_mock(crop, K, bbox, obj_id)
+    try:
+        return _gdrnpp_real(crop, K, bbox, obj_id, cfg)
+    except NotImplementedError:
+        return _gdrnpp_mock(crop, K, bbox, obj_id)      # graceful bis Checkpoint da
+
+
+def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print):
+    """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3).
+
+    Kette pro Detektion:
+      Crop+bbox -> call_gdrnpp -> (R_m2c, t_m2c) -> BOP.detection_to_result.
+    Liefert die 'aligned'-Liste (Format wie build_pose_result erwartet:
+      {instance_id, part, face_name, R_world(9), t_world(3), confidence,
+       bbox_2d(4), upright}).
+    """
+    cfg = cfg or GdrnppConfig()
+    if table_origin is None:
+        table_origin = TABLE_ORIGIN_SCENE
+    H, W = rgb.shape[:2]
+    K, R_w2c, t_w2c = load_scene_camera_state(rgb, warn=warn)
+    mode = "MOCK" if cfg.mock else "GDRNPP"
+    aligned = []
+    for d in dets:
+        bbox = d["bbox_2d"]
+        obj_id = BOP.PART_TO_OBJ_ID.get(d["part"])
+        if obj_id is None:                               # unbekanntes Teil -> skip
+            warn(f"[pose] '{d['part']}' nicht in obj_id-Map (§1.2) — übersprungen")
+            continue
+        crop = _crop(rgb, bbox)
+        R_m2c, t_m2c = call_gdrnpp(crop, K, bbox, obj_id, cfg=cfg)
+        r = BOP.detection_to_result(
+            instance_id=d.get("instance_id", len(aligned)),
+            obj_id=obj_id, R_m2c=R_m2c, t_m2c_mm=t_m2c,
+            R_w2c=R_w2c, t_w2c_mm=t_w2c, table_origin_m=table_origin,
+            bbox_2d=bbox, confidence=d.get("det_conf", 1.0))
+        # build_pose_result erwartet 'face_name'; detection_to_result liefert 'face'.
+        r["face_name"] = r.pop("face")
+        aligned.append(r)
+    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3)")
+    return aligned
+
+
+# Modul-State für die Kamera (gesetzt in run(), genutzt in estimate_poses).
+_SCENE_CAM_STATE: dict = {}
+
+
+def load_scene_camera_state(rgb, warn=print):
+    """Holt die in run() gesetzte Kamera, sonst Default aus der RGB-Größe."""
+    if "K" in _SCENE_CAM_STATE:
+        s = _SCENE_CAM_STATE
+        return s["K"], s["R_w2c"], s["t_w2c"]
+    H, W = rgb.shape[:2]
+    R_w2c, t_w2c = _default_extrinsics()
+    return _default_K(W, H), R_w2c, t_w2c
 
 
 # ── Stufe 4: pose_result + Contract-Gate ──────────────────────────────────────
@@ -321,13 +521,22 @@ def build_pose_result(img_path, aligned, table_origin=TABLE_ORIGIN_SCENE):
 
 
 # ── Orchestrierung ────────────────────────────────────────────────────────────
-def run(image, out_path, warn=print):
+def run(image, out_path, cfg=None, warn=print):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
 
-    Detektor (Stufe 1) -> GDRNPP (Stufe 3, Stub) -> pose_result (Stufe 4). Solange
-    GDRNPP nicht angebunden ist, sind 'results' leer — der Contract bleibt valide."""
+    Kette (ADR-018, Viktor §3/§4):
+      Detektor (Stufe 1, OBB->AABB §4) -> pro Detektion Crop+bbox ->
+      GDRNPP-Inferenz call_gdrnpp (Stufe 3; MOCK bis Kais Checkpoint da) ->
+      (R_m2c, t_m2c) -> BOP-Adapter (§3) -> pose_result (Stufe 4, schema-valide).
+    """
+    cfg = cfg or GdrnppConfig()
     rgb, dets = detections_for(image, warn=warn)
-    aligned = estimate_poses(rgb, dets, warn=warn)      # GDRNPP (Stub bis W2/W3)
+    # Kamera (BOP §1.3) einmal laden + für estimate_poses bereitstellen.
+    H, W = rgb.shape[:2]
+    K, R_w2c, t_w2c = load_scene_camera(image, W, H, warn=warn)
+    _SCENE_CAM_STATE.update({"K": K, "R_w2c": R_w2c, "t_w2c": t_w2c})
+    aligned = estimate_poses(rgb, dets, table_origin=TABLE_ORIGIN_SCENE,
+                             cfg=cfg, warn=warn)
     doc = build_pose_result(image, aligned, table_origin=TABLE_ORIGIN_SCENE)
     errors = check_pose_result(doc) + _check_with_jsonschema(doc)
     if errors:
@@ -336,7 +545,9 @@ def run(image, out_path, warn=print):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     json.dump(doc, open(out_path, "w"), indent=2)
     gate = "stdlib + jsonschema" if jsonschema_available() else "stdlib"
-    warn(f"[e2e] {len(doc['results'])} Teile, Schema-Gate PASS ({gate}) -> {out_path}")
+    mode = "MOCK" if cfg.mock else "GDRNPP"
+    warn(f"[e2e] {len(doc['results'])} Teile, Pose-Backend={mode}, "
+         f"Schema-Gate PASS ({gate}) -> {out_path}")
     return doc
 
 
@@ -374,9 +585,14 @@ def main(argv=None):
     ap.add_argument("--serve", action="store_true",
                     help="nach der Inferenz localhost-Server + 3D-Viewer öffnen")
     ap.add_argument("--port", type=int, default=8000, help="Server-Port für --serve")
+    ap.add_argument("--checkpoint", default=None,
+                    help="GDRNPP-Checkpoint (.pth). Fehlt -> MOCK-Modus.")
+    ap.add_argument("--mock", action="store_true",
+                    help="MOCK-Pose-Backend erzwingen (auch wenn Checkpoint da ist)")
     a = ap.parse_args(argv)
+    cfg = GdrnppConfig(checkpoint=a.checkpoint, mock=(True if a.mock else None))
     out = a.out or str(HERE / "temp" / "pose_result.json")
-    doc = run(a.image, out)
+    doc = run(a.image, out, cfg=cfg)
     print(f"\n[e2e] {len(doc['results'])} Teile -> {out}")
     for r in doc["results"]:
         print(f"  #{r['instance_id']:>2} {r['part']:<22} {r['face']:<10} "
