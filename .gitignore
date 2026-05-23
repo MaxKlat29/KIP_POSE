@@ -3,6 +3,16 @@
 *.swp
 .idea/
 
+# ── Secrets / local config ────────────────────────────────────
+# .env holds host/IP/MAC/path config — NEVER commit it. Track only .env.example.
+.env
+**/.env
+*.env
+# ...but the placeholder template MUST stay tracked (negation, last match wins).
+!.env.example
+!**/.env.example
+!*.env.example
+
 # ── Python ────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
@@ -12,6 +22,7 @@ __pycache__/
 venv/
 env/
 *.egg-info/
+.pytest_cache/
 
 # ── Face-Atlas outputs (collages + drop records are generated) ─
 faces_out/

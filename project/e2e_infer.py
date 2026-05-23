@@ -92,7 +92,9 @@ def _canonical_parts():
     return {p.lower(): p for p in available_parts()}
 
 
-def canonical_part(raw, canon):
+def canonical_part(raw: str, canon: dict[str, str]) -> str:
+    """Mappt ein rohes Label (beliebige Schreibweise) auf den kanonischen
+    part-Namen. Unbekannte Labels werden unverändert durchgereicht."""
     return canon.get(raw.strip().lower(), raw)
 
 
@@ -122,7 +124,7 @@ def _load_detector():
     return m
 
 
-def _obb_to_aabb(corners, W, H):
+def _obb_to_aabb(corners, W: int, H: int) -> list[int]:
     """Orientierte 4-Eck-Box -> achsenparallele BBox [x0,y0,x1,y1] (geklemmt)."""
     xs = [c[0] for c in corners]; ys = [c[1] for c in corners]
     x0 = max(0, min(int(round(min(xs))), W - 1)); x1 = max(0, min(int(round(max(xs))), W))
@@ -171,7 +173,9 @@ def detect_with_model(img_path, canon, warn=print):
     return dets
 
 
-def find_bbox_json(img_path):
+def find_bbox_json(img_path) -> pathlib.Path | None:
+    """Sucht die zum Bild gehörende SDG-Annotator-BBox-JSON (bbox_2d_<stem>.json,
+    sonst die erste bbox_2d_*.json im selben Ordner). None, wenn keine da."""
     img_path = pathlib.Path(img_path)
     stem = img_path.stem.replace("rgb_", "").replace("scene_", "")
     cands = [img_path.parent / f"bbox_2d_{stem}.json"]
@@ -535,6 +539,10 @@ def run(image, out_path, cfg=None, warn=print):
       (R_m2c, t_m2c) -> BOP-Adapter (§3) -> pose_result (Stufe 4, schema-valide).
     """
     cfg = cfg or GdrnppConfig()
+    if not pathlib.Path(image).exists():
+        raise FileNotFoundError(
+            f"Eingabebild nicht gefunden: {image}. "
+            f"Pfad pruefen (z.B. project/input/<scene>.png).")
     rgb, dets = detections_for(image, warn=warn)
     # Kamera (BOP §1.3) einmal laden + für estimate_poses bereitstellen.
     H, W = rgb.shape[:2]
