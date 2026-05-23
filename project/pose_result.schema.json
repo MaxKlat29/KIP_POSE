@@ -108,6 +108,26 @@
           "upright": {
             "type": "boolean",
             "description": "True if the part stands on its head / upright (Kopf steht hochkant), derived from the registry face tilt. Lets the viewer flag non-flat rest poses."
+          },
+          "rest_height": {
+            "type": "number",
+            "description": "Optional. Half the part's z-extent in this rest pose (m): how high the geometric center (= t_world reference point) sits above the table surface. Standing faces -> larger. t_world.z = table_origin.z + rest_height.",
+            "minimum": 0
+          },
+          "depth_order": {
+            "type": "integer",
+            "description": "Optional. Global stacking rank by camera depth (0 = farthest / bottom of stack, placed first; higher = nearer the camera / on top). Drives originalgetreue Stapelung in the viewer.",
+            "minimum": 0
+          },
+          "occluded_by": {
+            "type": "array",
+            "description": "Optional. instance_ids of parts that lie on top of this one (overlap in 2D + nearer in depth).",
+            "items": { "type": "integer", "minimum": 0 }
+          },
+          "on_top_of": {
+            "type": "array",
+            "description": "Optional. instance_ids of parts this one lies on top of (overlap in 2D + this one is nearer).",
+            "items": { "type": "integer", "minimum": 0 }
           }
         }
       }

@@ -26,34 +26,38 @@ export function createInfoPanel(viewer, origin) {
   const pointer = new THREE.Vector2();
   const dom = viewer.renderer.domElement;
 
-  let selected = null; // currently highlighted mesh
+  let selected = null; // currently highlighted holder (Group)
   let downXY = null; // pointer-down position, to distinguish click vs orbit-drag
 
+  function setEmissive(holder, hex) {
+    holder?.traverse?.((o) => {
+      if (o.isMesh && o.material?.emissive) o.material.emissive.setHex(hex);
+    });
+  }
+
   function clearHighlight() {
-    if (selected?.material?.emissive) {
-      selected.material.emissive.setHex(0x000000);
-    }
+    setEmissive(selected, 0x000000);
     selected = null;
   }
 
-  function highlight(mesh) {
+  function highlight(holder) {
     clearHighlight();
-    selected = mesh;
+    selected = holder;
     // Neutral warm-grey glow so the selection reads without recolouring the
     // part (keeps the blue/amber upright semantics intact).
-    if (mesh.material?.emissive) mesh.material.emissive.setHex(0x3a3a3a);
+    setEmissive(holder, 0x3a3a3a);
   }
 
   function fmtMeters(v) {
     return `${v >= 0 ? " " : ""}${v.toFixed(3)} m`;
   }
 
-  function showFor(mesh) {
-    const r = mesh.userData.result;
+  function showFor(holder) {
+    const r = holder.userData.result;
 
     // Part world position from its transform (handles moved meshes too).
     const worldPos = new THREE.Vector3();
-    mesh.getWorldPosition(worldPos);
+    holder.getWorldPosition(worldPos);
 
     // Position RELATIVE to the (possibly moved) null-point.
     const rel = worldPos.clone().sub(origin.getPosition());
@@ -74,7 +78,7 @@ export function createInfoPanel(viewer, origin) {
       ? '<span class="badge badge--upright">steht hochkant</span>'
       : '<span class="badge badge--flat">liegend</span>';
 
-    highlight(mesh);
+    highlight(holder);
     panel.hidden = false;
   }
 
@@ -88,12 +92,20 @@ export function createInfoPanel(viewer, origin) {
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, viewer.camera);
-    // Intersect only the solid box meshes (recursive=false). The per-part child
-    // line/axes helpers must NOT be raycast: in a metre-scale scene the default
-    // Line raycast threshold (~1 m) makes every line a hit from any direction.
-    const hits = raycaster.intersectObjects(viewer.pickables, false);
-    if (!hits.length) return null;
-    return hits[0].object.userData?.result ? hits[0].object : null;
+    // Recursive: echte CAD-Meshes liegen verschachtelt im Pose-Holder. Line/Points
+    // ignorieren (Line-Raycast-Schwelle ~1m würde in einer Meter-Szene alles treffen).
+    raycaster.params.Line = { threshold: 0 };
+    raycaster.params.Points = { threshold: 0 };
+    const hits = raycaster.intersectObjects(viewer.pickables, true);
+    for (const h of hits) {
+      if (h.object.type === "Line" || h.object.type === "LineSegments" ||
+          h.object.type === "Points") continue;
+      // bis zum Pose-Holder hochlaufen, der das Result trägt.
+      let o = h.object;
+      while (o && !o.userData?.result) o = o.parent;
+      if (o?.userData?.result) return o;
+    }
+    return null;
   }
 
   // Distinguish a click from an orbit-drag: record pointer-down, only treat as

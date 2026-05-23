@@ -19,6 +19,7 @@ const PART_SIZES = {
   Poltopf_kurz_centered: [0.033, 0.0534, 0.075],
   Getriebegehaeuse_typ4: [0.0719, 0.0403, 0.0938],
   Buerstenhalter_2polig: [0.056, 0.0323, 0.0298],
+  Ringmagnet: [0.0105, 0.0073, 0.0105],
   // Alias / Roh-Detektor-Label.
   Zahnrad_Typ7: [0.0486, 0.034, 0.0486],
 };

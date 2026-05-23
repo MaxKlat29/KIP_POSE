@@ -1,41 +1,48 @@
 # POSE — 3D Pose Viewer
 
 Interactive Three.js viewer for `pose_result.json` (the frozen contract in
-`docs/pose_result.schema.json`). Renders a table plane + a placeholder box per
-detected part at its 6D pose, with orbit/zoom, a null-point marker, and a
-click-to-inspect info panel.
+`project/pose_result.schema.json`). Renders the real cell CAD (`assets/cell.glb`:
+table/cart + robot arm + trays) plus the **real per-part CAD meshes**
+(`assets/parts/<part>.glb`) at each detected part's 6D pose, with orbit/zoom/pan,
+a null-point marker, and a click-to-inspect info panel.
 
-No build step — plain static web (ES modules + Three.js via CDN import map).
+No build step — plain static web (ES modules + Three.js **vendored locally** in
+`vendor/three/`, so it runs offline, no CDN).
 
 ## Run it
 
-Serve the **repo root** (so the viewer can reach `data/examples/`) and open the
-viewer:
+Serve **`project/`** (so the viewer at `/frontend/` can reach the inference
+output in `/temp/`) and open the viewer:
 
 ```bash
-# from the repo root
-python -m http.server 8000
+# from project/
+python3 -m http.server 8000 --bind 127.0.0.1
 # then open:
-#   http://127.0.0.1:8000/viewer/
+#   http://127.0.0.1:8000/frontend/
 ```
 
 > Use `127.0.0.1`, not `localhost` (Safari IPv6 quirk).
 
-Loading a different result file:
+By default the viewer loads `../temp/pose_result.json` (the latest inference
+output). To load a specific file — e.g. the frozen example fixture:
 
 ```
-http://127.0.0.1:8000/viewer/?file=../data/examples/pose_result.example.json
+http://127.0.0.1:8000/frontend/?file=./test/pose_result.example.json
 ```
 
-The `?file=` query overrides the default (the frozen example). Paths are
-resolved relative to `viewer/`.
+The `?file=` query overrides the default. Paths are resolved relative to
+`frontend/`.
+
+`e2e_infer.py --serve` is the one-command path: it runs the pipeline, writes a
+schema-valid `temp/pose_result.json`, then serves `project/` so the viewer shows
+the fresh result.
 
 ### Why a server and not a double-click?
 
-Opening `viewer/index.html` directly via `file://` will fail to `fetch()` the
-JSON (browsers block `file://` fetches as cross-origin) and the CDN import map
-needs an http(s) origin. `python -m http.server` is the robust, dependency-free
-way. Any static server works (`npx serve`, etc.).
+Opening `frontend/index.html` directly via `file://` will fail to `fetch()` the
+JSON (browsers block `file://` fetches as cross-origin) and the import map needs
+an http(s) origin. `python3 -m http.server` is the robust, dependency-free way.
+Any static server works (`npx serve`, etc.).
 
 ## Controls
 
@@ -50,14 +57,16 @@ way. Any static server works (`npx serve`, etc.).
 
 ## What you see
 
-- **Table plane + grid** in the XY plane (the world is Z-up, origin = table
-  plane null-point).
-- **Boxes** = placeholder CAD. Real USD CADs aren't web-loadable, so each part
-  is a coarse box sized per `src/partRegistry.js`. Unknown parts get a generic,
-  slightly translucent fallback box.
-- **Blue** = lying flat, **amber** = `upright: true` (stands on its head).
+- **Cell CAD** (`assets/cell.glb`): the real table/cart, robot arm and trays,
+  in the same Z-up metre world frame as the pipeline.
+- **Real part meshes** (`assets/parts/<part>.glb`): each detected part's actual
+  CAD geometry, centroid-centred (export `box_scripts/export_part_glbs.py`),
+  placed at `R_world @ body + t_world`. A part with no exported mesh falls back
+  to a coarse box sized per `src/partRegistry.js` (never a crash).
+- **Cyan-blue** = lying flat, **amber** = `upright: true` (stands on its head).
 - **Green triad + ring** = the null-point.
 - Each part carries a small body-frame axes triad so its orientation reads.
+- Parts render in `depth_order` so stacking matches the scene.
 
 ## Rotation convention
 
@@ -72,14 +81,19 @@ there.
 
 | File | Role |
 |---|---|
-| `index.html` | markup + import map + HUD/panel scaffolding |
+| `index.html` | markup + import map (vendored three) + HUD/panel scaffolding |
 | `src/style.css` | overlay UI styling |
-| `src/main.js` | entry point: boot scene, load pose, wire panel |
-| `src/scene.js` | renderer, Z-up camera, lights, table, OrbitControls, parts |
+| `src/main.js` | entry point: boot scene, load pose, place meshes, wire panel |
+| `src/scene.js` | renderer, Z-up camera, lights, table, cell + part placement |
+| `src/partMeshes.js` | loads + caches the real per-part CAD meshes (`assets/parts/`) |
 | `src/loadPose.js` | fetch + validate + **R→Matrix4 conversion** |
-| `src/partRegistry.js` | placeholder box sizes per part |
+| `src/partRegistry.js` | box-fallback sizes per part (used when a mesh is missing) |
 | `src/origin.js` | null-point marker (S-011) |
 | `src/infoPanel.js` | raycast click → info panel (S-011) |
+| `assets/cell.glb` | the cell CAD (table + arm + trays) |
+| `assets/parts/*.glb` | the per-part CAD meshes |
+| `assets/part_meta.json` | per-part centroid offset + extent (export metadata) |
+| `test/pose_result.example.json` | frozen schema-valid fixture (3 parts) |
 | `test/rotation.test.mjs` | node smoke test pinning the R-convention |
 
 ## Test
@@ -88,5 +102,5 @@ A dependency-free node test pins the rotation math against the frozen example
 (verifies the convention isn't silently transposed):
 
 ```bash
-node viewer/test/rotation.test.mjs
+node frontend/test/rotation.test.mjs
 ```

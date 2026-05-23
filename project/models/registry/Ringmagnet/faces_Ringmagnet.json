@@ -1,0 +1,26 @@
+{
+  "part": "Ringmagnet",
+  "n_views": 160,
+  "convention": "world = R @ body (column)",
+  "faces": [
+    {
+      "name": "Face 1",
+      "prob": 1.0,
+      "count": 160,
+      "tilt_deg": 78.7,
+      "tmpl_ok": false,
+      "R": [
+        0.839318,
+        -0.543377,
+        0.016928,
+        -0.455377,
+        -0.6857,
+        0.567845,
+        -0.296946,
+        -0.484311,
+        -0.822962
+      ],
+      "rest_height": 0.00528
+    }
+  ]
+}

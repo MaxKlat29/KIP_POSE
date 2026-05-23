@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-22T12:37:52Z",
+  "updated": "2026-05-23T07:33:28Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 52,
+  "next_id": 74,
   "tickets": [
     {
       "id": "T-001",
@@ -2006,6 +2006,1033 @@
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:17Z",
       "updated": "2026-05-22T10:10:17Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-052",
+      "title": "POSE intensiv: P0 Top-Down-Input + P1-P7 Fixes (Kollision, Höhe, neue Teile, Occlusion, Eval, Isaac-Recon, Viewer)",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-intensiv"
+      ],
+      "session": "",
+      "created": "2026-05-22T15:42:04Z",
+      "updated": "2026-05-22T16:46:02Z",
+      "started_at": null,
+      "completed_at": "2026-05-22T16:46:02Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T16:46:02Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "P0 Top-Down + P5 Eval done: detector mAP50 0.987 recall 1.00, trans 186mm, rot_sym 91deg; root-cause war Bank-Coverage nicht Kamera (stable-pose banks oracle 3deg). Split-screen final_2d_vs_3d.png."
+        },
+        {
+          "ts": "2026-05-22T16:46:02Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
+    },
+    {
+      "id": "T-053",
+      "title": "POSE E2E-Opt: Translation <30mm (Backprojection-Fix)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-intensiv2"
+      ],
+      "session": "",
+      "created": "2026-05-22T18:44:40Z",
+      "updated": "2026-05-22T19:19:10Z",
+      "started_at": "2026-05-22T18:44:40Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T19:13:52Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_progress"
+        },
+        {
+          "ts": "2026-05-22T19:19:10Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "GT-bbox-Bug gefunden+gefixed: gen_eval_scene_topdown cands.pop(0) -> projected-centroid match. Trans-Baseline 108mm war GT-Artefakt; echte Pipeline 27.5mm median (20 Szenen, fixed GT). 40/94 bboxes waren falsch zugeordnet."
+        }
+      ]
+    },
+    {
+      "id": "T-054",
+      "title": "POSE E2E-Opt: Rotation Domain-Gap schliessen (Isaac-Templates + Depth-ICP)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-intensiv2"
+      ],
+      "session": "",
+      "created": "2026-05-22T18:44:41Z",
+      "updated": "2026-05-22T19:13:52Z",
+      "started_at": "2026-05-22T19:13:52Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T19:13:52Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        }
+      ]
+    },
+    {
+      "id": "T-055",
+      "title": "POSE E2E-Opt: Eval-Harness 20+ Szenen vorher/nachher",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-intensiv2"
+      ],
+      "session": "",
+      "created": "2026-05-22T18:44:41Z",
+      "updated": "2026-05-22T19:13:52Z",
+      "started_at": "2026-05-22T19:13:52Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T19:13:52Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        }
+      ]
+    },
+    {
+      "id": "T-056",
+      "title": "POSE E2E-Opt: Localhost-Website interaktiver CAD-Viewer (echte Meshes)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-intensiv2"
+      ],
+      "session": "",
+      "created": "2026-05-22T18:44:41Z",
+      "updated": "2026-05-22T19:39:23Z",
+      "started_at": "2026-05-22T19:13:52Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T19:13:52Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T19:39:23Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Viewer: three.js vendored (offline), echte CAD-Meshes 10/10 + cell.glb laden, Orbit+Klick ok, 0 JS-Errors (infoPanel.js highlight(mesh)->holder Bug gefixt). Playwright headless smoke PASS."
+        }
+      ]
+    },
+    {
+      "id": "T-057",
+      "title": "POSE E2E-Opt: Mehr Daten / Detektor + Template-Banks feiner",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-intensiv2"
+      ],
+      "session": "",
+      "created": "2026-05-22T18:44:41Z",
+      "updated": "2026-05-22T19:13:52Z",
+      "started_at": "2026-05-22T19:13:52Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T19:13:52Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        }
+      ]
+    },
+    {
+      "id": "T-058",
+      "title": "POSE E2E-Opt: Lernbasiertes Pose-Refinement (GigaPose/MegaPose-Stil)",
+      "description": "",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-intensiv2"
+      ],
+      "session": "",
+      "created": "2026-05-22T19:13:52Z",
+      "updated": "2026-05-22T19:45:00Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T19:45:00Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Lernbasiertes Refinement validiert: Getriebe rot_sym 107.9->23.9 (-84deg!), global rot_sym 32.2->28.6 mit nur 1 trainiertem Teil. top1-in-OK 0.946. Re-Scorer-Embedding (InfoNCE sym-aware) blendet mit Handmetrik."
+        }
+      ]
+    },
+    {
+      "id": "T-059",
+      "title": "S-101: Eigenbau-Mittelteil (Face-Atlas + Template-Bank + Face-Classifier) sauber entfernen",
+      "description": "Verworfenen Pose-Mittelteil git-recoverable raus: models/{registry,templates,*_backup}, Face-Classifier-.pt, train_refiner.py, build_template_bank*.py, render_recon.py + Face-Code aus setup/infer/e2e. Viewer/CAD/Isaac/detector.pt intakt lassen. AK: ein Commit, revert-bar.",
+      "column": "in_review",
+      "assignee": "greta-refactor",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-bop-pivot",
+        "W0"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:17Z",
+      "updated": "2026-05-22T20:44:43Z",
+      "started_at": "2026-05-22T20:13:36Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:13:36Z",
+          "agent": "greta-refactor",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T20:13:36Z",
+          "agent": "greta-refactor",
+          "level": "info",
+          "msg": "Worker spawned in worktree .worktrees/S-101 — rip-out Eigenbau-Mittelteil"
+        },
+        {
+          "ts": "2026-05-22T20:36:59Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "team-refactor nicht verfügbar -> Rip-out via general-purpose re-spawned"
+        },
+        {
+          "ts": "2026-05-22T20:37:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Start S-101: Eigenbau pose-middle (face-atlas/template-bank/classifier) rausreissen — BOP pivot ADR-018. Worktree .worktrees/S-101."
+        },
+        {
+          "ts": "2026-05-22T20:39:44Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Deletion: git rm -r project/models/registry/ (14 Face-Registry files: faces_*.json + tmpl_*.png). Hinweis: andere Ticket-Targets (templates/, *.pt classifiers, box_scripts/, train_refiner.py) existieren in diesem Commit (190ec74) nicht — gehören zu späterem Stand; ebenso die KEEP-Targets detector.pt/part_meta.json. Nur registry/ war hier present."
+        },
+        {
+          "ts": "2026-05-22T20:42:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Notebook-Cleanup: setup.ipynb 35->16 Zellen (Face-Discovery/Registry/Template-Bank/Snippet/Face-CNN-Training + single-part Faceset-Renderer raus), infer.ipynb 28->18 (Registry-Loader/Face-Vorfilter/Template-Bank-6D/Eigenbau-Backprojection raus). Je 1 GDRNPP-Marker eingefügt. Detektor-Pfad + pose_result-Contract behalten. nbformat parse+validate OK."
+        },
+        {
+          "ts": "2026-05-22T20:44:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Commit 3956cc3 (User-only, kein Co-Author/Footer): rip out Eigenbau pose-middle. Verifikation grün: nbformat parse setup+infer OK, ast.parse e2e_infer.py OK + importierbar (empty pose_result contract-valid), GDRNPP-Stub zeigt klar auf BOP-Pfad. Ticket-grep zeigt nur KEEP-Treffer (README/schema/frontend = explizit KEEP) + Marker-Doc-Text — keine toten Code-Referenzen. Hinweis: in diesem Commit (190ec74) existierte von den Lösch-Targets nur registry/; templates/, *.pt classifiers, box_scripts/, train_refiner.py gehören zu späterem Stand und waren nicht present."
+        },
+        {
+          "ts": "2026-05-22T20:44:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-060",
+      "title": "S-201: Isaac-SDG -> BOP-Format-Konverter",
+      "description": "Isaac-Output -> BOP: scene_camera/scene_gt/scene_gt_info.json + mask_visib/ + models/*.ply in mm. Validiert gegen bop_toolkit. Tor zu allen BOP-Repos.",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-bop-pivot",
+        "W1"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:17Z",
+      "updated": "2026-05-22T21:17:49Z",
+      "started_at": "2026-05-22T20:36:59Z",
+      "completed_at": null,
+      "comments": [
+        {
+          "ts": "2026-05-22T20:10:56Z",
+          "author": "viktor-lead",
+          "text": "adr.md §1 = verbindlicher BOP-Contract. Vorbild intrinsic-ai/ipd/convert_to_bop.ipynb."
+        }
+      ],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:10:55Z",
+          "agent": "viktor-lead",
+          "level": "success",
+          "msg": "Architektur-Review: BOP-Datensatz-Contract spec'd in adr.md §1 (Layout/mm/row-major, obj_id-Mapping 1-6, scene_camera/gt/gt_info Felder, OBB->AABB fuer bbox_obj). Approved m. Auflage: w2c-Richtung (Isaac liefert oft c2w -> invertieren), mm-Skalierung, vis_gt_poses-Gate."
+        },
+        {
+          "ts": "2026-05-22T20:36:59Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T20:36:59Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Worker spawned (S-201/202/203 gebündelt) — BOP-Daten-Fundament, arm-sichtbar, Fokus Anker+Zahnrad"
+        },
+        {
+          "ts": "2026-05-22T20:38:51Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "GPU-Box wach (maxgpuserverobk, RTX 3090, 0 MiB used). Starte BOP-Daten-Fundament: arm-sichtbare SDG + isaac_to_bop.py + models_info Symmetrie."
+        },
+        {
+          "ts": "2026-05-22T20:46:22Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "models/ + models_eval/ PLY (6 Teile, mm) + models_info.json fertig. obj_id-Mapping eingefroren 1=Anker_Kurz..6=Zahnrad (=Detektor-Klasse+1, gegen detector.metrics.json verifiziert). Poltopf ausgelassen (R6 degenerate). Konverter + arm-sichtbarer SDG geschrieben, jetzt Box-Test."
+        },
+        {
+          "ts": "2026-05-22T21:03:45Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Konverter fertig + GT-Pose validiert: Zahnrad-Origin projiziert 2.4px vom Mask-Centroid (mm/row-major/w2c-Invert/OpenGL->OpenCV-Flip/Scale-Strip alle KORREKT). Kritischer Fix: Isaac instance-seg idToLabels = PRIM-PFAD (nicht Klasse) -> exaktes SpawnedObject_NNN-Token-Matching zu GT. Scale-Strip noetig: obj2world-3x3 hat OBJECT_SCALE 1e-3 eingebacken -> SVD-orthonormalisiert. cam_R_w2c=diag(1,-1,-1) top-down, cam_t_w2c in mm."
+        },
+        {
+          "ts": "2026-05-22T21:15:58Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Kleine-Batch validiert (20 Frames, 206 GT-Instanzen): BOP-Format-Check ALL PASS + bop_toolkit NATIVE LOAD PASS (inout.load_scene_camera/gt + load_ply lesen ohne Patch). cam_R det=1, t_m2c in mm-Range, bbox [x,y,w,h], visib_fract in [0,1]. mask/=GT-posed-Mesh-Raster (full silhouette), mask_visib/=arm-occluded. visib_fract mean 0.36 (Arm+Clutter-Occlusion reflektiert). Overlay-Belege: CAD@GT-Pose projiziert auf Teile, Zahnrad-Origin 2.4px. Evidence -> project/temp/bop_check/ (5 overlays + mask_visib panel)."
+        },
+        {
+          "ts": "2026-05-22T21:17:49Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "VOLL-RENDER laeuft (nohup, poll spaeter): PID 195479, log /mnt/data/bop/logs/armvis_full.log, output /mnt/data/kip_pose/data/sdg_armvis_full, 2000 Szenen @ ~0.12/s -> ETA ~4-5h. Poll: box_src/gpu_run.sh -- 'tail -5 /mnt/data/bop/logs/armvis_full.log; ls /mnt/data/kip_pose/data/sdg_armvis_full/gt_raw_*.json|wc -l; pgrep -f sdg_armvis_full||echo DONE'. Danach: isaac_to_bop.py auf sdg_armvis_full (train/val-Split). NICHT auf Fertigstellung gewartet."
+        },
+        {
+          "ts": "2026-05-22T21:17:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-061",
+      "title": "S-202: Arm-sichtbare Top-Down-Daten-Gen + Domain-Randomization",
+      "description": "Top-Down MIT sichtbarem LARA5-Arm + random drops + DR (Licht/Material/Kamera/BG). Wirksamster Occlusion+Sim2Real-Hebel. Box-Job nohup+poll, Fokus Anker/Zahnrad.",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-bop-pivot",
+        "W1"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:17Z",
+      "updated": "2026-05-23T07:12:27Z",
+      "started_at": "2026-05-22T20:36:59Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:36:59Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T21:03:45Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Arm WIRKLICH sichtbar bestaetigt: SDG-Log 'ARM VISIBLE (occluder, no obj_id): [/World/NEURA_LARA5_Pose_Zivid_Detection, /World/lara5]', Overlay-PNGs zeigen Arm im Bild. Arm hat KEIN semantic-label -> nie obj_id, occludet aber Teile (viele maskpx=0 = arm-occluded). visib_fract-Hebel aktiv. Tuning Spawn-Region noetig: aktuell zu viele Teile voll-occluded."
+        },
+        {
+          "ts": "2026-05-22T21:15:58Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Arm-Occlusion-Verteilung gut nach Spawn-Tuning (open front-left x0.18-0.52 y0.08-0.50): 56% Teile voll-sichtbar, 14% partial, 30% arm-occluded. Fokus-Teile sichtbar: Anker_Kurz 81% Anker_Lang 76% Zahnrad 65%. Arm im Bild bestaetigt (mask_visib-Panel zeigt LARA5 als Occluder)."
+        },
+        {
+          "ts": "2026-05-22T21:17:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "S-202 arm-sichtbarer SDG validiert + im Voll-Render (PID 195479). in_review via T-060-Buendel."
+        },
+        {
+          "ts": "2026-05-23T05:46:01Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Nacht-Render fertig: 2000 arm-sichtbare Szenen (sdg_armvis_full), GPU frei"
+        },
+        {
+          "ts": "2026-05-23T05:49:22Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Nacht-Render verifiziert: 2000 gt_raw + 2000 rgb + 2000 depth in sdg_armvis_full, Log endet sauber (Simulation App Shutting Down), kein Render-Zombie. GPU frei (1MiB/24576MiB, 0%, keine compute-apps). GDRNPP install FINISH_GDRNPP_DONE rc=0. obb_2d_*.json (2000) + instance-seg vorhanden -> Detektor-Retrain + Konvert moeglich."
+        },
+        {
+          "ts": "2026-05-23T06:01:50Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Full->BOP convert laeuft als nohup (PID ~256223, log /mnt/data/bop/logs/convert_full.log): 2000 frames -> 90/10 split = 18 train_pbr scenes + 2 val scenes (scene_size 100, seed 7). scene 000000 fertig: 100 frames, 998 GT instances. ~3min/scene -> ETA ~60min. Validierung (toolkit-load + overlay) folgt nach DONE."
+        },
+        {
+          "ts": "2026-05-23T07:10:23Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Resume: Render fertig (2000/2000 gt_raw+rgb), GPU frei. Full->BOP convert läuft (nohup PID 256223): train_pbr 18 scenes/1800 frames done, val 2 scenes/200 frames laufend. Warte auf CONVERT_FULL_DONE + validiere."
+        },
+        {
+          "ts": "2026-05-23T07:12:27Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Full->BOP convert DONE + validated. train_pbr 18 scenes/1800 frames, val 2 scenes/200 frames (90/10, seed 7). 18083 train + 1964 val GT-Instanzen. bop_toolkit NATIVE load grün (alle 20 scenes, kein Schema-Error) -> VALIDATE_BOP_OK. visib_fract mean 0.37 (Arm-Occlusion belegt: 17069/18083 train-Inst <0.9 sichtbar). Symmetrie aufgelöst: obj1/2/5 continuous(315), obj3/4 none, obj6 discrete C_7(7). GT-Overlays: 5 Belege (3 train + 2 val) zeigen Mesh@GT auf Teilen + Arm sichtbar als Occluder. Evidence: project/temp/bop_check/full/ + box_src/bop_check_evidence_full/. BOP root: /mnt/data/kip_pose/project/bop/pose_isaac."
+        },
+        {
+          "ts": "2026-05-23T07:12:27Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-062",
+      "title": "S-203: models_info.json mit korrekten Symmetrie-Flags pro Teil",
+      "description": "symmetries_continuous (Anker rotationssym) + symmetries_discrete (Zahnrad) + diameter/min/size in mm. Analytische Loesung des 120-vs-91-Grad-Problems. bop_toolkit-kompatibel.",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-bop-pivot",
+        "W1"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:17Z",
+      "updated": "2026-05-22T21:17:49Z",
+      "started_at": "2026-05-22T20:36:59Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:10:55Z",
+          "agent": "viktor-lead",
+          "level": "success",
+          "msg": "Architektur-Review: Symmetrie-Spec in adr.md §2 (analytische Loesung 120/91-Problem). Anker_Kurz/Lang+Ringmagnet=continuous um Y-Achse; Zahnrad=discrete C_N (N-1 R_y-Matrizen, N=Zaehnezahl zaehlen); Buerstenhalter/Getriebe=keine. Overlay-Beleg Pflicht. Achse=Extent-mit-gleichen-Orthogonalen (Y)."
+        },
+        {
+          "ts": "2026-05-22T20:36:59Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T20:46:22Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "S-203 Symmetrie gesetzt + bop_toolkit-validiert: Anker_Kurz/Lang/Ringmagnet=continuous(Y), Buerstenhalter/Getriebe=none, Zahnrad=discrete C_7 (Zaehnezahl aus Mesh GEZAEHLT: rasterisierte Top-Down-Silhouette -> inner 7-Spline-Nabe, aeusserer Rand glatte Scheibe ptp 0.2mm. Vertex-Scatter-FFT gab faelschlich 67/66=Noise). bop_toolkit get_symmetry_transformations: obj6=7 transforms(C_7), continuous=63, none=1. PLY in mm exportiert (GLB metres x1000), models_info.json + models_eval/ geschrieben."
+        },
+        {
+          "ts": "2026-05-22T21:15:58Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Symmetrie end-to-end validiert: bop_toolkit get_symmetry_transformations liest models_info -> Zahnrad=C_7 (7 transforms), Anker/Ring=continuous(63), Buerstenhalter/Getriebe=none(1). PLY in mm, models/+models_eval/ geschrieben. Loest 120deg/91deg-Rotationsproblem analytisch."
+        },
+        {
+          "ts": "2026-05-22T21:17:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "S-203 models_info+Symmetrie fertig+validiert. in_review via T-060-Buendel."
+        }
+      ]
+    },
+    {
+      "id": "T-063",
+      "title": "S-204: GPU-Run-Harness + BOP-Repos auf Box installieren",
+      "description": "WoL->ssh->run(nohup)->rsync. CNOS/GigaPose/MegaPose/GDRNPP/bop_toolkit installiert+import-getestet, Gewichte geladen, Smoke-Run je Repo auf RTX3090 <24GB.",
+      "column": "in_review",
+      "assignee": "sam-devops",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-bop-pivot",
+        "W1"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:18Z",
+      "updated": "2026-05-22T20:35:28Z",
+      "started_at": "2026-05-22T20:13:36Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:10:56Z",
+          "agent": "viktor-lead",
+          "level": "warn",
+          "msg": "Lizenz-Gate (adr.md §5-R2): GDRNPP/CNOS/GigaPose/MegaPose/bop_toolkit alle Apache/MIT = PASS. ABER: CNOS-Segmentor pruefen — FastSAM ist AGPL! Bei FastSAM -> auf SAM (Apache) oder MobileSAM (Apache) wechseln. Einziger echter Lizenz-Stolperstein. VRAM: Stages sequenziell laden (nicht alle 3 gleichzeitig)."
+        },
+        {
+          "ts": "2026-05-22T20:13:36Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T20:13:36Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "Worker spawned — GPU-Harness + BOP-Repos install (SAM statt FastSAM/AGPL)"
+        },
+        {
+          "ts": "2026-05-22T20:14:55Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Box erreichbar (kein WoL noetig): maxgpuserverobk, RTX 3090 24576MiB, driver 590.48.01"
+        },
+        {
+          "ts": "2026-05-22T20:16:13Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "Box-Env: CUDA13.1-capable driver, py3.11.15 avail, gcc13.3, train-venv torch2.5.1+cu121 cuda OK. Plan: bop-venv = py3.11 + torch2.5.1+cu121. 3.3TB frei. Starte venv+clones unter /mnt/data/bop/"
+        },
+        {
+          "ts": "2026-05-22T20:18:56Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Lizenz-Gate CNOS: default segmentor_model=sam (Apache), FastSAM nur opt-in. Nutze download_sam, NIE download_fastsam. CNOS bundlet eigenes Apache segment_anything. = PASS"
+        },
+        {
+          "ts": "2026-05-22T20:19:26Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Repo 1/5: bop_toolkit_lib installed editable + import OK (inout, pose_error metrics laden)"
+        },
+        {
+          "ts": "2026-05-22T20:20:36Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Repo 2/5: CNOS code-path import OK (segment_anything Apache + src.model.sam/dinov2/detector). Lizenz-sicher via default sam.yaml"
+        },
+        {
+          "ts": "2026-05-22T20:20:53Z",
+          "agent": "sam-devops",
+          "level": "warn",
+          "msg": "SAM vit_h (2.5GB) laeuft als nohup PID 176833 -> /mnt/data/bop/logs/dl_sam.log. Poll spaeter."
+        },
+        {
+          "ts": "2026-05-22T20:22:18Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Repo 3/5: GigaPose code-path import OK (src.models.gigaPose). Installed --no-deps (xformers0.0.18 pin skipped, DINOv2 faellt zurueck). setup.cfg name=megapose -> Kollisions-Risiko mit megapose6d notiert."
+        },
+        {
+          "ts": "2026-05-22T20:22:40Z",
+          "agent": "sam-devops",
+          "level": "warn",
+          "msg": "GigaPose ckpt + MegaPose coarse/refiner RGB Checkpoints laufen als nohup PID 177835 -> /mnt/data/bop/logs/dl_pose_ckpts.log. Poll spaeter."
+        },
+        {
+          "ts": "2026-05-22T20:26:16Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Repo 4/5: MegaPose6d (canonical) installed editable --no-deps + inference import OK. Stolpersteine geloest: CONDA_PREFIX-Shim (venv statt conda), py3.11 dataclass mutable-default Patch (training_config.py:145 -> default_factory), deps transforms3d/panda3d/simplejson/roma. numpy<2 gehalten (pin/cmeel optional)."
+        },
+        {
+          "ts": "2026-05-22T20:28:36Z",
+          "agent": "sam-devops",
+          "level": "warn",
+          "msg": "GDRNPP heaviest: braucht detectron2+custom CUDA-ops (fps/flow/ransac_voting/uncertainty_pnp/torch_nndistance/egl_renderer) + apt-libs (eigen/glog/suitesparse, alle MISSING) + Onedrive/BaiDu password-gated weights. Isoliere in eigenem gdrnpp-venv (Pins onnx1.8.1/mmcv/deepspeed/pytorch3d kollidieren mit torch2.5 -> NICHT in bop-venv). apt-libs nohup PID 180380."
+        },
+        {
+          "ts": "2026-05-22T20:29:02Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Weights ALLE da: SAM vit_h 2.4GB (Apache), GigaPose v1 3.6GB, MegaPose coarse+refiner RGB 83MB je. apt-libs (eigen/glog/suitesparse/egl) rc=0. GDRNPP pip: detectron2-build FAILED rc=1, untersuche."
+        },
+        {
+          "ts": "2026-05-22T20:30:56Z",
+          "agent": "sam-devops",
+          "level": "warn",
+          "msg": "GPU aktuell belegt: FREMDER Trainingsjob laeuft (PID 178299, train-venv, train_refiner.py part=Ringmagnet, 21.3GB/24GB). NICHT meiner - nicht angefasst. Nur ~2.7GB frei. Volle GPU-Weight-Load-Smokes warten; Import-Smokes (Task-Anforderung) laufen CPU-seitig durch."
+        },
+        {
+          "ts": "2026-05-22T20:35:19Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Weights GPU-load-verifiziert (foreign train_refiner-job inzwischen fertig, 23.8GB frei): SAM vit_h 641M params load OK, GigaPose-ckpt PL-load OK. pretrained/-Symlink-Layout fuer hydra root_dir gewired."
+        },
+        {
+          "ts": "2026-05-22T20:35:23Z",
+          "agent": "sam-devops",
+          "level": "warn",
+          "msg": "GDRNPP laeuft als self-completing nohup: detectron2-CUDA-build (PID 182542) -> finish_gdrnpp.sh (PID 183973) wartet+compiled custom-ops+import-smoke. Poll: box_src/gpu_run.sh -- 'tail -40 /mnt/data/bop/logs/finish_gdrnpp.log'. GDRNPP-Weights password-gated (Onedrive/BaiDu) = manuell, NICHT automatisierbar."
+        },
+        {
+          "ts": "2026-05-22T20:35:28Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "4/5 Repos import-smoke GRUEN in bop-venv (bop_toolkit, cnos+SAM, gigapose, megapose6d). Commit 14745e2 (box_src/gpu_run.sh + BOP_SETUP.md, Max-only). bop-venv=/mnt/data/bop/bop-venv, gdrnpp-venv isoliert. torch2.5.1+cu121, cuda True, RTX3090 24GB."
+        },
+        {
+          "ts": "2026-05-22T20:35:28Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-064",
+      "title": "S-205: Viewer-Check - pose_result + echte CAD-Meshes auf cell.glb",
+      "description": "Three.js-Viewer laedt pose_result.json (ADR-017), platziert echte CAD-Meshes (Anker/Zahnrad) an 6D-Pose auf cell.glb, frei orbit, klick->info. Nach S-101-Ripout intakt.",
+      "column": "in_review",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-bop-pivot",
+        "W1"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:30Z",
+      "updated": "2026-05-22T20:20:54Z",
+      "started_at": "2026-05-22T20:13:36Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:13:36Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-22T20:13:36Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Worker spawned in worktree .worktrees/S-205 — Viewer-Check echte CAD-Meshes"
+        },
+        {
+          "ts": "2026-05-22T20:15:02Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Worktree spawned at .worktrees/S-205. Start Viewer-Verify (pose_result + echte CAD-Meshes). Kontext: Viewer ist mein eigener S-010/S-011-Code (build-less three.js, R ohne Transpose)."
+        },
+        {
+          "ts": "2026-05-22T20:15:57Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Befund: Mesh-Viewer (echte CAD-Meshes via partMeshes.js + assets/parts/*.glb + part_meta.json) existiert auf main UNCOMMITTED — Worktree S-205 ist von aelterem Commit (Proxy-Box-Stand S-010/S-011). Verifiziere gegen main (= behaltenes Endergebnis). Three.js lokal vendored. Starte Playwright."
+        },
+        {
+          "ts": "2026-05-22T20:18:41Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "Playwright headless GRUEN: meshStats={total:3,real:3} -> alle 3 Fokus-Teile (Anker_Lang/Zahnrad_Typ7/Anker_Kurz) als ECHTE CAD-Meshes (real:true), KEINE Proxy-Boxen. cellLoaded=true (Tisch+Arm). Orbit camMoved=true. Klick -> Info-Panel (Teil/Pos rel Nullpunkt x0.200 y0.200 z0.012m/conf100%/liegend). Leer-Klick schliesst. 0 pageErrors, 0 consoleErrors."
+        },
+        {
+          "ts": "2026-05-22T20:20:54Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "Commit 06da50c (Max-only). WICHTIG: Mesh-Viewer lag uncommitted im main-Working-Tree (committeter Stand 190ec74 = alte Proxy-Boxen). In S-205-Worktree-Branch versioniert -> echtes Endergebnis jetzt gesichert. Enthaelt: partMeshes.js, 7 part-GLBs, part_meta.json, mesh-scene.js, vendored three.js (offline), schema-valide Fixture. Start: aus project/ -> python3 -m http.server 8000 --bind 127.0.0.1 -> http://127.0.0.1:8000/frontend/ (oder e2e_infer.py --serve). README aktualisiert (war auf Proxy-Box-Stand)."
+        },
+        {
+          "ts": "2026-05-22T20:20:54Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-065",
+      "title": "S-301: Gleis A Pipeline CNOS->GigaPose->MegaPose auf BOP-Daten",
+      "description": "Zero-shot Kette: CNOS-Detektion -> GigaPose-coarse -> MegaPose-refine. Laeuft e2e auf Box via S-204-Harness, Output je Stage gespeichert. Fokus-Teile auf >=3 Szenen ohne Crash.",
+      "column": "backlog",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-bop-pivot",
+        "W2"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:30Z",
+      "updated": "2026-05-22T20:36:59Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:36:59Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Gleis A (CNOS/GigaPose/MegaPose) zurückgestellt -> GDRNPP ist Hauptlinie (Max-Direktive)"
+        }
+      ]
+    },
+    {
+      "id": "T-066",
+      "title": "S-302: Gleis A -> pose_result.json -> Viewer (Baseline live)",
+      "description": "MegaPose-Output -> pose_result.json (schema-validiert, Symmetrie respektiert) -> Viewer rendert Teile an korrekter Pose. E2E reproduzierbar. Sofort-SOTA-Baseline sichtbar.",
+      "column": "in_review",
+      "assignee": "jonas-backend",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-bop-pivot",
+        "W2"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:30Z",
+      "updated": "2026-05-23T07:18:54Z",
+      "started_at": "2026-05-23T07:11:49Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:10:55Z",
+          "agent": "viktor-lead",
+          "level": "success",
+          "msg": "Architektur-Review: Pose-Mapping BOP<->Viewer in adr.md §3. R_m2w=R_w2c.T@R_m2c, t_m2w=R_w2c.T@(t_m2c-t_w2c), mm->m, -table_origin. Beide Gleise DURCH DENSELBEN Adapter -> identisches pose_result. Symmetrie-Kanonisierung Pflicht. world=R@body kein Transpose."
+        },
+        {
+          "ts": "2026-05-22T20:36:59Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "zurückgestellt zugunsten GDRNPP-Hauptlinie"
+        },
+        {
+          "ts": "2026-05-23T07:11:49Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-23T07:11:49Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "Repurposed: BOP->pose_result-Adapter + e2e GDRNPP-Inferenzpfad (Gleis A zurückgestellt, Adapter dient GDRNPP)"
+        },
+        {
+          "ts": "2026-05-23T07:13:14Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "Worktree spawned at .worktrees/S-302 (branch team/2026-05-22-pose-bop-pivot/S-302). Pflicht-Read durch: Viktor adr.md §1/§3/§4, pose_result.schema.json, e2e_infer.py GDRNPP-Stub. Plan: BOP->pose_result-Adapter (§3 Transform-Kette) als eigenes getestetes Modul + e2e_infer call_gdrnpp(crop,K,bbox,obj_id) mit MOCK-Modus -> ganze Kette grün."
+        },
+        {
+          "ts": "2026-05-23T07:15:38Z",
+          "agent": "jonas-backend",
+          "level": "success",
+          "msg": "Adapter fertig: project/bop_adapter.py (§3.2 Transform-Kette R_m2w=R_w2c.T@R_m2c, t_m2w=R_w2c.T@(t_m2c-t_w2c), mm->m, -table_origin, world=R@body kein Transpose) + §3.3 Symmetrie-Kanonisierung + §3.4/R8 face/upright aus 6D + §1.2 obj_id-Mapping. Unit-Tests 17/17 grün (pytest). Round-Trip max R-err=8.9e-16, t-err=3.0e-16 ueber 200 zufaellige SO(3)-Posen inkl. mm/m + table_origin + nicht-triviale Extrinsics + R_model_to_body."
+        },
+        {
+          "ts": "2026-05-23T07:18:36Z",
+          "agent": "jonas-backend",
+          "level": "success",
+          "msg": "e2e-Kette mit MOCK grün: Detektor (OBB->AABB §4, Fallback SDG-Boxen) -> pro Detektion Crop+bbox -> call_gdrnpp(crop,K,bbox,obj_id) [MOCK bis Kais Checkpoint] -> R_m2c,t_m2c -> BOP-Adapter §3 -> pose_result.json. Real-Bild-Smoke: 12 Teile, alle auf Tisch (z~0), Schema-Gate PASS (stdlib + jsonschema strict 0 Fehler). --serve Smoke: Viewer-Index/main.js/pose_result/cell.glb alle HTTP 200. Tests gesamt 21/21 (17 Adapter + 4 e2e). Kais echter GDRNPP-Call haengt in e2e_infer.py::_gdrnpp_real ein (NotImplementedError -> graceful Mock-Fallback bis Checkpoint da)."
+        },
+        {
+          "ts": "2026-05-23T07:18:54Z",
+          "agent": "jonas-backend",
+          "level": "success",
+          "msg": "Commit b8fd084 (user-only, kein Footer). 4 files, +945/-23. project/bop_adapter.py (Adapter §3, neu), project/tests/{test_bop_adapter.py 17, test_e2e_mock.py 4}, project/e2e_infer.py (Stub->echte Kette). Status -> in_review."
+        },
+        {
+          "ts": "2026-05-23T07:18:54Z",
+          "agent": "jonas-backend",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-067",
+      "title": "S-401: Detektor-Retrain MIT sichtbarem Arm",
+      "description": "YOLO-Detektor neu auf arm-sichtbaren Daten (S-202) trainieren, ersetzt YOLOX als GDRNPP-Detection-Stage. Box-Job nohup+poll, mAP50 dokumentiert, alter detector.pt als .bak.",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-bop-pivot",
+        "W3"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:30Z",
+      "updated": "2026-05-23T07:15:37Z",
+      "started_at": "2026-05-23T05:46:01Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-22T20:10:55Z",
+          "agent": "viktor-lead",
+          "level": "warn",
+          "msg": "Detektor-Bridge (adr.md §4): detector.pt ist yolov8s-OBB UND arm-hidden trainiert. GDRNPP/CNOS brauchen AABB [x,y,w,h] im BOP-Detection-JSON (category_id=obj_id=class+1). 2 Tasks: (1) OBB->AABB-Adapter P0, (2) arm-visible Retrain P0. OBB behalten (informativer), AABB ist Adapter."
+        },
+        {
+          "ts": "2026-05-23T05:46:01Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-23T06:01:50Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Detektor-Retrain-Setup fertig: train_detector_armvis.py (yolov8s-OBB, FROZEN class order anker_kurz..zahnrad=obj_id-1, max_occ 0.85 -> arm-occludierte Boxen lernen). Daten haben obb_2d_*.json (2000) mit occlusion-Feld (max 0.988, ~9% >0.5occ). Alte Baseline arm-FREI: map50 0.987 (detect_topdown) - NICHT vergleichbar (haertere arm-Verteilung). OBB->AABB-Adapter obb_to_aabb_dets.py FERTIG (BOP detection JSON [x,y,w,h], category_id=class+1, Viktor §4)."
+        },
+        {
+          "ts": "2026-05-23T07:15:37Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Detektor-Retrain MIT Arm gestartet (Stage 1/6 der nohup-Kette, train-venv yolov8s-obb). Dataset: 2000 frames -> 1800 train/200 val, 15794 OBBs behalten, 589 dropped (occ>0.85), Klassen FROZEN (anker_kurz=0..zahnrad=5 => category_id+1=obj_id). GPU greift: 7.4GB/99%. epochs=100 imgsz=1280 batch=8 max-occ=0.85, patience=40, top-down-Aug (rot/flip ja, perspective/shear nein). OBB->AABB-Adapter FERTIG: box_src/obb_to_aabb_dets.py (obb_corners_to_aabb() + aabb_xywh_to_xyxy() für ADR-017 + BOP-Detection-JSON-Export). mAP-Erwartung: deutlich unter altem arm-freien 0.987 (Arm-Occlusion = härtere Verteilung), ehrlicher Wert kommt mit DETECTOR_TRAIN_DONE."
+        },
+        {
+          "ts": "2026-05-23T07:15:37Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Läuft in nohup-Kette (CHAIN_PID 280162). Poll: ssh max@100.85.216.95 'tail -30 /mnt/data/bop/logs/train_chain.log; grep DETECTOR_TRAIN_DONE /mnt/data/bop/logs/train_chain.log && cat /mnt/data/kip_pose/data/detector_armvis/detector.metrics.json'. ~1h ETA."
+        }
+      ]
+    },
+    {
+      "id": "T-068",
+      "title": "S-402: GDRNPP per-Objekt-Training (Anker + Zahnrad) - Kickoff Background-Job",
+      "description": "GDRNPP pro Fokus-Teil auf Isaac-PBR-Synth (S-201/202), Detektor=S-401. MEHRTAEGIGER nohup-Job - nur sauberer Kickoff+Poll diese Session, nicht fertig-trainiert. Erste Loss-Kurve konvergiert.",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-bop-pivot",
+        "W3"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:30Z",
+      "updated": "2026-05-23T07:15:45Z",
+      "started_at": "2026-05-23T05:46:01Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-23T05:46:01Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-23T05:46:01Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Max-Entscheidung: RGB-only HART (keine brauchbare Depth) -> GDRNPP RGB-Modus, RGB-D-Ablation gestrichen; Eval nur synth-Holdout"
+        },
+        {
+          "ts": "2026-05-23T06:01:59Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "GDRNPP-Config fertig + deployed: RGB-only bestaetigt (convnext_base in_chans=3, DEPTH_BACKBONE disabled, XYZ_ONLINE=True -> kein offline EGL xyz-gen, kein Depth-Refine). Per-Objekt SO-Configs (anker_kurz/anker_lang/zahnrad + alle 6). ref/pose_isaac.py + pose_isaac_pbr.py loader (PNG, dynamic scenes) deployed, dataset_factory + ref/__init__ gepatcht, BOP symlinked, Symmetrien aus models_info.json (continuous 1/2/5, discrete C_7 obj6) greifen via get_symmetry_transformations + PM_LOSS_SYM. SOLVER konservativ (batch 16, AMP) fuer 3090 24GB. Training nutzt GT-Boxen (TEST_BBOX_TYPE=gt) aus scene_gt_info."
+        },
+        {
+          "ts": "2026-05-23T06:01:59Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "BLOCKER gefunden+wird geloest: gdrnpp-venv hatte KEIN mmcv (main_gdrn: from mmcv import Config -> mmcv 1.x API). Sam-Install baute detectron2 aber kein mmcv-full. Fix: setuptools<81 (pkg_resources restored) -> mmcv-full==1.7.2 source-build laeuft als nohup (nvcc 12.0, gcc 13.3, arch 8.6), log /mnt/data/bop/logs/mmcv_install2.log. Train-Chain gated darauf."
+        },
+        {
+          "ts": "2026-05-23T06:41:11Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "GDRNPP venv-Blocker-Kaskade ALLE geloest, main_gdrn import OK + Dataset-Registrierung validiert (sym_infos zahnrad=(7,3,3) = C_7 korrekt aus models_info!). Fixes: mmcv-full 1.7.2 (source-build), PL 1.9.0 + _LiteModule->_FabricModule-patch, fairscale+pyassimp, CppEGLRenderer gebaut (pybind11 2.3->2.13.6 swap + iostream-include fuer gcc13), collections.abc.Sequence-patch, numpy 1.23.5 + scipy 1.10.1 (np.float restored), is_binary_file py2-unicode-patch. fps_points+keypoints_3d.pkl generiert. Patches als idempotente Skripte in box_src/gdrnpp/."
+        },
+        {
+          "ts": "2026-05-23T07:15:45Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "GDRNPP-Config FERTIG + Dataset registriert + deploy validiert (DEPLOY_GDRNPP_POSE_ISAAC_DONE). RGB-ONLY bestätigt: in_chans=3, convnext_base, kein DEPTH_BACKBONE, kein depth-refine (ITODD-Vorlage). PM_LOSS_SYM=True (symmetrie-aware loss, 120/91-Fix), XYZ_ONLINE=True. VRAM-konservativ: IMS_PER_BATCH=16 + AMP. GT-Boxen fürs val (TEST_BBOX_TYPE=gt, LOAD_DETS_TEST=False), FILTER_VISIB_THR=0.3. 14 Dataset-Varianten registriert. config-parse dry-run grün. Objekte: anker_kurz, anker_lang, zahnrad (alle 6 SO-configs deployt, Kette trainiert 3). Epochs=100/Objekt."
+        },
+        {
+          "ts": "2026-05-23T07:15:45Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "GDRNPP-Training läuft mehrtägig als Stage 4-6 der sequentiellen nohup-Kette (CHAIN_PID 280162, single-GPU: erst Detektor ~1h, dann GDRNPP per-Objekt je ~1-2 Tage). ETA Gesamt: ~3-6 Tage für 3 Objekte. Poll-Befehl: ssh max@100.85.216.95 'tail -40 /mnt/data/bop/logs/train_chain.log; pgrep -af train_chain.sh; nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader; ls -t /mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/*/  2>/dev/null'. Bleibt in_progress."
+        }
+      ]
+    },
+    {
+      "id": "T-069",
+      "title": "S-403: GPU-Job-Orchestrierung fuer Langlaeufer (poll + resync + Status)",
+      "description": "Background-GPU-Jobs (GDRNPP) zuverlaessig pollen, Checkpoints periodisch rsyncen, Status maschinenlesbar. Session-uebergreifend re-attachable.",
+      "column": "backlog",
+      "assignee": "sam-devops",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-bop-pivot",
+        "W3"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:30Z",
+      "updated": "2026-05-22T20:08:30Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-070",
+      "title": "S-501: BOP-Metrik-Eval-Harness (AR + ADD/ADI mit Symmetrie)",
+      "description": "AR=VSD/MSSD/MSPD via bop_toolkit + ADD/ADI mit Symmetrie aus models_info.json. Input pose_result.json -> Metrik-Report. Pro Fokus-Teil + Aggregat, reproduzierbar.",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-bop-pivot",
+        "W4"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:39Z",
+      "updated": "2026-05-23T07:33:28Z",
+      "started_at": "2026-05-23T07:11:49Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-23T07:11:49Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-23T07:11:49Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "BOP-Eval-Harness (AR + ADD/ADI mit Symmetrie) — parallel während GDRNPP trainiert"
+        },
+        {
+          "ts": "2026-05-23T07:33:24Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "BOP eval harness fertig: box_src/eval_bop.py (+eval_bop.sh wrapper, EVAL_BOP.md). bop_toolkit AR=mean(VSD/MSSD/MSPD)+ADD/ADI, symmetrie-aware via models_eval/models_info.json (obj1/2/5 continuous-Y=315 syms, obj6 Zahnrad C_7=7 syms, obj3/4 none). Plus trans-mm + symmetrie-bereinigter rot-deg. Commit e52dbb1."
+        },
+        {
+          "ts": "2026-05-23T07:33:24Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Self-Validation (full val, 1964 GT-Instanzen) GRUEN: [a] GT-vs-GT AR=1.0000 / ADD=0 / rot=0 PASS. [b] 10deg-random+5mm: AR faellt auf 0.829, naive-rot=10deg exakt PASS. [c] symmetrie-axis-twist: continuous(1,2,5) 30deg->resolved 0.29deg, Zahnrad C_7 51.43deg->0.00deg, asym(3,4) 30deg==naive (korrekt bestraft) PASS. Das ist der 120/91-deg-Beweis. --preds CSV-Pfad round-trips AR=1.0. VSD funktioniert (vispy/EGL) aber GT-vs-GT!=1.0 wg single-object-render vs full-scene-depth -> opt-in + dokumentiert, headline AR=MSSD+MSPD."
+        },
+        {
+          "ts": "2026-05-23T07:33:28Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-071",
+      "title": "S-502: A/B Gleis A vs Gleis B auf realen Szenen + Integration ins Notebook",
+      "description": "Beide Gleise auf identischen realen Szenen, S-501 erzeugt A/B-Tabelle (AR/ADD pro Teil). Beide Pfade als waehlbare Modi im Haupt-Notebook. Gleis-B-Zahlen erst final wenn S-402 durch.",
+      "column": "backlog",
+      "assignee": "jonas-backend",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-bop-pivot",
+        "W4"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:39Z",
+      "updated": "2026-05-22T20:08:39Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-072",
+      "title": "S-503: Eval-Gate + Smoke-Tests fuer BOP-Pipeline",
+      "description": "pose_result.json beider Gleise gegen Schema validiert. Smoke: Konverter (S-201) bop_toolkit-valid, Eval-Harness (S-501) auf Mini-Fixture. Regression: Symmetrie-Flags verhindern alte 120/91-Bestrafung.",
+      "column": "backlog",
+      "assignee": "ravi-qs",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "sprint-bop-pivot",
+        "W4"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:39Z",
+      "updated": "2026-05-22T20:08:39Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-073",
+      "title": "S-504: Doku + ADR-Konsequenzen + README-Update",
+      "description": "README beschreibt BOP-Stack (Gleis A+B), Datenfluss Isaac->BOP->Pose->Viewer, Bedienanleitung, neues-CAD-rein-Rezept. Verweis ADR-018/017, Eigenbau-Removal als Historie, Symmetrie-Konvention.",
+      "column": "backlog",
+      "assignee": "viktor-lead",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "sprint-bop-pivot",
+        "W4"
+      ],
+      "session": "2026-05-22-pose-bop-pivot",
+      "created": "2026-05-22T20:08:39Z",
+      "updated": "2026-05-22T20:08:39Z",
       "started_at": null,
       "completed_at": null,
       "comments": [],
