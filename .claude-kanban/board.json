@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-23T08:14:28Z",
+  "updated": "2026-05-23T08:17:07Z",
   "columns": [
     {
       "id": "backlog",
@@ -1995,7 +1995,7 @@
       "id": "T-051",
       "title": "7.3: Doku + v0.2-Release",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "viktor-lead",
       "instance": "",
       "priority": "P2",
@@ -2005,9 +2005,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:17Z",
-      "updated": "2026-05-23T08:14:28Z",
+      "updated": "2026-05-23T08:17:07Z",
       "started_at": "2026-05-23T08:09:10Z",
-      "completed_at": null,
+      "completed_at": "2026-05-23T08:17:07Z",
       "comments": [],
       "logs": [
         {
@@ -2051,6 +2051,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "Engineering-Haertung committed (User-only, kein Footer): SHA f973a91 auf Branch team/2026-05-22-pose-bop-pivot/S-506. 7 files, +247/-11. Working tree clean. NICHT done bewegt (Queen merged). FLAG: .env weiter in Git-HISTORY -> vor Push scrubben/rotieren."
+        },
+        {
+          "ts": "2026-05-23T08:17:07Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-05-23T08:17:07Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Merged -> main: handover docs+LICENSE+THIRD_PARTY (S-505) + secrets/requirements/REPRODUCE/hygiene (S-506)"
         }
       ]
     },
