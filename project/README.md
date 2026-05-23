@@ -116,3 +116,21 @@ RGB-vs-RGB-D-Ablation mit confidence-gefilterter Zivid-Depth (+10–15 AR laut
 BOP-Industrial-Evidenz, RGB bleibt Default); Eval-Automatisierung (nach jedem
 Checkpoint `eval_bop.sh` triggern + Report archivieren); Zahnrad-N (C_7) gegen
 das CAD gegenchecken.
+
+## Dokumentation (`docs/`)
+
+| Doc | Inhalt |
+|-----|--------|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Pipeline-Stages, Datenfluss, Methodenwahl |
+| [`docs/ADD_NEW_PART.md`](docs/ADD_NEW_PART.md) | **Neues CAD-Teil aufnehmen** — Generalisierung für Weiterverwendung |
+| [`docs/EVAL.md`](docs/EVAL.md) | BOP-Metriken (AR / ADD / ADI) + `eval_bop` nutzen |
+| [`docs/REPRODUCE.md`](docs/REPRODUCE.md) | Von Null reproduzieren (lokal + Box-venvs, pip-Pins) |
+| [`docs/REFERENCES.md`](docs/REFERENCES.md) | Methoden-Zitate (GDRNPP, CNOS, GigaPose, MegaPose, BOP) |
+| [`docs/PROJECT_REPORT.md`](docs/PROJECT_REPORT.md) | Akademischer Kurzbericht (Uni-tauglich) |
+
+## Lizenz
+
+Eigener Code: **MIT** ([`../LICENSE`](../LICENSE)). Dritt-Komponenten behalten ihre eigene
+Lizenz — siehe [`../THIRD_PARTY_LICENSES.md`](../THIRD_PARTY_LICENSES.md). ⚠️ Der **YOLOv8-Detektor
+ist AGPL-3.0** (relevant nur für geschlossene Weitergabe des Detektors; der BOP-Pose-Stack
+ist MIT/Apache und akzeptiert beliebige Detektoren).
