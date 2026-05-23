@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-23T08:17:07Z",
+  "updated": "2026-05-23T09:17:19Z",
   "columns": [
     {
       "id": "backlog",
@@ -2936,7 +2936,7 @@
       "id": "T-067",
       "title": "S-401: Detektor-Retrain MIT sichtbarem Arm",
       "description": "YOLO-Detektor neu auf arm-sichtbaren Daten (S-202) trainieren, ersetzt YOLOX als GDRNPP-Detection-Stage. Box-Job nohup+poll, mAP50 dokumentiert, alter detector.pt als .bak.",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -2946,9 +2946,9 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-23T07:15:37Z",
+      "updated": "2026-05-23T08:47:49Z",
       "started_at": "2026-05-23T05:46:01Z",
-      "completed_at": null,
+      "completed_at": "2026-05-23T08:47:49Z",
       "comments": [],
       "logs": [
         {
@@ -2980,6 +2980,18 @@
           "agent": "kai-ml",
           "level": "warn",
           "msg": "Läuft in nohup-Kette (CHAIN_PID 280162). Poll: ssh max@100.85.216.95 'tail -30 /mnt/data/bop/logs/train_chain.log; grep DETECTOR_TRAIN_DONE /mnt/data/bop/logs/train_chain.log && cat /mnt/data/kip_pose/data/detector_armvis/detector.metrics.json'. ~1h ETA."
+        },
+        {
+          "ts": "2026-05-23T08:47:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-05-23T08:47:49Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Detektor MIT Arm fertig: mAP50 ~0.99, data/detector_armvis/detector.pt"
         }
       ]
     },
@@ -2997,7 +3009,7 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-23T07:15:45Z",
+      "updated": "2026-05-23T09:17:19Z",
       "started_at": "2026-05-23T05:46:01Z",
       "completed_at": null,
       "comments": [],
@@ -3043,6 +3055,36 @@
           "agent": "kai-ml",
           "level": "warn",
           "msg": "GDRNPP-Training läuft mehrtägig als Stage 4-6 der sequentiellen nohup-Kette (CHAIN_PID 280162, single-GPU: erst Detektor ~1h, dann GDRNPP per-Objekt je ~1-2 Tage). ETA Gesamt: ~3-6 Tage für 3 Objekte. Poll-Befehl: ssh max@100.85.216.95 'tail -40 /mnt/data/bop/logs/train_chain.log; pgrep -af train_chain.sh; nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader; ls -t /mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/*/  2>/dev/null'. Bleibt in_progress."
+        },
+        {
+          "ts": "2026-05-23T08:47:49Z",
+          "agent": "claude",
+          "level": "error",
+          "msg": "GDRNPP-Training fehlgeschlagen: EGL-Renderer-Segfault (egl_renderer_v3.py:729 load_object), alle 3 obj, 0 Checkpoints. Chain meldete faelschlich TRAIN_CHAIN_DONE/rc=0. Fix+Restart noetig."
+        },
+        {
+          "ts": "2026-05-23T08:50:02Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "ROOT-CAUSE bestaetigt (nicht headless-EGL!): Mesh-Loader-Bug in lib/egl_renderer/glutils/meshutil.py:227 calc_normals. EGL initialisiert sauber (GL-Extensions enumeriert). calc_normals nimmt Triangle-Soup an (range(0,N-1,3); v=vertices[i+2]) bekommt aber INDIZIERTE PLYs (element vertex N + separate faces). Unsere trimesh-PLYs: keine Normalen -> recalculate_normals greift IMMER. zahnrad obj6=2771 verts -> vertices[2771] IndexError (gefangen). anker_kurz/lang 23241/25060 verts -> falsche Normalen -> EGL/GL Segfault rc=139. WICHTIG: offline-XYZ (itodd_pbr_1_gen_xyz) nutzt DENSELBEN EGLRenderer.load_object->load_mesh_sixd->calc_normals -> wuerde am identischen Bug crashen. Echter Fix = calc_normals per-Vertex aus Face-Indizes berechnen."
+        },
+        {
+          "ts": "2026-05-23T08:52:01Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "FIX angewandt (Box meshutil.py gepatcht, Backup .orig-pre-t068): calc_normals(vertices, faces=None) - bei faces korrekte per-Vertex-Normalen aus Face-Indizes (area-weighted accumulate+normalize), Fallback out-of-bounds-safe. Beide indizierten Aufrufstellen (load_mesh_sixd: model[faces], load_mesh_pyassimp: mesh.faces) versorgt. Unit-Smoke gruen: zahnrad 2771v KEIN IndexError, alle 3 obj finite unit-Normalen (zero_normals nur 0/14/12 = degenerate tris, harmlos). GEWAEHLTER FIX = calc_normals-Reparatur statt offline-XYZ, weil offline-XYZ denselben EGLRenderer-Pfad nutzt -> haette identisch gecrasht. XYZ_ONLINE=True bleibt (kein extra Precompute, keine GB XYZ-maps). Patch idempotent in box_src/gdrnpp/patch_egl_calc_normals.py."
+        },
+        {
+          "ts": "2026-05-23T09:06:38Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "SMOKE GRUEN (zahnrad, 1 epoch, separate OUTPUT_DIR): EGL-Renderer laedt headless OHNE Segfault (EGL 1.5, render() liefert nonzero px), Training laeuft alle 146 iters, total_loss faellt 19.62->19.30, CHECKPOINTS .pth GESCHRIEBEN: model_0000099/119/139.pth + model_final.pth (je 1.64GB), max_mem 4916M (viel Luft auf 3090). Das war genau das Fehlende (vorher 0 Checkpoints). Cascade von 4 Blockern geloest (jeder deckte den naechsten auf): (1) calc_normals IndexError/Segfault, (2) pyassimp 4.1.4-vs-libassimp5.3.1 ABI-Segfault beim Material-Reload -> bypassed mit Default-Materials, (3) PL1.9 self._precision_plugin entfernt -> self._strategy.precision, (4) VOC2012-BG-Aug -> CHANGE_BG_PROB=0 (unsere PBR-Renders haben schon Arm+Clutter-BG, ADR-018). Bonus: eval-subprocess bare 'python' -> sys.executable (3 sites). NICHT offline-XYZ noetig - XYZ_ONLINE=True funktioniert jetzt."
+        },
+        {
+          "ts": "2026-05-23T09:17:19Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "RESTART LIVE + CHECKPOINTS VERIFIZIERT im echten Run. Kette: bash box_src/train_chain.sh --gdrnpp-only (CHAIN_PID 295225, log /mnt/data/bop/logs/train_chain.log). Detektor (mAP50 0.99) NICHT neu trainiert (--gdrnpp-only ueberspringt Stage 1-3, deploy-Artefakte existieren). anker_kurz laeuft: epoch 6 iter 799/14100 (5.7%), total_loss ~130 fallend, max_mem 4916M, GPU-PID 295238 5.4GB. ERSTER ECHTER CHECKPOINT GESCHRIEBEN: anker_kurz/model_0000704.pth (1.64GB, epoch 5) - genau das was vorher fehlte. Checkpoint alle 5 Epochs (CHECKPOINT_BY_EPOCH common_base.py) + model_final. ETA ~2.5h/Objekt -> ~7-8h gesamt fuer 3 Objekte (RGB-only convnext_base, 0.64s/iter). train_chain.sh gehaertet: rc-check + .pth-Existenz-Verify + TRAIN_CHAIN_FAILED(exit60) statt falschem DONE. Commit 74c8365 (Worktree S-068, user-only). POLL: ssh max@100.85.216.95 'tail -5 /mnt/data/bop/logs/train_chain.log; ls -t /mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/*/*.pth 2>/dev/null'. T-068 bleibt in_progress (mehrstuendig)."
         }
       ]
     },
