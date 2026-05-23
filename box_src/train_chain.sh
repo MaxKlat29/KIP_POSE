@@ -57,7 +57,9 @@ $TRAIN_VENV "$REPO/box_src/obb_to_aabb_dets.py" \
     --conf 0.1 --imgsz 1280 || say "STAGE 2 WARN: det bridge failed (non-fatal, GDRNPP uses GT boxes for val)"
 
 # ---------------------------------------------------------------------------
-say "STAGE 3/6: deploy pose_isaac into GDRNPP (ref+loader+cfg+symlink+fps)"
+say "STAGE 3a/6: GDRNPP env prep (mmcv/PL/numpy pins + py311 patches + EGL build)"
+bash "$REPO/box_src/gdrnpp/prep_gdrnpp_env.sh" || say "STAGE 3a WARN: prep returned non-zero (may already be set up)"
+say "STAGE 3b/6: deploy pose_isaac into GDRNPP (ref+loader+cfg+symlink+fps)"
 bash "$REPO/box_src/gdrnpp/deploy_gdrnpp_pose_isaac.sh"
 RC=$?
 if [ $RC -ne 0 ]; then say "STAGE 3 FAILED rc=$RC — ABORTING CHAIN"; exit 30; fi

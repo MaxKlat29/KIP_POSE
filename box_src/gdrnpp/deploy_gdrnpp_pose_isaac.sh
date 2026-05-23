@@ -48,6 +48,10 @@ else:
     print("  ref/__init__.py already has pose_isaac")
 PY
 
+echo "[deploy] 5b) GDRNPP py311 + PL1.9 source patches (idempotent)"
+$PY "$SRC/patch_gdrnpp_py311.py"
+$PY "$SRC/patch_pl19_compat.py"
+
 echo "[deploy] 6) patch dataset_factory.py"
 $PY - <<PY
 p = "$GDRN/core/gdrn_modeling/datasets/dataset_factory.py"
