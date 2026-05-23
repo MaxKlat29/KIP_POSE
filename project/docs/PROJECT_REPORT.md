@@ -75,23 +75,72 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full data flow.
 
 ## 4. Results
 
-> Pose accuracy figures are filled in once GDRNPP training completes; the eval
-> harness and its self-validation are already in place and proven.
+GDRNPP was trained per object (RGB-only, ConvNeXt-Base, 100 epochs, batch 16) on
+the 1 800-frame synthetic train split and evaluated **symmetry-aware** on the
+200-frame held-out `val` split via `box_src/eval_bop.py` (BOP-toolkit metrics;
+predictions are real network output, `TEST_BBOX_TYPE=gt`). Three of the six parts
+were trained and evaluated (Anker_Kurz, Anker_Lang, Zahnrad); the other three are
+out of scope for this checkpoint round.
 
-| Component | Metric | Value |
-|---|---|---|
-| Object detector (arm-visible) | mAP50 | **0.991** (measured) |
-| Eval harness self-test `[a]` GT-as-prediction | AR / ADD / rot | **AR ≈ 1.0, errors ≈ 0** (validated — plumbing correct) |
-| Eval harness self-test `[c]` symmetry-axis perturbation | `rot_deg` vs `rot_naive` | **`rot_deg` collapses to ≈ 0** for symmetric parts (validated — symmetry handling correct) |
-| GDRNPP per-object pose | AR (mean MSSD/MSPD) | *to be filled in after training* |
-| GDRNPP per-object pose | ADD / ADI | *to be filled in after training* |
-| Track A (CNOS→GigaPose→MegaPose) zero-shot | AR | *baseline, to be measured* |
+### 4.1 Harness validation (sanity, before reading the numbers)
 
-The detector reaching mAP50 0.991 and the symmetry-aware metric collapsing the
-symmetry-axis error to ≈ 0 are the two concrete results to date. They establish
-that (a) parts are reliably localised under the visible arm, and (b) the
-analytic symmetry handling does what it must — a correct symmetric-part pose is
-no longer punished, which directly addresses the original 120°/91° failure.
+| Eval-harness self-test | Result |
+|---|---|
+| `[a]` GT-as-prediction | **AR = 1.000, ADD ≈ 0, rot ≈ 0** (plumbing correct) |
+| `[b]` random-axis noise (10°/5 mm) | **AR drops to 0.82** (monotonicity correct) |
+| `[c]` symmetry-axis perturbation | symmetric parts' `rot_deg` **collapses to ≈ 0** while `rot_naive` shows the full twist (Zahnrad C_7: 51.4° → 0°; Anker continuous: 30° → 0.29°) — the analytic fix for the 120°/91° failure is proven |
+
+### 4.2 GDRNPP pose accuracy (val split, real weights)
+
+`AR` = mean(AR_MSSD, AR_MSPD); `rot` is **symmetry-resolved** (the metric that the
+eigenbau failed). Means **and** medians are shown because the error distribution
+is bimodal (a good core plus a heavy failure tail under arm-occlusion).
+
+| obj | part | sym | AR | ADD/ADI mean (mm) | trans median / mean (mm) | rot median / mean (°) | n_matched / n_gt |
+|---|---|---|---|---|---|---|---|
+| 1 | Anker_Kurz | cont-Y | **0.416** | 73.3 | **36.6** / 84.5 | **8.1** / 37.9 | 300 / 390 |
+| 2 | Anker_Lang | cont-Y | **0.451** | 80.1 | **39.8** / 90.8 | **5.4** / 27.4 | 308 / 397 |
+| 6 | Zahnrad | C_7 | **0.275** | 36.8 | **27.2** / 47.4 | **87.1** / 80.6 | 297 / 392 |
+| — | **mean (3 trained)** | | **0.381** | 63.4 | **34.5** / 74.2 | **33.5** / 48.6 | 905 / 1 179 |
+
+(Detector arm-visible: **mAP50 = 0.991**, measured separately.)
+
+### 4.3 Comparison vs the in-house baseline
+
+| metric (typical-case median) | eigenbau (face-atlas) | GDRNPP (this work) | improvement |
+|---|---|---|---|
+| rotation error (sym-resolved) | **91°** | **5.4–8.1°** (Anker), 87° (Zahnrad) | **11–17× better** on the Anker; Zahnrad on par/worse |
+| translation error | **186 mm** | **27–40 mm** | **≈ 5× better** across all three parts |
+
+**Verdict — honest:** GDRNPP **clearly beats** the in-house baseline on what
+matters most: the typical-case median rotation for the two Anker parts drops from
+91° to **5–8°** (an 11–17× improvement), and translation drops from 186 mm to
+**27–40 mm** (≈ 5×) for *all three* parts including the Zahnrad. Even the mean
+rotation (which includes every failure) is ≤ the 91° baseline for all three.
+
+**Where it falls short of the BOP expectation (~82 AR):** the achieved AR of
+**0.28–0.45** is well below SOTA-on-public-benchmarks, for two concrete reasons
+visible in the distribution:
+
+- **A heavy failure tail.** ~23 % of GT instances are unmatched (a prediction
+  landed nowhere near the part — typically strong arm-occlusion) and a further
+  13–19 % of the matched Anker poses are catastrophic ≥ 90° flips. The medians are
+  good; the tail drags the means and tanks AR. This is the classic top-down 6D
+  failure mode (180° flip / wrong stable face under occlusion), amplified here by
+  the deliberately hard arm-visible setting.
+- **The Zahnrad rotation did not converge** (median 87°, only 1 % under 5°, 48 %
+  flips). The C_7 discrete symmetry (7 representatives) does not forgive a wrong
+  tooth-alignment the way the Anker's continuous-Y symmetry forgives any twist;
+  the network simply did not learn the gear's in-plane orientation from the
+  texture-less, occluded synthetic data. This is a real model failure, *not* a
+  metric artefact — the harness self-test `[c]` confirms the C_7 handling is
+  correct.
+
+The gap is consistent with **synth-only, single-view, arm-occluded, texture-less
+metal at 100 epochs** — the headline ~82 AR figures come from depth-aided and/or
+real-data-tuned regimes. Closing it (more synthetic data + stronger DR, a
+flip-aware loss, real Zivid fine-tuning, optional confidence-filtered depth) is
+the next-work agenda in §6.
 
 ## 5. Limitations
 
@@ -107,9 +156,16 @@ no longer punished, which directly addresses the original 120°/91° failure.
   high *with* strong domain randomisation, but real performance is only provable
   against real Zivid scenes with ground-truth poses, which are required to close
   the loop.
-- **Single GPU** — one RTX 3090 forces sequential training; per-object GDRNPP is
-  multi-day, so the project ships with a MOCK pose backend that keeps the full
-  chain (and viewer) runnable before any checkpoint exists.
+- **Single GPU** — one RTX 3090 forces sequential, per-object training (each
+  object ~2.5 h, ~7–8 h for the three trained parts). A MOCK pose backend keeps
+  the chain runnable before a checkpoint exists, but the results above and the
+  shipped `pose_result.json` are from the **real** trained weights, not the mock.
+- **End-to-end proof (real weights, no mock):** the full chain was run on a real
+  `val` frame — detector (arm-visible) → GDRNPP `model_final.pth` → `bop_adapter`
+  → schema-valid `pose_result.json` (`meta.pose_backend = "GDRNPP"`), rendered by
+  the Three.js viewer (real CAD meshes on the real `cell.glb`) with **0 JS
+  errors** (Playwright headless: `meshStats total=4/real=4`, `cell.glb` loaded).
+  The 2D-vs-3D evidence is `project/temp/final_2d_vs_3d.png`.
 - **Detector licensing** — the YOLOv8 backbone is AGPL-3.0; relevant only for
   closed redistribution of the detector, not for the MIT/Apache BOP pose stack
   (see [`REFERENCES.md`](REFERENCES.md) and `THIRD_PARTY_LICENSES.md`).
