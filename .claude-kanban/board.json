@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-23T08:06:32Z",
+  "updated": "2026-05-23T08:14:28Z",
   "columns": [
     {
       "id": "backlog",
@@ -1995,7 +1995,7 @@
       "id": "T-051",
       "title": "7.3: Doku + v0.2-Release",
       "description": "",
-      "column": "backlog",
+      "column": "in_progress",
       "assignee": "viktor-lead",
       "instance": "",
       "priority": "P2",
@@ -2005,11 +2005,54 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:17Z",
-      "updated": "2026-05-22T10:10:17Z",
-      "started_at": null,
+      "updated": "2026-05-23T08:14:28Z",
+      "started_at": "2026-05-23T08:09:10Z",
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-23T08:09:10Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-23T08:09:11Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Uni/Industrie-Handover-Härtung: Doku-Suite + Generalisierung + Lizenzen (Viktor) ∥ Reproduzierbarkeit/Secrets/Hygiene (eng)"
+        },
+        {
+          "ts": "2026-05-23T08:11:20Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Secrets-Fix: project/.env aus Git-Index entfernt (git rm --cached, lokal behalten), .env + **/.env in .gitignore, project/.env.example mit Platzhaltern angelegt. HINWEIS: .env ist noch in der Git-HISTORY -> Max muss vor Push History scrubben (BFG/filter-repo) oder Werte rotieren."
+        },
+        {
+          "ts": "2026-05-23T08:12:47Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "requirements.txt angelegt (project/): Kern numpy>=1.26, pillow>=10, pytest>=7.4, jsonschema>=4.18 (lokal verifiziert numpy 2.4.3 / pillow 12.2 / pytest 9.0). ultralytics+torch optional/auskommentiert (Detektor-Fallback). Box-venvs NICHT hier (REPRODUCE.md)."
+        },
+        {
+          "ts": "2026-05-23T08:12:48Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "docs/REPRODUCE.md geschrieben: lokales Setup (pip install -r), Box-Setup mit 4 venvs (isaacsim/train/bop/gdrnpp) + LIVE pip-freeze-Snapshot von der Box (ssh read-only, Training nicht gestoert): bop-venv torch2.5.1+cu121/numpy1.26.4, gdrnpp-venv mmcv-full1.7.2/detectron2/numpy1.23.5, train-venv ultralytics8.4.53. WoL->ssh->run->rsync via gpu_run.sh dokumentiert + Verweis box_src/BOP_SETUP.md."
+        },
+        {
+          "ts": "2026-05-23T08:14:14Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "pytest gruen: cd project && python3 -m pytest tests/ -q -> 21 passed (Baseline 21, unveraendert nach Code-Politur). bop_adapter.py + e2e_infer.py kompilieren + importieren sauber. Zahnrad C_7=7 gegen Box-models_info.json verifiziert (obj6: 6 symmetries_discrete + Identitaet), aber n_fold absichtlich None gelassen (sonst bricht test_discrete_unknown_N_unchanged) -> als TODO(S-203) im Adapter notiert."
+        },
+        {
+          "ts": "2026-05-23T08:14:28Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Engineering-Haertung committed (User-only, kein Footer): SHA f973a91 auf Branch team/2026-05-22-pose-bop-pivot/S-506. 7 files, +247/-11. Working tree clean. NICHT done bewegt (Queen merged). FLAG: .env weiter in Git-HISTORY -> vor Push scrubben/rotieren."
+        }
+      ]
     },
     {
       "id": "T-052",
