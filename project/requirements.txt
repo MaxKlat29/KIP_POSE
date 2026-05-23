@@ -1,0 +1,38 @@
+# POSE — local inference + tests (project/) requirements.
+# Install:  pip install -r project/requirements.txt
+#
+# Scope: ONLY the local pieces — the standalone E2E inference (e2e_infer.py),
+# the BOP->pose_result adapter (bop_adapter.py), the notebooks (setup/infer)
+# and the test suite (tests/). The heavy box-side stacks (Isaac Sim SDG,
+# YOLOv8-OBB training, BOP toolkit, GDRNPP) live in their own venvs ON THE GPU
+# BOX — see docs/REPRODUCE.md. Do NOT mix those pins in here.
+#
+# Verified locally with Python 3.11+ (numpy 2.x, pillow 12.x).
+
+# ── Core (required) ───────────────────────────────────────────
+# Linear algebra for the adapter transform-chain + image arrays.
+numpy>=1.26
+# Image loading (e2e_infer reads the input PNG via PIL).
+pillow>=10.0
+
+# ── Tests ─────────────────────────────────────────────────────
+pytest>=7.4
+
+# ── Optional gates / extras ───────────────────────────────────
+# jsonschema: bonus pose_result Draft-2020-12 contract gate. e2e_infer falls
+# back to its built-in stdlib validator when this is absent (tests stay green
+# either way), so it is optional but recommended.
+jsonschema>=4.18
+
+# ── Optional: real OBB detector (models/detector.pt) ──────────
+# Only needed to run the trained YOLOv8-OBB detector. Without these,
+# e2e_infer.py gracefully falls back to SDG annotator boxes, then a dummy box.
+# torch is large + platform-specific — install the right build for your machine
+# (see https://pytorch.org). Uncomment to enable the real detector locally:
+# ultralytics>=8.1
+# torch>=2.1
+
+# ── Notebooks (optional) ──────────────────────────────────────
+# Needed only to run infer.ipynb / setup.ipynb interactively.
+# jupyter>=1.0
+# ipython>=8.0

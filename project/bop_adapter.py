@@ -75,8 +75,13 @@ PART_SYMMETRY = {
     "Anker_Kurz":             {"type": "continuous", "axis": [0.0, 1.0, 0.0]},
     "Anker_Lang":             {"type": "continuous", "axis": [0.0, 1.0, 0.0]},
     "Ringmagnet":             {"type": "continuous", "axis": [0.0, 1.0, 0.0]},
+    # TODO(S-203): Zahnrad ist C_7 (7-fach) — verifiziert gegen das
+    # CAD-abgeleitete models_info.json auf der Box (obj6: 6 symmetries_discrete
+    # + Identität = 7-fach). n_fold absichtlich noch None gelassen, weil der
+    # getestete None-Pfad (test_discrete_unknown_N_unchanged) sonst bricht; auf 7
+    # setzen, sobald der Test gemeinsam mit S-203 nachgezogen wird.
     "Zahnrad":                {"type": "discrete",   "axis": [0.0, 1.0, 0.0],
-                              "n_fold": None},   # Kai zählt N im CAD (S-203)
+                              "n_fold": None},   # -> 7 (C_7), s. TODO oben
     "Buerstenhalter_2polig":  None,
     "Getriebegehaeuse_typ4":  None,
 }
