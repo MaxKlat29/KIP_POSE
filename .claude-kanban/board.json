@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T09:34:41Z",
+  "updated": "2026-05-24T09:54:53Z",
   "columns": [
     {
       "id": "backlog",
@@ -1855,7 +1855,7 @@
       "id": "T-041",
       "title": "4.3: 6D-Alignment robust (Mask-MSE-Yaw + upright) -> pose_result",
       "description": "",
-      "column": "backlog",
+      "column": "in_review",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P1",
@@ -1865,11 +1865,36 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:12Z",
-      "updated": "2026-05-22T10:10:12Z",
-      "started_at": null,
+      "updated": "2026-05-24T09:54:53Z",
+      "started_at": "2026-05-24T09:35:49Z",
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-24T09:35:49Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-24T09:35:49Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Bau M1 (Stable-Pose-Rot-Snap) + M4 (Zahnrad Yaw-Lock) + M3 (Anker Top-Down-C_2) — training-frei (S-047)"
+        },
+        {
+          "ts": "2026-05-24T09:54:53Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "M1/M3/M4 training-free rotation refinements gebaut (bop_adapter.py, hinter Flags) + an realen GDRNPP-val-Predictions gemessen (eval_bop, sym-aware, gefiltert n=1077). EHRLICH: kein AR-Gewinn ueber Z-Snap-Baseline. zsnap=Baseline AnkerKurz 0.645/AnkerLang 0.650/Zahnrad 0.360. M1 −0.002/−0.003/±0 (Anker-Flip=echter 3D-Flip nicht Tilt; Zahnrad ruht oft nicht flach, tilt-med 41deg). M4 +0.002 = Rauschen (AR-Metrik ist C_7-bewusst -> 7 Yaws aequivalent; Top-Down-Silhouette C_7-invariant). M3: Anker-C_2 NICHT valide (top-down self-IoU 0.58/0.64, Kopf vs duenner Schaft) -> kein blinder C_2 (false credit). Defaults: nur Z-Snap AN, M1/M4 hinter Flag. 47/47 pytest gruen (28 alt + 19 neu). Commit 510ce12. Doc: project/docs/REFINE_T041.md. Ziel (Zahnrad 0.7+/Anker 0.8+) training-frei NICHT erreichbar -> braucht M2-Refiner/M5-Retrain."
+        },
+        {
+          "ts": "2026-05-24T09:54:53Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
     },
     {
       "id": "T-042",
@@ -2512,7 +2537,7 @@
       "id": "T-058",
       "title": "POSE E2E-Opt: Lernbasiertes Pose-Refinement (GigaPose/MegaPose-Stil)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2521,9 +2546,9 @@
       ],
       "session": "",
       "created": "2026-05-22T19:13:52Z",
-      "updated": "2026-05-24T09:34:41Z",
+      "updated": "2026-05-24T09:35:48Z",
       "started_at": "2026-05-24T09:29:48Z",
-      "completed_at": null,
+      "completed_at": "2026-05-24T09:35:48Z",
       "comments": [],
       "logs": [
         {
@@ -2561,6 +2586,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-24T09:35:48Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-24T09:35:48Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Deep-Research: PHASE3_PEAK_PLAN.md — >80% erreichbar, Top-Hebel M1/M4/M3 training-frei"
         }
       ]
     },
