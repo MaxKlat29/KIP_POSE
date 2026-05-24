@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T08:58:24Z",
+  "updated": "2026-05-24T09:09:23Z",
   "columns": [
     {
       "id": "backlog",
@@ -1915,7 +1915,7 @@
       "id": "T-044",
       "title": "5.2: CAD-Meshes (USD->glTF) statt Proxy-Boxen",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P1",
@@ -1925,9 +1925,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:14Z",
-      "updated": "2026-05-24T08:58:24Z",
+      "updated": "2026-05-24T09:01:15Z",
       "started_at": "2026-05-24T08:44:49Z",
-      "completed_at": null,
+      "completed_at": "2026-05-24T09:01:15Z",
       "comments": [],
       "logs": [
         {
@@ -1965,6 +1965,18 @@
           "agent": "lena-frontend",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-24T09:01:15Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-24T09:01:15Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "Viewer rock-solid gemerged: echte CAD 0/3/9 Teile, 0 Errors, Mesh-Offset gefixt"
         }
       ]
     },
@@ -2101,7 +2113,7 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:17Z",
-      "updated": "2026-05-24T08:47:47Z",
+      "updated": "2026-05-24T09:09:23Z",
       "started_at": "2026-05-24T08:44:49Z",
       "completed_at": null,
       "comments": [],
@@ -2129,6 +2141,36 @@
           "agent": "kai-ml",
           "level": "info",
           "msg": "Gap-analysis done. Symmetry defs VERIFIED on box: Anker obj1/2 = continuous-Y ONLY (NO discrete sym declared) -> the 13-19% >=90deg flips are an END-TO-END 180deg ambiguity the cont-Y group does NOT canonicalize (the stab looks ~same flipped but isnt a sym axis) = NOT a metric artifact, the loss never punishes the flip consistently. Zahnrad obj6 = C_7 CONFIRMED CORRECT (6 discrete entries: 51.4/102.9/154.3 deg = 360/7 multiples) -> the 87deg-median/48%-flip/MSSD-0.043 is a genuine LEARNING failure (small teeth crushed in GDRNPP fixed 256-crop/64-out), NOT a sym-def bug. Translation: MSSD(0.26) << MSPD(0.57) for Anker => depth/Z-along-axis is the AR killer, in-plane proj is fine. GDRNPP default INPUT_RES=256 OUTPUT_RES=64 confirmed in gdrn_base.py."
+        },
+        {
+          "ts": "2026-05-24T09:04:13Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_progress"
+        },
+        {
+          "ts": "2026-05-24T09:04:13Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Phase-2 autonome Box-Kette: wait-render -> convert -> Research-Fixes (320/80, C_2-CAD, aug, 160ep) -> Detektor+GDRNPP-Retrain"
+        },
+        {
+          "ts": "2026-05-24T09:05:42Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Phase-2-Chain-Bau gestartet. Render läuft (PID 384553, 110/8000 Szenen, ETA ~16h, GPU 4.1GB Isaac). Kette wartet darauf. Bestätigt: bop-venv (trimesh 4.12/np 1.26/bop_toolkit), GLBs + part_meta da, deploy regeneriert fps/keypoints, alte train_chain TRAIN_CHAIN_DONE."
+        },
+        {
+          "ts": "2026-05-24T09:08:37Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Anker-C_2-Check entschieden: KEEP_CONT_Y für BEIDE Anker. Methode: 180°-Flip um Quer-Achse (X/Z) durch Centroid, AND-Gate chamfer_rel<=0.06 UND voxel_IoU>=0.80. Ergebnis: chamfer niedrig (0.016-0.023) ABER voxel_IoU nur 0.53-0.65 -> KEIN C_2. Diagnose bestätigt: Anker hat langen Schaft (85-87mm) + kurzen Kopf (25-30mm), head-vs-flipped-tail IoU nur 0.46 -> NICHT flip-symmetrisch. Flip-Tail ist LERN-Problem -> Fix-1 (320/80) + Fix-2 (DR+shape-aug) fangen es. Chamfer allein hätte falsch C_2 addiert."
+        },
+        {
+          "ts": "2026-05-24T09:09:23Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "phase2_chain.sh GESTARTET detached: PHASE2_PID=388975, log /mnt/data/bop/logs/phase2_chain.log. Detach bewiesen (fresh-ssh: PPID=1, SID==PID, Ss session-leader). Wartet jetzt in STAGE 1 WAIT-RENDER (render_alive=1, 142/8000). Milestone-Marker: WAIT_RENDER_DONE -> CONVERT_DONE -> SYM_CHECK_DONE -> SMOKE_DONE -> DETECTOR_TRAIN_DONE -> PHASE2_TRAIN_DONE (Erfolg) / PHASE2_FAILED (jeder harte Stage-Fail). Research-Fixes gebacken: 320/80, COLOR_AUG 0.9, 160 epochs, FILTER_VISIB 0.20."
         }
       ]
     },
