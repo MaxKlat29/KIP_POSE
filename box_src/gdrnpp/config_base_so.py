@@ -32,7 +32,15 @@ INPUT = dict(
     # is the whole point of the arm-visible dataset (ADR-018). Backgrounds stay
     # as rendered.
     CHANGE_BG_PROB=0.0,
-    COLOR_AUG_PROB=0.8,
+    # [T-050 / PHASE2] 0.8 -> 0.9. Texture-less specular metal has NO real albedo
+    # signal — the network must become shape-biased, not texture-biased (Thalhammer
+    # et al. 2024, arXiv:2402.04878: randomized-texture / texture-destroying aug
+    # gives +18.6% pose AR on ITODD metal). Pushing COLOR_AUG_PROB up + the strong
+    # Grayscale/contrast/brightness chain below forces geometry-from-shading cues.
+    # This is a generalizable training-data lever, not a per-part tweak. The
+    # heavy lifting is in the DR-5k render (material/light randomization); this aug
+    # is the on-the-fly complement.
+    COLOR_AUG_PROB=0.9,
     MIN_SIZE_TRAIN=720,
     MAX_SIZE_TRAIN=1280,
     MIN_SIZE_TEST=720,
@@ -58,8 +66,18 @@ INPUT = dict(
 )
 
 SOLVER = dict(
+    # [T-050 / PHASE2] Batch 16 -> 24 because (a) the new sdg_armvis_dr5k DR set
+    # roughly doubles usable instances after the visib>0.20 filter, and (b) AMP
+    # leaves headroom on the 3090. KEEP 16 if the INPUT_RES bump (below) is also
+    # enabled — higher crop res costs VRAM; do not raise both blindly. GPU
+    # smoke-test required (see PHASE2_PLAN.md §Retrain validation).
     IMS_PER_BATCH=16,            # conservative for one 3090 24GB (adr.md §5-R1)
-    TOTAL_EPOCHS=100,
+    # [T-050 / PHASE2] 100 -> 160 epochs. The Zahnrad never converged at 100
+    # (median 87°, 1% <5°); texture-less small-feature in-plane orientation needs
+    # more iterations. Anker was already good at 100, but the bigger DR set means
+    # more variety per epoch — longer schedule amortises it. flat_and_anneal
+    # keeps the LR flat then cosine-anneals at ANNEAL_POINT, so extending is safe.
+    TOTAL_EPOCHS=160,
     LR_SCHEDULER_NAME="flat_and_anneal",
     ANNEAL_METHOD="cosine",
     ANNEAL_POINT=0.72,
@@ -71,6 +89,19 @@ SOLVER = dict(
 )
 
 DATASETS = dict(
+    # [T-050 / PHASE2] The new DR-heavy set sdg_armvis_dr5k (5000 scenes,
+    # --dr-strong: per-object roughness/metallic/tint, lights 120-2200, cam
+    # jitter +-0.08 + roll +-12°, focal 14-24, clutter 8-16) is the Sim2Real +
+    # shape-bias lever (see PHASE2_PLAN.md §Fix-2). The data-strang converts it
+    # with `isaac_to_bop.py --min-visib 0.20`. WIRING (pick one — owned by the
+    # data-strang's BOP layout, validate at GPU-free time):
+    #   (A) MERGE: append the DR scenes into pose_isaac/train_pbr/ (renumbered
+    #       scene dirs). Then the existing TRAIN names below already cover them —
+    #       no config change. PREFERRED (keeps SO names stable).
+    #   (B) SEPARATE split: register `pose_isaac_<obj>_train_dr` in
+    #       ref_pose_isaac.py + pose_isaac_pbr.py and set TRAIN to the TUPLE
+    #       ("pose_isaac_<obj>_train_pbr", "pose_isaac_<obj>_train_dr") — GDRNPP
+    #       concatenates multiple train dataset names natively.
     TRAIN=("pose_isaac_anker_kurz_train_pbr",),   # overridden per-object
     TEST=("pose_isaac_anker_kurz_val",),          # overridden per-object; HAS GT
     # GT-box training (adr.md): TEST_BBOX_TYPE=gt below uses scene_gt_info boxes.
@@ -80,7 +111,13 @@ DATASETS = dict(
 
 DATALOADER = dict(
     NUM_WORKERS=8,
-    FILTER_VISIB_THR=0.3,         # skip near-fully-arm-occluded instances in train
+    # [T-050 / PHASE2] 0.3 -> 0.2 to MATCH the uniform THR=0.20 visibility gate
+    # that T-038 applied at the BOP-GT level (filter_visibility.py / --min-visib
+    # 0.20). The data is already filtered at <=0.20 on disk; aligning the loader
+    # threshold to 0.20 (not 0.30) keeps the 0.20-0.30 visibility band as TRAIN
+    # signal instead of silently dropping it twice. A part 20-30% visible is still
+    # pose-able and is exactly the arm-occluded regime we must learn.
+    FILTER_VISIB_THR=0.2,
 )
 
 MODEL = dict(
@@ -91,6 +128,24 @@ MODEL = dict(
     POSE_NET=dict(
         NAME="GDRN_double_mask",
         XYZ_ONLINE=True,
+        # [T-050 / PHASE2 — HIGHEST-IMPACT FIX for Zahnrad, GPU-GATED]
+        # gdrn_base default is INPUT_RES=256 / OUTPUT_RES=64. The Zahnrad
+        # (diameter 49.9mm, fine C_7 teeth) is crushed into a 256px crop and the
+        # XYZ/region head only emits 64px — the per-tooth orientation cue that the
+        # C_7 rotation depends on is below the output-grid resolution. This is the
+        # concrete reason the gear's rotation never converged (median 87°, 1%
+        # <5°, MSSD 0.043) while the metric self-test proves the C_7 symmetry
+        # handling is correct. Raising to 320/80 restores small-feature detail and
+        # generalizes to any small/fine-feature part (not a per-part hack).
+        #
+        # VRAM/shape RISK: convnext_base out_indices=(3,) feeds GEO_HEAD
+        # in_dim=1024; the feature-map size scales with INPUT_RES. Must run a
+        # 1-iter GPU smoke-test (CUDA_VISIBLE_DEVICES=0, --num-gpus 1, few iters)
+        # to confirm no shape mismatch and that batch 16 still fits before the
+        # multi-day run. If 320 OOMs, drop IMS_PER_BATCH to 12. See
+        # PHASE2_PLAN.md §Retrain validation.
+        INPUT_RES=320,
+        OUTPUT_RES=80,
         BACKBONE=dict(
             FREEZE=False,
             PRETRAINED="timm",
