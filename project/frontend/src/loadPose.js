@@ -31,6 +31,30 @@ export function resolvePoseUrl() {
   return "../temp/pose_result.json";
 }
 
+/** True when this URL is the implicit default (no explicit ?file=). A missing
+ *  default is benign — the pipeline simply hasn't produced output yet, so we
+ *  render an empty scene instead of an error. An explicit ?file= that 404s IS an
+ *  error the user should see. */
+export function isDefaultPoseUrl() {
+  return !new URLSearchParams(window.location.search).get("file");
+}
+
+/** An empty-but-valid pose document (table + null-point, no parts). Used when the
+ *  default output file does not exist yet. */
+export function emptyPoseDoc() {
+  return {
+    meta: {
+      source_image: "—",
+      table_origin: [0, 0, -0.007],
+      units: "m",
+      coordinate_convention:
+        "Z-up world; column rotation world = R @ body; origin = table-plane null-point",
+      schema_version: "1.0.0",
+    },
+    results: [],
+  };
+}
+
 /**
  * Fetch + validate a pose_result document. Throws a human-readable Error on
  * structural problems so the caller can surface it in the status toast.
@@ -87,20 +111,37 @@ export function validatePose(doc) {
     );
   }
 
-  // Validate each result minimally; drop malformed entries rather than crash.
+  // Validate + normalise each result; drop malformed entries rather than crash.
+  // Every field is coerced to a safe default so the renderer never sees undefined.
   const results = [];
   doc.results.forEach((r, i) => {
-    const ok =
+    const okShape =
       r &&
+      typeof r === "object" &&
       Array.isArray(r.R_world) &&
       r.R_world.length === 9 &&
+      r.R_world.every((n) => Number.isFinite(n)) &&
       Array.isArray(r.t_world) &&
-      r.t_world.length === 3;
-    if (!ok) {
-      console.warn(`[loadPose] result[${i}] malformed — skipped.`, r);
+      r.t_world.length === 3 &&
+      r.t_world.every((n) => Number.isFinite(n));
+    if (!okShape) {
+      console.warn(`[loadPose] result[${i}] malformed (R/t) — skipped.`, r);
       return;
     }
-    results.push(r);
+    results.push({
+      instance_id: Number.isFinite(r.instance_id) ? r.instance_id : i,
+      part: typeof r.part === "string" && r.part.length ? r.part : "Unbekannt",
+      face: typeof r.face === "string" && r.face.length ? r.face : "–",
+      R_world: r.R_world.map(Number),
+      t_world: r.t_world.map(Number),
+      confidence:
+        typeof r.confidence === "number" && Number.isFinite(r.confidence)
+          ? Math.max(0, Math.min(1, r.confidence))
+          : null,
+      bbox_2d: Array.isArray(r.bbox_2d) ? r.bbox_2d : null,
+      upright: r.upright === true,
+      depth_order: Number.isFinite(r.depth_order) ? r.depth_order : i,
+    });
   });
 
   return { meta, results };

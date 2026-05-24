@@ -12,12 +12,15 @@ Server is managed by with_server.py (serve project/ on :8000). This script just
 drives the browser. Captures a screenshot of the rendered viewer for the
 split-screen.
 """
+import os
 import sys
 from playwright.sync_api import sync_playwright
 
-URL = ("http://127.0.0.1:8000/frontend/index.html"
-       "?file=../temp/pose_result.json")
-SHOT = "/Users/Admin/POSE/.worktrees/S-072/project/temp/viewer_render.png"
+# Worktree-agnostic: PORT, ?file= and screenshot path are overridable via env/argv.
+PORT = os.environ.get("POSE_PORT", sys.argv[1] if len(sys.argv) > 1 else "8000")
+FILE_Q = os.environ.get("POSE_FILE", "./test/fixtures/full.json")
+URL = f"http://127.0.0.1:{PORT}/frontend/index.html?file={FILE_Q}"
+SHOT = os.environ.get("POSE_SHOT", "/tmp/viewer_render.png")
 
 
 def main():
@@ -36,8 +39,12 @@ def main():
                 lambda r: failed_requests.append(f"{r.url} :: {r.failure}"))
 
         page.goto(URL, wait_until="networkidle", timeout=30000)
+        try:
+            page.wait_for_function("() => window.__POSE_READY__ === true", timeout=20000)
+        except Exception:
+            pass
         # let GLB loaders + the render loop settle
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(2000)
 
         # read what the viewer reported
         meta_count = page.locator("#meta-count").inner_text()
