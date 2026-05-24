@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T10:43:14Z",
+  "updated": "2026-05-24T11:24:58Z",
   "columns": [
     {
       "id": "backlog",
@@ -2549,7 +2549,7 @@
       "id": "T-058",
       "title": "POSE E2E-Opt: Lernbasiertes Pose-Refinement (GigaPose/MegaPose-Stil)",
       "description": "",
-      "column": "in_progress",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2558,7 +2558,7 @@
       ],
       "session": "",
       "created": "2026-05-22T19:13:52Z",
-      "updated": "2026-05-24T10:43:14Z",
+      "updated": "2026-05-24T11:24:58Z",
       "started_at": "2026-05-24T09:29:48Z",
       "completed_at": null,
       "comments": [],
@@ -2628,6 +2628,48 @@
           "agent": "claude",
           "level": "info",
           "msg": "M2 multi-hypothesis render-and-compare refiner gebaut (S-048): Hypothesen-Generator (coarse+180-flips+C_N-yaws+stable-poses+tilts, dedup, generalisierbar) + CPU-Kanten/Silhouetten-Scorer + MegaPose-RGB-Contract. Integriert in e2e_infer.py + bop_adapter.detection_to_result(rc_refiner) + real_pose_result.py --refine-rc + e2e_finish.sh, hinter Flag refine_rc default AUS, RGB-only, Contract unveraendert. EHRLICH gemessen (box, CPU, val n=1077): CPU-Kanten-Scorer korrigiert Anker-Flip NICHT - offenes Gate verschlechtert AR (Anker 0.645/0.650->0.533/0.577, overall 0.331->0.294, switched 460/519); striktes Gate 0.15 neutral (0.330=raw, 2/519). Kein training-freier Teilgewinn - Silhouette/Kante trennt 180-Flip auf realem RGB nicht (deckt M3/T-041). MegaPose-GPU-Pfad verdrahtet+finish-validierbar (box_src/megapose_refine.py self-check OK; voller chain real_pose_result --refine-rc cpu_edge laeuft e2e gruen auf realer val-Frame). pytest 57 gruen (12 neu). Doc: M2_REFINER.md."
+        },
+        {
+          "ts": "2026-05-24T10:44:19Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-05-24T10:44:19Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "M2-Refiner gemerged: Hypo-Gen + CPU-Edge (null auf Flip) + MegaPose-GPU-Pfad (finish-validierbar)"
+        },
+        {
+          "ts": "2026-05-24T11:15:36Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: done → in_progress"
+        },
+        {
+          "ts": "2026-05-24T11:15:36Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Architektur-Hebel-Research + Prep: SO(3)-Verteilungs-Kopf (SC6D/Implicit-PDF) + TTA, parallel zum Training, GPU-validierbar beim Finish (S-049)"
+        },
+        {
+          "ts": "2026-05-24T11:18:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Arch-research-Phase3 (S-049): docs gelesen (T-041/M2 zeigen: training-freie Rot-Fixes ausgereizt, nur Z-Snap hilft). Web-Research: SC6D ITODD 30.3 AR (sym-agnostic, SO(3)-cls head, cosine-sim, 5k train/480k infer anchors), SurfEmb ITODD 38.7 (dense-corr, schwerer), Implicit-PDF (HEALPix-SO(3)-Dichte). Baue jetzt: TTA-Wrapper (inferenzseitig) + SO(3)-Distribution-Head-Scaffold (phase-3, kein Retrain jetzt). GPU 100% belegt (training in flight) - nur lesend."
+        },
+        {
+          "ts": "2026-05-24T11:24:58Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "S-049 fertig (commit 1f471f2, branch team/2026-05-22-pose-bop-pivot/S-049). GEBAUT (kein GPU-Job): (1) TTA-Wrapper project/tta_pose.py - inferenzseitig, RGB-only, in-plane-90-Rotationen + SO(3)-Aggregation (medoid/chordal/score), hinter --tta, Default AUS, in e2e_infer verdrahtet, 14 Tests gruen. Erwartung +1..3 AR (unimodal), loest NICHT Becken/Flip - validierbar erst GPU-frei am Checkpoint. (2) SO(3)-cls-Kopf-Scaffold box_src/so3_rotation_head.py (SC6D-Stil: SO(3)-Embedding + Cosinus-Klassifikation + HEALPix-Anker + one-to-many-CE) + Config zahnrad_so3cls.py + train_so3cls_phase3.sh (GPU-guarded, bricht bei busy ab) + SO3_INTEGRATION.md (3-Punkte-Hook), 11 Tests gruen, Self-Check gruen - ready-to-train PHASE-3 NACH Retrain, NICHT trainiert. Doku PHASE3_ARCH_PLAN.md. EMPFEHLUNG: KEIN Modell-Wechsel (SurfEmb/ZebraPose lohnt nicht); JA SO(3)-cls-Kopf fuers Zahnrad als erste GPU-Aktion NACH Retrain+M2-Messung. Gesamtsuite 82 passed / 6 skipped."
+        },
+        {
+          "ts": "2026-05-24T11:24:58Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
         }
       ]
     },
