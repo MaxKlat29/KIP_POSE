@@ -58,6 +58,13 @@ try:
 except Exception:  # pragma: no cover
     RC = None
 
+# TTA — Test-Time-Augmentation für die GDRNPP-Rotation (T-058, S-049). Optional,
+# inferenzseitig, hinter Flag. Fehlt das Modul, läuft die Kette ohne TTA.
+try:
+    import tta_pose as TTA
+except Exception:  # pragma: no cover
+    TTA = None
+
 # ── Pfade (relativ zu diesem Skript, CWD-unabhängig) ──────────────────────────
 HERE = pathlib.Path(__file__).resolve().parent          # project/
 MODELS = HERE / "models"
@@ -88,6 +95,16 @@ PLANAR_TILT_CORRECT = False
 # scorer: "cpu_edge" (kein GPU, default) | "megapose" (GPU, finish-time).
 REFINE_RC_DEFAULT = False
 REFINE_RC_SCORER = "cpu_edge"
+# TTA (T-058, S-049). DEFAULT AUS. Inferenzseitig, RGB-only, kein Retrain. Härtet
+# die View-Empfindlichkeit der per-View-Einzel-Rotation von GDRNPP ab (in-plane
+# 90°-Rotationen des Crops, exakte Pixel-Ops, Rück-Transform + Aggregation auf
+# SO(3)). Erwartung: kleiner unimodaler Gewinn (+1..3 AR Literatur), LÖST NICHT
+# das falsche Becken / den 3D-Flip (dafür M2-MegaPose / SO(3)-Head Phase-3).
+# Validierbar erst GPU-frei am echten Checkpoint.
+TTA_DEFAULT = False
+TTA_N_ROT = 4               # 1=aus, 2={0,180}, 4=alle vier in-plane-90°-views
+TTA_HFLIP = False           # Spiegelung — ändert Chiralität, default AUS
+TTA_AGG = "medoid"          # medoid (score-frei, bimodal-robust) | chordal | score
 # C_N pro obj_id (aus models_info): Anker continuous-Y -> kein discrete N; Zahnrad
 # C_7 (-> Yaw-Hypothesen). Generalisierbar via PART_SYMMETRY im Adapter.
 OBJ_NFOLD = {1: None, 2: None, 6: 7}
@@ -537,7 +554,9 @@ def _make_rc_refiner(obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
 def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
                    planar_refine=PLANAR_REFINE_DEFAULT,
                    tilt_correct=PLANAR_TILT_CORRECT,
-                   refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER):
+                   refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER,
+                   tta=TTA_DEFAULT, tta_n_rot=TTA_N_ROT, tta_hflip=TTA_HFLIP,
+                   tta_agg=TTA_AGG):
     """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3) ->
     [M2 Render-and-Compare-Refiner, optional] -> planares Z-Snap (T-055).
 
@@ -556,6 +575,7 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
     mode = "MOCK" if cfg.mock else "GDRNPP"
     n_snapped = 0
     n_rc = 0
+    n_tta = 0
     aligned = []
     for d in dets:
         bbox = d["bbox_2d"]
@@ -564,7 +584,13 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
             warn(f"[pose] '{d['part']}' nicht in obj_id-Map (§1.2) — übersprungen")
             continue
         crop = _crop(rgb, bbox)
-        R_m2c, t_m2c = call_gdrnpp(crop, K, bbox, obj_id, cfg=cfg)
+        if tta and TTA is not None and tta_n_rot > 1:
+            R_m2c, t_m2c, _ = TTA.tta_call_gdrnpp(
+                call_gdrnpp, crop, K, bbox, obj_id, cfg=cfg,
+                n_rot=tta_n_rot, use_hflip=tta_hflip, agg=tta_agg, warn=warn)
+            n_tta += 1
+        else:
+            R_m2c, t_m2c = call_gdrnpp(crop, K, bbox, obj_id, cfg=cfg)
         # Mesh wird für Z-Snap UND den RC-Refiner gebraucht.
         need_mesh = planar_refine or refine_rc
         mesh_m = _load_mesh_verts_m(obj_id, warn=warn) if need_mesh else None
@@ -592,7 +618,9 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
     snap = (f", Planar-Z-Snap auf {n_snapped}/{len(aligned)}"
             if planar_refine else " (Planar-Refine AUS)")
     rc = f", RC-Refine ({rc_scorer}) auf {n_rc}/{len(aligned)}" if refine_rc else ""
-    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3){snap}{rc}")
+    tt = (f", TTA ({tta_n_rot}-rot/{tta_agg}) auf {n_tta}/{len(aligned)}"
+          if tta and TTA is not None and tta_n_rot > 1 else "")
+    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3){snap}{rc}{tt}")
     return aligned
 
 
@@ -706,7 +734,9 @@ def build_pose_result(img_path, aligned, table_origin=TABLE_ORIGIN_SCENE):
 # ── Orchestrierung ────────────────────────────────────────────────────────────
 def run(image, out_path, cfg=None, warn=print,
         planar_refine=PLANAR_REFINE_DEFAULT, tilt_correct=PLANAR_TILT_CORRECT,
-        refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER):
+        refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER,
+        tta=TTA_DEFAULT, tta_n_rot=TTA_N_ROT, tta_hflip=TTA_HFLIP,
+        tta_agg=TTA_AGG):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
 
     Kette (ADR-018, Viktor §3/§4 + T-055 §3.5 + T-058 M2):
@@ -729,7 +759,8 @@ def run(image, out_path, cfg=None, warn=print,
     aligned = estimate_poses(rgb, dets, table_origin=TABLE_ORIGIN_SCENE,
                              cfg=cfg, warn=warn, planar_refine=planar_refine,
                              tilt_correct=tilt_correct, refine_rc=refine_rc,
-                             rc_scorer=rc_scorer)
+                             rc_scorer=rc_scorer, tta=tta, tta_n_rot=tta_n_rot,
+                             tta_hflip=tta_hflip, tta_agg=tta_agg)
     doc = build_pose_result(image, aligned, table_origin=TABLE_ORIGIN_SCENE)
     errors = check_pose_result(doc) + _check_with_jsonschema(doc)
     if errors:
@@ -791,12 +822,22 @@ def main(argv=None):
     ap.add_argument("--rc-scorer", default=REFINE_RC_SCORER,
                     choices=["cpu_edge", "megapose"],
                     help="RC-Scorer: cpu_edge (kein GPU, default) | megapose (GPU)")
+    ap.add_argument("--tta", action="store_true",
+                    help="Test-Time-Augmentation (in-plane-Rotationen) an (default aus)")
+    ap.add_argument("--tta-n-rot", type=int, default=TTA_N_ROT, choices=[1, 2, 4],
+                    help="TTA in-plane-90°-Views: 1=aus, 2={0,180}, 4=alle (default 4)")
+    ap.add_argument("--tta-hflip", action="store_true",
+                    help="TTA H-Flip-View zusätzlich (ändert Chiralität, default aus)")
+    ap.add_argument("--tta-agg", default=TTA_AGG,
+                    choices=["medoid", "chordal", "score"],
+                    help="TTA-Aggregation: medoid (bimodal-robust) | chordal | score")
     a = ap.parse_args(argv)
     cfg = GdrnppConfig(checkpoint=a.checkpoint, mock=(True if a.mock else None))
     out = a.out or str(HERE / "temp" / "pose_result.json")
     doc = run(a.image, out, cfg=cfg, planar_refine=not a.no_planar_refine,
               tilt_correct=a.tilt_correct, refine_rc=a.refine_rc,
-              rc_scorer=a.rc_scorer)
+              rc_scorer=a.rc_scorer, tta=a.tta, tta_n_rot=a.tta_n_rot,
+              tta_hflip=a.tta_hflip, tta_agg=a.tta_agg)
     print(f"\n[e2e] {len(doc['results'])} Teile -> {out}")
     for r in doc["results"]:
         print(f"  #{r['instance_id']:>2} {r['part']:<22} {r['face']:<10} "
