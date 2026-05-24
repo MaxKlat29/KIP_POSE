@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T08:09:29Z",
+  "updated": "2026-05-24T08:58:24Z",
   "columns": [
     {
       "id": "backlog",
@@ -1700,7 +1700,7 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:10Z",
-      "updated": "2026-05-24T08:09:29Z",
+      "updated": "2026-05-24T08:54:13Z",
       "started_at": "2026-05-24T07:53:04Z",
       "completed_at": null,
       "comments": [],
@@ -1752,6 +1752,36 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "Commit ddff9fb (user-only). Geliefert: filter_visibility.py (idempotent, .full-Snapshots), isaac_to_bop/convert_full --min-visib, detector --max-occ 0.80, gen_sdg --dr-strong, viewer_shot worktree-agnostisch. Re-Eval-Report project/docs/REEVAL_T038_visib20.md + eval JSONs. T-038 bleibt in_progress (Render laeuft, Phase-2 offen)."
+        },
+        {
+          "ts": "2026-05-24T08:41:27Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Max: Render-Verteilung auf 0-10 Teile (inkl. leer+spärlich) korrigieren + viele Daten. Aktueller 8-16-Render wird gekillt+neu."
+        },
+        {
+          "ts": "2026-05-24T08:44:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Render-Fix-Strang (S-040): 0-10 Teile inkl leer, tisch-weit (Marc-style), DR, viele Daten"
+        },
+        {
+          "ts": "2026-05-24T08:45:55Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Kill render PID 374952 — falscher Config (8-16 Teile, enge inner-table spawn). Re-gen folgt: 0-10 Teile inkl leer, full-table spawn (Marc SPAWN_BOUNDS x0.057-0.783 y0.042-0.537), DR-strong behalten, ~8000 Szenen."
+        },
+        {
+          "ts": "2026-05-24T08:50:46Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Smoke 5 Szenen grün (force-counts 0,8,1,10,3). Scene 0 = LEER (0 parts, gt_raw n_instances=0, 8 Files, rendert sauber kein Crash). Teile-XY-Extent x[0.051,0.870] y[-0.091,0.541] = ganze Tischfläche (Marc-Bounds x0.057-0.783), nicht alte enge Zone x0.18-0.52. isaac_to_bop konvertiert alle 5 Frames: frame0 scene_gt=[] (sauberer 0-GT-Frame), >20%-Filter aktiv (13/22 gedroppt). Beleg: project/temp/spawn_proof_t038.png + rgb_0000/0001.png"
+        },
+        {
+          "ts": "2026-05-24T08:54:13Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Voll-Render gestartet: PID 384553, 8000 Szenen, 0-10 Teile inkl leer, full-table spawn (Marc x0.057-0.783 y0.042-0.537), settle 160, dr-strong, seed 20260524. Log /mnt/data/bop/logs/sdg_dr5k.log, output /mnt/data/kip_pose/data/sdg_armvis_dr5k (überschrieben). Rate ~0.13/s, ETA ~986min (~16.4h). Detach via fresh-ssh-pgrep bewiesen. Leere 0-GT-Szenen erscheinen organisch (scene13=0 parts). GPU 4.1GB/79%."
         }
       ]
     },
@@ -1885,7 +1915,7 @@
       "id": "T-044",
       "title": "5.2: CAD-Meshes (USD->glTF) statt Proxy-Boxen",
       "description": "",
-      "column": "backlog",
+      "column": "in_review",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P1",
@@ -1895,11 +1925,48 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:14Z",
-      "updated": "2026-05-22T10:10:14Z",
-      "started_at": null,
+      "updated": "2026-05-24T08:58:24Z",
+      "started_at": "2026-05-24T08:44:49Z",
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-24T08:44:49Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-24T08:44:49Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Web-Viewer einwandfrei mit echten CAD-Meshes (S-042)"
+        },
+        {
+          "ts": "2026-05-24T08:47:05Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Worktree .worktrees/S-042 — Analyse: viewer-Basis solide (S-205-Stand). rotation.test 9/9 grün. Gefundene Lücken: (A) Anker_Kurz/Anker_Lang/Getriebegehaeuse GLBs sind NICHT centroid-zentriert (Anker Y-off ~30mm) → Mesh würde verschoben sitzen; (B) kein temp/pose_result.json → Default-Boot muss leer-robust sein; (C) Playwright-Scripts haben hardcoded falsche Worktree-Pfade (S-072/S-038); (D) keine Fixtures für leer/spärlich/voll."
+        },
+        {
+          "ts": "2026-05-24T08:53:01Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "Playwright 3-Szenarien GRÜN: EMPTY (0 Teile → Zelle+Hinweis, 0 Errors), SPARSE (3/3 echte CAD-Meshes, Orbit+Klick), FULL (9/9 echte Meshes, Orbit+Klick). cell.glb geladen, kein Box-Fallback, 0 console/page/request-Errors überall. Fix: Meshes werden auf bbox-Center re-zentriert (Anker_* waren ~30mm off-origin exportiert) → Teile sitzen jetzt korrekt auf t_world."
+        },
+        {
+          "ts": "2026-05-24T08:58:24Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "Commit 1cf7a42 — rock-solid viewer. rotation.test 9/9 grün. Playwright 3/3 Szenarien grün (EMPTY/SPARSE/FULL, je echte CAD-Meshes nicht Box, 0 Errors, Orbit+Klick). Defensiv-Probes grün: unbekanntes Teil→Box-Fallback, fehlende Felder→Defaults, kaputter Entry→gedropt, malformed JSON/404→Error-Toast, alles ohne uncaught page-error. Mesh-Re-Zentrierung fixt Anker-Versatz. Screenshot: project/temp/viewer_full_overview.png. Start: aus project/ → python3 -m http.server 8000 --bind 127.0.0.1 → http://127.0.0.1:8000/frontend/"
+        },
+        {
+          "ts": "2026-05-24T08:58:24Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
     },
     {
       "id": "T-045",
@@ -2024,7 +2091,7 @@
       "id": "T-050",
       "title": "7.2: Parameter-Tuning (Schwellen/Cluster/Alignment)",
       "description": "",
-      "column": "backlog",
+      "column": "in_progress",
       "assignee": "claude",
       "instance": "",
       "priority": "P2",
@@ -2034,11 +2101,36 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:17Z",
-      "updated": "2026-05-22T10:10:17Z",
-      "started_at": null,
+      "updated": "2026-05-24T08:47:47Z",
+      "started_at": "2026-05-24T08:44:49Z",
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-24T08:44:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-24T08:44:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Research+generalisierende Gap-Fixes (S-041): Flip/Zahnrad/AR/Sim2Real + Phase-2-Retrain startklar"
+        },
+        {
+          "ts": "2026-05-24T08:46:43Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Research done (WebSearch/WebFetch): SOTA findings collected. Key papers: SymCode/SymNet (arXiv 2405.10557) one-to-many symmetry correspondences -> T-LESS discrete-sym recall 38%->78%, directly maps to our Zahnrad C_7 failure. Metallic-GDRNPP (2503.03655) material-recon head + keypoint head -> industrial AR 7%->14%. GDRNPP crops to 256x256 fixed -> small-feature (Zahnrad teeth, diam 50mm) detail lost. Implicit-PDF (2106.05965) + EPOS for multi-hypothesis symmetric pose. SurfEmb dense continuous corr distributions for sym. Next: gap-analysis + phase2 config."
+        },
+        {
+          "ts": "2026-05-24T08:47:47Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Gap-analysis done. Symmetry defs VERIFIED on box: Anker obj1/2 = continuous-Y ONLY (NO discrete sym declared) -> the 13-19% >=90deg flips are an END-TO-END 180deg ambiguity the cont-Y group does NOT canonicalize (the stab looks ~same flipped but isnt a sym axis) = NOT a metric artifact, the loss never punishes the flip consistently. Zahnrad obj6 = C_7 CONFIRMED CORRECT (6 discrete entries: 51.4/102.9/154.3 deg = 360/7 multiples) -> the 87deg-median/48%-flip/MSSD-0.043 is a genuine LEARNING failure (small teeth crushed in GDRNPP fixed 256-crop/64-out), NOT a sym-def bug. Translation: MSSD(0.26) << MSPD(0.57) for Anker => depth/Z-along-axis is the AR killer, in-plane proj is fine. GDRNPP default INPUT_RES=256 OUTPUT_RES=64 confirmed in gdrn_base.py."
+        }
+      ]
     },
     {
       "id": "T-051",
