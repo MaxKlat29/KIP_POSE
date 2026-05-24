@@ -443,12 +443,317 @@ def test_detection_to_result_with_planar_snap():
     assert abs(r2["t_world"][2] - 0.25) < 1e-9
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# PHASE 3 — M1 Stable-Pose-Snap / M3 Top-Down-C_2 / M4 Contour-Yaw-Lock (T-041)
+# ══════════════════════════════════════════════════════════════════════════════
+import pytest  # noqa: E402
+
+try:
+    import trimesh as _tm
+except Exception:  # pragma: no cover
+    _tm = None
+requires_trimesh = pytest.mark.skipif(_tm is None, reason="trimesh nicht installiert")
+
+
+def _disk_mesh(radius=0.02, height=0.004, sections=48):
+    """Symmetrischer Zylinder (trimesh) — liegt flach, Top-Down-flip-identisch."""
+    return _tm.creation.cylinder(radius=radius, height=height, sections=sections)
+
+
+# ── M1: _min_rot_align ─────────────────────────────────────────────────────────
+def test_min_rot_align_basic():
+    """Align(a->b) @ a == b, gültige SO(3)."""
+    rng = np.random.default_rng(1)
+    for _ in range(20):
+        a = rng.normal(size=3); a /= np.linalg.norm(a)
+        b = rng.normal(size=3); b /= np.linalg.norm(b)
+        R = A._min_rot_align(a, b)
+        assert np.allclose(R @ a, b, atol=1e-9)
+        assert np.allclose(R @ R.T, np.eye(3), atol=1e-9)
+        assert abs(np.linalg.det(R) - 1.0) < 1e-9
+
+
+def test_min_rot_align_antiparallel():
+    """a == -b: 180°-Drehung um eine senkrechte Achse, immer noch a->b."""
+    a = np.array([0.0, 0.0, 1.0])
+    R = A._min_rot_align(a, -a)
+    assert np.allclose(R @ a, -a, atol=1e-9)
+    assert abs(np.linalg.det(R) - 1.0) < 1e-9
+
+
+# ── M1: stable_pose_snap (synthetische stable-downs, kein trimesh) ─────────────
+def test_stable_pose_snap_snaps_tilt_preserves_yaw():
+    """Eine flach-liegende Rotation + kleine Kippung snappt auf die Ruhelage zurück;
+    der In-Plane-Yaw um Welt-Z bleibt erhalten."""
+    down = np.array([0.0, 0.0, -1.0])                 # body-Z zeigt nach Welt-DOWN
+    downs = np.array([down])                           # eine Ruhelage
+    # exakte flache Pose: body-down == down. Yaw 30° um Welt-Z dazu.
+    R_flat = A._min_rot_align(down, np.array([0.0, 0.0, -1.0]))
+    R_yaw = A.axis_angle_matrix([0, 0, 1], np.radians(30.0))
+    R_flat = R_yaw @ R_flat                            # In-Plane-Yaw (um Welt-Z)
+    # 12° Kippung (verlässt die Ruhelage):
+    R_tilt = A.axis_angle_matrix([0, 1, 0], np.radians(12.0)) @ R_flat
+    R_new, info = A.stable_pose_snap(R_tilt, downs, max_tilt_snap_deg=55.0)
+    assert info["snapped"] is True
+    assert abs(info["tilt_deg"] - 12.0) < 0.5
+    # body-down danach exakt auf die Ruhelage:
+    bd = R_new.T @ np.array([0.0, 0.0, -1.0]); bd /= np.linalg.norm(bd)
+    assert float((downs @ bd).max()) > 0.99999
+    # In-Plane-Yaw erhalten: R_new ~ R_flat (die snap entfernt nur die 12°-Kippung).
+    rel = R_flat.T @ R_new
+    ang = np.degrees(np.arccos(np.clip((np.trace(rel) - 1) / 2, -1, 1)))
+    assert ang < 1.0, f"yaw nicht erhalten, residual {ang:.2f}deg"
+    # gültige SO(3):
+    assert np.allclose(R_new @ R_new.T, np.eye(3), atol=1e-9)
+
+
+def test_stable_pose_snap_idempotent():
+    """Zweimal snappen == einmal (das Teil ruht schon)."""
+    downs = np.array([[0.0, 0.0, -1.0], [0.0, 0.0, 1.0]])
+    R = A.axis_angle_matrix([1, 0, 0], np.radians(20.0)) @ \
+        A.axis_angle_matrix([1, 0, 0], np.pi)
+    R1, i1 = A.stable_pose_snap(R, downs, max_tilt_snap_deg=55.0)
+    R2, i2 = A.stable_pose_snap(R1, downs, max_tilt_snap_deg=55.0)
+    assert i1["snapped"] is True
+    assert abs(i2["tilt_deg"]) < 1e-3                  # zweiter Snap ist ein No-Op
+    assert np.allclose(R1, R2, atol=1e-9)
+
+
+def test_stable_pose_snap_guard_skips_standing():
+    """Guard: ein weit gekipptes/stehendes Teil (Tilt > guard) wird NICHT gesnappt."""
+    downs = np.array([[0.0, 0.0, -1.0]])              # flach-Ruhelage
+    # 80° gekippt — über dem 55°-Guard:
+    R = A.axis_angle_matrix([0, 1, 0], np.radians(80.0)) @ \
+        A.axis_angle_matrix([1, 0, 0], np.pi)
+    R_new, info = A.stable_pose_snap(R, downs, max_tilt_snap_deg=55.0)
+    assert info["snap_skipped"] is True and info["snapped"] is False
+    assert np.allclose(R_new, R, atol=1e-12)          # Pose unverändert
+
+
+def test_stable_pose_snap_picks_nearest_of_many():
+    """Bei mehreren Ruhelagen wird die zur Vorhersage NÄCHSTE gewählt."""
+    downs = np.array([[0.0, 0.0, -1.0],               # 0: flach
+                      [1.0, 0.0, 0.0],                # 1: auf der Seite (body-X unten)
+                      [0.0, 1.0, 0.0]])               # 2: auf der Seite (body-Y unten)
+    # Vorhersage nah an Ruhelage 1 (body-X leicht verkippt nach unten):
+    base = A._min_rot_align(downs[1], np.array([0.0, 0.0, -1.0]))
+    R = A.axis_angle_matrix([0, 1, 0], np.radians(8.0)) @ base
+    R_new, info = A.stable_pose_snap(R, downs, max_tilt_snap_deg=55.0)
+    assert info["pose_idx"] == 1
+
+
+def test_stable_pose_snap_validates_shape():
+    with pytest.raises(ValueError):
+        A.stable_pose_snap(np.eye(3), np.zeros((0, 3)))
+
+
+# ── M1 in planar_refine (Flag + Kombination mit Z-Snap) ───────────────────────
+def test_planar_refine_default_no_m1():
+    """Default planar_refine() rührt die Rotation NICHT an (M1 aus)."""
+    V = _box_verts(0.02, 0.05, 0.015)
+    R = A.axis_angle_matrix([0, 0, 1], np.radians(20.0))
+    t = np.array([0.1, 0.1, 0.015 + 0.02])
+    R_out, _, info = A.planar_refine(R, t, V, table_z=0.0)
+    assert np.allclose(R_out, R, atol=1e-12)
+    assert info["m1_snapped"] is False
+
+
+def test_planar_refine_m1_requires_downs():
+    V = _box_verts(0.02, 0.05, 0.015)
+    with pytest.raises(ValueError):
+        A.planar_refine(np.eye(3), [0, 0, 0.5], V, stable_pose_snap=True)
+
+
+def test_planar_refine_m1_plus_zsnap_combine():
+    """M1 + Z-Snap zusammen: Rotation auf Ruhelage, Höhe auf Tischebene."""
+    V = _box_verts(0.02, 0.05, 0.015)                 # flache Box
+    downs = np.array([[0.0, 0.0, -1.0], [0.0, 0.0, 1.0]])
+    # gekippte + zu hohe Pose:
+    R = A.axis_angle_matrix([0, 1, 0], np.radians(10.0)) @ \
+        A.axis_angle_matrix([1, 0, 0], np.pi)         # ~flach + 10° Kippung
+    t = np.array([0.1, 0.1, 0.015 + 0.03])            # 30mm zu hoch (< Guard)
+    R_out, t_out, info = A.planar_refine(
+        R, t, V, table_z=0.0, z_snap=True, stable_pose_snap=True,
+        stable_downs=downs, max_tilt_snap_deg=55.0)
+    assert info["m1_snapped"] is True
+    assert info["z_snap"] is True
+    # nach M1 ist die body-down auf einer Ruhelage:
+    bd = R_out.T @ np.array([0.0, 0.0, -1.0]); bd /= np.linalg.norm(bd)
+    assert float((downs @ bd).max()) > 0.999
+    # tiefster Punkt auf der Tischebene:
+    assert abs(t_out[2] + A.lowest_contact_z(R_out, V)) < 1e-9
+
+
+# ── M1: echte trimesh-Ruhelagen ───────────────────────────────────────────────
+@requires_trimesh
+def test_stable_pose_body_downs_gear_is_flat():
+    """Ein flacher Zylinder hat eine dominante Ruhelage 'flach auf der Fläche'
+    (body-Z down/up), nach prob_min-Filter."""
+    disk = _disk_mesh()
+    downs, probs = A.stable_pose_body_downs(mesh=disk, prob_min=0.05)
+    # die dominante Ruhelage liegt flach: body-Z (Zylinderachse) zeigt nach
+    # world-down ODER world-up (|Z-Komponente| ~ 1).
+    assert abs(abs(downs[0][2]) - 1.0) < 1e-3
+    assert probs[0] > 0.3
+
+
+@requires_trimesh
+def test_stable_pose_body_downs_cache():
+    disk = _disk_mesh()
+    d1 = A.stable_pose_body_downs(mesh=disk, cache_key="diskA")
+    d2 = A.stable_pose_body_downs(mesh=disk, cache_key="diskA")
+    assert d1[0] is d2[0]                              # gecacht (identisches Objekt)
+
+
+# ── M3: Top-Down-C_2-Check ────────────────────────────────────────────────────
+@requires_trimesh
+def test_topdown_c2_symmetric_disk_is_flip_identical():
+    """Ein symmetrischer Zylinder ist top-down unter 180°-Flip deckungsgleich."""
+    disk = _disk_mesh(radius=0.02, height=0.004)
+    ident, iou = A.topdown_c2_flip_identical(mesh=disk, n_px=200, iou_thresh=0.95)
+    assert ident is True and iou > 0.95
+
+
+@requires_trimesh
+def test_topdown_c2_asymmetric_L_not_flip_identical():
+    """Ein klar asymmetrisches Teil (L-förmig) ist NICHT flip-identisch top-down."""
+    # L-Form: zwei Boxen, eine lang, eine kurz quer -> 180° überlappt schlecht.
+    a = _tm.creation.box(extents=[0.08, 0.01, 0.004])
+    b = _tm.creation.box(extents=[0.01, 0.04, 0.004])
+    b.apply_translation([0.035, 0.02, 0.0])
+    L = _tm.util.concatenate([a, b])
+    # flache Top-Down-Rotation = Identität (Teil liegt in xy):
+    ident, iou = A.topdown_c2_flip_identical(mesh=L, R_world=np.eye(3),
+                                             n_px=200, iou_thresh=0.90)
+    assert ident is False and iou < 0.90
+
+
+# ── M4: Contour-Yaw-Lock ──────────────────────────────────────────────────────
+def _gear_mesh(n_teeth=7, r_in=18.0, r_tooth=24.0, h=10.0, marked=False):
+    """Synthetisches C_N-Zahnrad in MM (wie das echte CAD): Scheibe + n_teeth
+    radiale Zähne. marked=True: EIN Zahn ist deutlich länger → die Silhouette bricht
+    die C_N-Symmetrie (so KANN ein Silhouetten-Yaw-Lock überhaupt diskriminieren —
+    ein perfekt C_N-symmetrisches Zahnrad hat eine flip-/rotations-invariante
+    Top-Down-Silhouette, s. M4-Doku in bop_adapter)."""
+    parts = [_tm.creation.cylinder(radius=r_in, height=h, sections=64)]
+    for k in range(n_teeth):
+        th = 2 * np.pi * k / n_teeth
+        rt = r_tooth * (1.6 if (marked and k == 0) else 1.0)   # Zahn 0 markiert
+        tooth = _tm.creation.box(extents=[6.0, (rt - r_in) * 1.1, h])
+        tooth.apply_translation([0.0, (r_in + rt) / 2.0, 0.0])
+        tooth.apply_transform(_tm.transformations.rotation_matrix(th, [0, 0, 1]))
+        parts.append(tooth)
+    g = _tm.util.concatenate(parts)
+    # Symmetrieachse soll body-Y sein (wie im Projekt): drehe Z->Y.
+    g.apply_transform(_tm.transformations.rotation_matrix(np.pi / 2, [1, 0, 0]))
+    return g
+
+
+@requires_trimesh
+def test_contour_yaw_lock_picks_correct_of_N():
+    """M4 wählt unter den 7 Zahn-Yaws den, der zur WAHREN Maske passt — getestet an
+    einem Zahnrad mit EINEM markierten (längeren) Zahn, das die C_7-Silhouette
+    bricht (nur dann ist der Silhouetten-Lock überhaupt diskriminativ — beim echten,
+    perfekt C_7-symmetrischen Zahnrad ist die Top-Down-Silhouette invariant, s.
+    REFINE_T041-Befund: M4 hat dort 0 AR-Wirkung)."""
+    n = 7
+    gear = _gear_mesh(n_teeth=n, marked=True)
+    K = np.array([[1006.0, 0, 640.0], [0, 1006.0, 360.0], [0, 0, 1.0]])
+    R_w2c = np.diag([1.0, -1.0, -1.0])                # ~top-down
+    t_w2c = np.array([0.0, 0.0, 300.0])              # mm
+    table_origin = np.zeros(3)
+    # WAHRE flache Welt-Rotation: gear flach (body-Y -> world-Z) + 0° Yaw.
+    R_true = np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]])  # body-Y -> world+Z
+    t_world = np.array([0.0, 0.0, 0.10])             # 10cm vor der Kamera (mm-Mesh)
+    # Zielmaske = (gefüllte) Silhouette der WAHREN Pose im Bild.
+    R_m2c_true = R_w2c @ R_true
+    t_m2c = R_w2c @ ((t_world + table_origin) * 1000.0) + t_w2c
+    pts, _ = _tm.sample.sample_surface(gear, 8000)
+    mask = A._camera_silhouette(np.asarray(pts, float), R_m2c_true, t_m2c, K,
+                                (720, 1280))
+    assert mask.sum() > 2000                          # Maske sinnvoll gefüllt
+    # Eingabe-Pose: um 3 Zähne verdreht (falscher Yaw, den GDRNPP liefern könnte).
+    R_off = R_true @ A.axis_angle_matrix([0, 1, 0], 3 * 2 * np.pi / n)
+    R_best, info = A.contour_yaw_lock(
+        R_off, mask, K, t_world, table_origin, R_w2c, t_w2c,
+        mesh=gear, n_fold=n, sym_axis=(0, 1, 0))
+    assert info["applied"] is True
+    # der gewählte Yaw bringt R_off zurück auf ~R_true (Restwinkel um Y klein):
+    rel = R_true.T @ R_best
+    ang = np.degrees(np.arccos(np.clip((np.trace(rel) - 1) / 2, -1, 1)))
+    assert ang < (360.0 / n) / 2.0, f"yaw-lock residual {ang:.1f}deg"
+    # die gewählte Lage muss die BESTE der N sein (Diskriminierung), IoU>0 reicht
+    # (Punkt-Scatter-Silhouette → absolute IoU moderat, aber klar maximal bei k*).
+    assert info["iou"] == max(info["ious"]) and info["iou"] > 0.2
+
+
+@requires_trimesh
+def test_contour_yaw_lock_idempotent():
+    """Bereits korrekt ausgerichtet -> M4 wählt k=0 (markiertes Zahnrad)."""
+    n = 7
+    gear = _gear_mesh(n_teeth=n, marked=True)
+    K = np.array([[1006.0, 0, 640.0], [0, 1006.0, 360.0], [0, 0, 1.0]])
+    R_w2c = np.diag([1.0, -1.0, -1.0]); t_w2c = np.array([0.0, 0.0, 300.0])
+    R_true = np.array([[1.0, 0, 0], [0, 0, -1.0], [0, 1.0, 0]])
+    t_world = np.array([0.0, 0.0, 0.10])
+    R_m2c_true = R_w2c @ R_true
+    t_m2c = R_w2c @ (t_world * 1000.0) + t_w2c
+    pts, _ = _tm.sample.sample_surface(gear, 8000)
+    mask = A._camera_silhouette(np.asarray(pts, float), R_m2c_true, t_m2c, K,
+                                (720, 1280))
+    R_best, info = A.contour_yaw_lock(R_true, mask, K, t_world, np.zeros(3),
+                                      R_w2c, t_w2c, mesh=gear, n_fold=n)
+    rel = R_true.T @ R_best
+    ang = np.degrees(np.arccos(np.clip((np.trace(rel) - 1) / 2, -1, 1)))
+    assert ang < (360.0 / n) / 2.0
+
+
+def test_contour_yaw_lock_nfold_none_noop():
+    """n_fold None/<2 -> No-Op (kontinuierliche/asymmetrische Teile unangetastet)."""
+    R = A.axis_angle_matrix([0, 0, 1], np.radians(33.0))
+    R_out, info = A.contour_yaw_lock(
+        R, np.ones((10, 10), bool), np.eye(3), [0, 0, 0.3], [0, 0, 0],
+        np.eye(3), [0, 0, 0], mesh_verts_mm=np.zeros((4, 3)), n_fold=None)
+    assert info["applied"] is False
+    assert np.allclose(R_out, R, atol=1e-12)
+
+
+def test_contour_yaw_lock_no_mask_noop():
+    """Ohne Maske kein Yaw-Lock (kein Crash)."""
+    R = np.eye(3)
+    R_out, info = A.contour_yaw_lock(
+        R, None, np.eye(3), [0, 0, 0.3], [0, 0, 0], np.eye(3), [0, 0, 0],
+        mesh_verts_mm=np.zeros((4, 3)), n_fold=7)
+    assert info["applied"] is False
+    assert np.allclose(R_out, R, atol=1e-12)
+
+
+# ── Masken-/IoU-Hilfen ────────────────────────────────────────────────────────
+def test_mask_iou_basic():
+    a = np.zeros((10, 10), bool); a[2:6, 2:6] = True
+    b = np.zeros((10, 10), bool); b[4:8, 4:8] = True
+    assert abs(A._mask_iou(a, a) - 1.0) < 1e-12
+    assert A._mask_iou(a, np.zeros((10, 10), bool)) == 0.0
+    assert 0.0 < A._mask_iou(a, b) < 1.0
+    assert A._mask_iou(np.zeros((4, 4), bool), np.zeros((4, 4), bool)) == 1.0
+
+
 # ── Self-Runner (ohne pytest) ─────────────────────────────────────────────────
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    passed = 0
+    passed = skipped = 0
     for fn in fns:
-        fn()
+        # Tests, die trimesh brauchen, überspringen wenn es fehlt (statt zu crashen).
+        if _tm is None and getattr(fn, "__wrapped__", None) is not None:
+            skipped += 1
+            print(f"  SKIP {fn.__name__} (trimesh fehlt)")
+            continue
+        try:
+            fn()
+        except pytest.skip.Exception:                 # @requires_trimesh
+            skipped += 1
+            print(f"  SKIP {fn.__name__}")
+            continue
         passed += 1
         print(f"  PASS {fn.__name__}")
-    print(f"\n{passed}/{len(fns)} adapter tests green")
+    print(f"\n{passed} passed, {skipped} skipped / {len(fns)} adapter tests")
