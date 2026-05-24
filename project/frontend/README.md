@@ -60,9 +60,11 @@ Any static server works (`npx serve`, etc.).
 - **Cell CAD** (`assets/cell.glb`): the real table/cart, robot arm and trays,
   in the same Z-up metre world frame as the pipeline.
 - **Real part meshes** (`assets/parts/<part>.glb`): each detected part's actual
-  CAD geometry, centroid-centred (export `box_scripts/export_part_glbs.py`),
-  placed at `R_world @ body + t_world`. A part with no exported mesh falls back
-  to a coarse box sized per `src/partRegistry.js` (never a crash).
+  CAD geometry, placed at `R_world @ body + t_world`. Each template is re-centred
+  on its own geometric bounding box at load time, so the visible mesh sits exactly
+  on the predicted `t_world` even if a GLB was exported off-origin. A part with no
+  exported mesh (or an empty/degenerate GLB) falls back to a coarse box sized per
+  `src/partRegistry.js` (never a crash).
 - **Cyan-blue** = lying flat, **amber** = `upright: true` (stands on its head).
 - **Green triad + ring** = the null-point.
 - Each part carries a small body-frame axes triad so its orientation reads.
@@ -94,13 +96,44 @@ there.
 | `assets/parts/*.glb` | the per-part CAD meshes |
 | `assets/part_meta.json` | per-part centroid offset + extent (export metadata) |
 | `test/pose_result.example.json` | frozen schema-valid fixture (3 parts) |
+| `test/fixtures/{empty,sparse,full,defensive}.json` | robustness fixtures (0 / 3 / 9 parts + malformed entries) |
 | `test/rotation.test.mjs` | node smoke test pinning the R-convention |
+| `test/viewer_scenarios.py` | Playwright: EMPTY / SPARSE / FULL end-to-end |
+
+## Robustness
+
+The viewer is built to survive any input the pipeline throws at it:
+
+- **0 parts** (or a missing default `temp/pose_result.json`) → the cell + null-point
+  render and a *"Keine Teile erkannt"* hint shows; no error, no crash.
+- **Many parts** (10+) → all placed in `depth_order`; raycast picks the front part.
+- **Unknown part name** → coarse box fallback (still pickable), no missing-GLB crash.
+- **Missing / malformed fields** → coerced to safe defaults, broken entries dropped
+  (logged to the console), the rest still render.
+- An explicit `?file=` that 404s or isn't JSON → a clear error toast (the user asked
+  for that file). A missing *default* file is treated as an empty scene.
 
 ## Test
 
-A dependency-free node test pins the rotation math against the frozen example
-(verifies the convention isn't silently transposed):
+**Rotation convention** — dependency-free node test pinning the R math against the
+frozen example (verifies it isn't silently transposed):
 
 ```bash
 node frontend/test/rotation.test.mjs
+```
+
+**End-to-end scenarios** — headless Playwright across EMPTY / SPARSE / FULL,
+asserting real CAD meshes (not boxes), zero console/page/request errors, orbit, and
+click→info-panel. Serve `project/` first, then point the test at the port:
+
+```bash
+# from project/
+python3 -m http.server 8000 --bind 127.0.0.1 &
+python3 frontend/test/viewer_scenarios.py 8000
+```
+
+Screenshot a scene for review (worktree-agnostic — SHOT / PORT / FILE are args):
+
+```bash
+python3 frontend/test/viewer_shot.py temp/viewer.png 8000 ./test/fixtures/full.json
 ```

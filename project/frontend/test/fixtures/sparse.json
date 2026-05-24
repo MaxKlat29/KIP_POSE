@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "source_image": "sparse_scene",
+    "table_origin": [
+      0.0,
+      0.0,
+      -0.007
+    ],
+    "units": "m",
+    "coordinate_convention": "Z-up world; column rotation world = R @ body (same as faces_<part>.json registry); origin = table-plane null-point",
+    "schema_version": "1.0.0"
+  },
+  "results": [
+    {
+      "instance_id": 0,
+      "part": "Anker_Lang",
+      "face": "Face 1",
+      "R_world": [
+        1.0,
+        -0.0,
+        0,
+        0.0,
+        1.0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "t_world": [
+        0.3,
+        0.25,
+        0.012
+      ],
+      "confidence": 0.97,
+      "bbox_2d": [
+        120,
+        80,
+        180,
+        260
+      ],
+      "upright": false,
+      "depth_order": 0
+    },
+    {
+      "instance_id": 1,
+      "part": "Zahnrad_Typ7",
+      "face": "Face 1",
+      "R_world": [
+        0.7071067811865476,
+        -0.7071067811865475,
+        0,
+        0.7071067811865475,
+        0.7071067811865476,
+        0,
+        0,
+        0,
+        1
+      ],
+      "t_world": [
+        0.46,
+        0.31,
+        0.017
+      ],
+      "confidence": 0.91,
+      "bbox_2d": [
+        260,
+        200,
+        360,
+        300
+      ],
+      "upright": false,
+      "depth_order": 1
+    },
+    {
+      "instance_id": 2,
+      "part": "Anker_Kurz",
+      "face": "Face 3",
+      "R_world": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        -1,
+        0,
+        1,
+        0
+      ],
+      "t_world": [
+        0.4,
+        0.18,
+        0.06
+      ],
+      "confidence": 0.88,
+      "bbox_2d": [
+        300,
+        60,
+        360,
+        180
+      ],
+      "upright": true,
+      "depth_order": 2
+    }
+  ]
+}

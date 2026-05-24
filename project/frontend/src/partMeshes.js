@@ -1,8 +1,11 @@
 // partMeshes.js — lädt die ECHTEN CAD-Teil-Meshes (assets/parts/<part>.glb) und
-// cached sie. Die glTFs sind im Schwerpunkt zentriert (export_part_glbs.py: V -
-// centroid), Z-up, Meter — exakt der body-frame, in dem die Pipeline R_world @ body
-// + t_world(=Schwerpunkt) anwendet. Platzierung also: clone -> matrix = R_world,
-// position = t_world. Kein Offset nötig (t_world IST der Schwerpunkt).
+// cached sie. Die glTFs SOLLTEN body-frame-zentriert sein (Z-up, Meter), so dass
+// t_world (= die vorhergesagte Teil-Position) das Mesh-Zentrum trifft. In der
+// Praxis sind einige Exports NICHT sauber zentriert (z.B. Anker_* sitzen ~30 mm
+// off-origin) und part_meta.json ist teils veraltet. Darum re-zentrieren wir jede
+// Vorlage robust auf ihren eigenen geometrischen Bounding-Box-Mittelpunkt: das
+// verankert das sichtbare Mesh-Zentrum verlässlich auf t_world, unabhängig von der
+// Export-Qualität. Platzierung dann: clone -> matrix = R_world, position = t_world.
 //
 // Fehlt ein glb (oder GLTFLoader scheitert), liefert getPartMesh null -> der Viewer
 // fällt sauber auf eine Box (partRegistry) zurück.
@@ -34,15 +37,35 @@ function loadPartTemplate(part, baseUrl) {
     _loader.load(
       url,
       (gltf) => {
-        // alle Meshes zu EINER Geometrie-Gruppe verschmelzen + ein gemeinsames
-        // Material; wir tönen pro Instanz später ein (flat/upright).
+        // alle Meshes zu EINER Gruppe sammeln. Materialien tönen wir pro Instanz.
         const group = new THREE.Group();
+        const meshes = [];
         gltf.scene.traverse((o) => {
-          if (o.isMesh) {
+          if (o.isMesh && o.geometry) {
             o.geometry.computeVertexNormals?.();
-            group.add(o);
+            meshes.push(o);
           }
         });
+        if (meshes.length === 0) {
+          // degeneriertes/leeres glb (z.B. Poltopf-Stub) -> Box-Fallback nutzen.
+          console.warn(`[part] ${name}.glb hat keine Meshes — Fallback.`);
+          resolve(null);
+          return;
+        }
+        meshes.forEach((o) => group.add(o));
+
+        // Robust re-zentrieren: das Mesh-Zentrum auf den body-frame-Origin legen,
+        // damit t_world (= Teil-Position) das sichtbare Zentrum trifft — auch wenn
+        // das glb off-origin exportiert wurde. Box3 über die geklonte Gruppe.
+        const box = new THREE.Box3().setFromObject(group);
+        if (box.isEmpty()) {
+          resolve(null);
+          return;
+        }
+        const center = box.getCenter(new THREE.Vector3());
+        if (center.lengthSq() > 1e-10) {
+          group.children.forEach((m) => m.position.sub(center));
+        }
         resolve(group);
       },
       undefined,

@@ -4,7 +4,13 @@
 
 import * as THREE from "three";
 import { createViewer } from "./scene.js";
-import { loadPose, resolvePoseUrl } from "./loadPose.js";
+import {
+  loadPose,
+  resolvePoseUrl,
+  isDefaultPoseUrl,
+  emptyPoseDoc,
+  validatePose,
+} from "./loadPose.js";
 import { createOriginMarker } from "./origin.js";
 import { createInfoPanel } from "./infoPanel.js";
 
@@ -34,7 +40,20 @@ async function boot() {
   const url = resolvePoseUrl();
   showStatus(`Lade ${url} …`);
   try {
-    const { meta, results } = await loadPose(url);
+    let meta, results;
+    try {
+      ({ meta, results } = await loadPose(url));
+    } catch (loadErr) {
+      // A missing DEFAULT file (pipeline hasn't run yet) is benign: render an
+      // empty scene with a hint instead of an error toast. A missing/broken
+      // EXPLICIT ?file= is a real error the user asked for — re-throw it.
+      if (isDefaultPoseUrl()) {
+        console.warn("[boot] default pose_result missing — empty scene.", loadErr);
+        ({ meta, results } = validatePose(emptyPoseDoc()));
+      } else {
+        throw loadErr;
+      }
+    }
 
     // Echtes Anlagen-CAD laden (Tisch/Wagen + Roboterarm + Trays). Asynchron —
     // die Teile werden unabhängig davon platziert.
@@ -74,10 +93,11 @@ async function boot() {
     };
 
     if (results.length === 0) {
-      showStatus("Keine Teile in results[] — nur Tisch + Nullpunkt.");
+      showStatus("Keine Teile erkannt — nur Zelle + Nullpunkt.");
     } else {
       hideStatus();
     }
+    window.__POSE_READY__ = true; // smoke-test signal: boot finished cleanly
   } catch (err) {
     console.error(err);
     showStatus(err.message ?? String(err), true);
