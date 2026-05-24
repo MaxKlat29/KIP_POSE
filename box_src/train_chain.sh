@@ -56,8 +56,35 @@ if [ "$GDRNPP_ONLY" -eq 1 ]; then
     /mnt/data/bop/gdrnpp-venv/bin/python "$REPO/box_src/gdrnpp/patch_pl19_compat.py"
     /mnt/data/bop/gdrnpp-venv/bin/python "$REPO/box_src/gdrnpp/patch_egl_calc_normals.py"
     cp "$REPO/box_src/gdrnpp/config_base_so.py" "$GDRN/configs/gdrn/poseIsaacPbrSO/base_so.py"
+    cp "$REPO/box_src/gdrnpp/so_configs/"*.py "$GDRN/configs/gdrn/poseIsaacPbrSO/"   # [T-050] refresh per-obj cfgs too
     rm -rf "$GDRN/.cache"   # drop any stale mesh cache
-    say "patches applied, base_so.py refreshed, mesh cache cleared"
+    say "patches applied, base_so.py + so_configs refreshed, mesh cache cleared"
+
+    # [T-050 / PHASE2] The new base_so.py raises INPUT_RES 256->320 (Zahnrad
+    # small-feature fix). This changes the feature-map size into the geo/PnP head
+    # and MUST be smoke-tested on the GPU before the multi-day run, or a shape
+    # mismatch / OOM only surfaces hours in. Pass --smoke to run a few-iter probe
+    # on anker_kurz and ABORT the chain if it fails. Skip with no flag once the
+    # res change is validated. Also re-confirm the DR-5k train data is converted
+    # into the BOP dataset (PHASE2_PLAN.md §Retrain validation, wiring A or B).
+    if [ "${2:-}" = "--smoke" ]; then
+        say "SMOKE: 1-config few-iter GPU probe of the INPUT_RES=320 change (anker_kurz)"
+        cd "$GDRN"
+        PYTHONPATH="$GDRN" CUDA_VISIBLE_DEVICES=0 timeout 900 $GDRN_VENV \
+            "$GDRN/core/gdrn_modeling/main_gdrn.py" \
+            --config-file "$GDRN/configs/gdrn/poseIsaacPbrSO/anker_kurz.py" \
+            --num-gpus 1 \
+            SOLVER.TOTAL_EPOCHS 1 TRAIN.MAX_ITER 20 SOLVER.IMS_PER_BATCH 16
+        local_rc=$?
+        if [ $local_rc -ne 0 ]; then
+            say "SMOKE FAILED rc=$local_rc — INPUT_RES=320 shape/OOM issue. ABORT before the multi-day run."
+            say "Fix: drop INPUT_RES to 256/64 in base_so.py OR lower IMS_PER_BATCH to 12, then re-smoke."
+            exit 40
+        fi
+        say "SMOKE OK — INPUT_RES=320 forward/backward fits. Proceeding to full training."
+    else
+        say "NOTE: skipping GPU smoke-test (no --smoke). Run once after the INPUT_RES bump (PHASE2_PLAN.md)."
+    fi
 else
     # ---------------------------------------------------------------------------
     say "STAGE 1/6: detector retrain (arm-visible) — train-venv"
