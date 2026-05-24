@@ -42,7 +42,22 @@ say() { echo "[$(ts)] [chain] $*"; }
 # OBB->AABB bridge + GDRNPP deploy artifacts already exist. Verifies the
 # prerequisite artifacts exist before skipping.
 GDRNPP_ONLY=0
-[ "${1:-}" = "--gdrnpp-only" ] && GDRNPP_ONLY=1
+SMOKE=0
+# [T-050] --det-src lets the caller point the detector retrain at a different SDG
+# bundle than the legacy data/sdg_armvis_full (Phase-2 retrains on the new
+# 0-10/full-table data/sdg_armvis_dr5k). Defaults to the legacy path so the
+# canonical S-401/402 invocation is unchanged.
+DET_SRC="$REPO/data/sdg_armvis_full"
+# robust flag parse (order-independent) — old positional `--gdrnpp-only [--smoke]`
+# still works because both are matched here.
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --gdrnpp-only) GDRNPP_ONLY=1; shift ;;
+        --smoke)       SMOKE=1; shift ;;
+        --det-src)     DET_SRC="$2"; shift 2 ;;
+        *) echo "[chain] WARN ignoring unknown arg: $1"; shift ;;
+    esac
+done
 
 if [ "$GDRNPP_ONLY" -eq 1 ]; then
     say "MODE: --gdrnpp-only (skip detector retrain + bridge + deploy)"
@@ -67,29 +82,40 @@ if [ "$GDRNPP_ONLY" -eq 1 ]; then
     # on anker_kurz and ABORT the chain if it fails. Skip with no flag once the
     # res change is validated. Also re-confirm the DR-5k train data is converted
     # into the BOP dataset (PHASE2_PLAN.md §Retrain validation, wiring A or B).
-    if [ "${2:-}" = "--smoke" ]; then
-        say "SMOKE: 1-config few-iter GPU probe of the INPUT_RES=320 change (anker_kurz)"
+    if [ "$SMOKE" -eq 1 ]; then
+        # [T-050] phase2_chain.sh drives the OOM/shape fallback by overriding the
+        # smoke batch/resolution via env (SMOKE_BATCH / SMOKE_INPUT_RES /
+        # SMOKE_OUTPUT_RES). Defaults match base_so.py (batch 16, 320/80). The
+        # config-file values are overridden on the command line so the smoke probe
+        # itself is config-pure (no file edits); phase2_chain bakes the WINNING
+        # combo into base_so.py before the full run.
+        SMK_BATCH="${SMOKE_BATCH:-16}"
+        SMK_IN="${SMOKE_INPUT_RES:-320}"
+        SMK_OUT="${SMOKE_OUTPUT_RES:-80}"
+        say "SMOKE: few-iter GPU probe (anker_kurz) batch=$SMK_BATCH res=$SMK_IN/$SMK_OUT"
         cd "$GDRN"
         PYTHONPATH="$GDRN" CUDA_VISIBLE_DEVICES=0 timeout 900 $GDRN_VENV \
             "$GDRN/core/gdrn_modeling/main_gdrn.py" \
             --config-file "$GDRN/configs/gdrn/poseIsaacPbrSO/anker_kurz.py" \
             --num-gpus 1 \
-            SOLVER.TOTAL_EPOCHS 1 TRAIN.MAX_ITER 20 SOLVER.IMS_PER_BATCH 16
+            SOLVER.TOTAL_EPOCHS 1 TRAIN.MAX_ITER 20 \
+            SOLVER.IMS_PER_BATCH "$SMK_BATCH" \
+            MODEL.POSE_NET.INPUT_RES "$SMK_IN" MODEL.POSE_NET.OUTPUT_RES "$SMK_OUT"
         local_rc=$?
         if [ $local_rc -ne 0 ]; then
-            say "SMOKE FAILED rc=$local_rc — INPUT_RES=320 shape/OOM issue. ABORT before the multi-day run."
-            say "Fix: drop INPUT_RES to 256/64 in base_so.py OR lower IMS_PER_BATCH to 12, then re-smoke."
+            say "SMOKE FAILED rc=$local_rc — INPUT_RES=$SMK_IN shape/OOM issue at batch=$SMK_BATCH."
+            say "Fix: lower SMOKE_BATCH or SMOKE_INPUT_RES and re-smoke (phase2_chain does this automatically)."
             exit 40
         fi
-        say "SMOKE OK — INPUT_RES=320 forward/backward fits. Proceeding to full training."
+        say "SMOKE OK — batch=$SMK_BATCH res=$SMK_IN/$SMK_OUT forward/backward fits."
     else
         say "NOTE: skipping GPU smoke-test (no --smoke). Run once after the INPUT_RES bump (PHASE2_PLAN.md)."
     fi
 else
     # ---------------------------------------------------------------------------
-    say "STAGE 1/6: detector retrain (arm-visible) — train-venv"
+    say "STAGE 1/6: detector retrain (arm-visible) — train-venv  [src=$DET_SRC]"
     $TRAIN_VENV "$REPO/box_src/train_detector_armvis.py" \
-        --src  "$REPO/data/sdg_armvis_full" \
+        --src  "$DET_SRC" \
         --out  "$DETOUT" \
         --epochs 100 --imgsz 1280 --batch 8 --max-occ 0.85
     RC=$?
