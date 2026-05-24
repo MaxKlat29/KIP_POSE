@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T09:26:31Z",
+  "updated": "2026-05-24T09:34:41Z",
   "columns": [
     {
       "id": "backlog",
@@ -2063,7 +2063,7 @@
       "id": "T-048",
       "title": "6.3: Beliebiges-CAD-rein-Demo end-to-end im Notebook",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2073,9 +2073,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:16Z",
-      "updated": "2026-05-24T09:19:38Z",
+      "updated": "2026-05-24T09:27:22Z",
       "started_at": "2026-05-24T09:14:12Z",
-      "completed_at": null,
+      "completed_at": "2026-05-24T09:27:22Z",
       "comments": [],
       "logs": [
         {
@@ -2101,6 +2101,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-24T09:27:22Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-24T09:27:22Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "E2E-Finish-Harness gemerged (dry-run grün)"
         }
       ]
     },
@@ -2368,7 +2380,7 @@
       "id": "T-055",
       "title": "POSE E2E-Opt: Eval-Harness 20+ Szenen vorher/nachher",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2377,9 +2389,9 @@
       ],
       "session": "",
       "created": "2026-05-22T18:44:41Z",
-      "updated": "2026-05-24T09:26:31Z",
+      "updated": "2026-05-24T09:27:22Z",
       "started_at": "2026-05-22T19:13:52Z",
-      "completed_at": null,
+      "completed_at": "2026-05-24T09:27:21Z",
       "comments": [],
       "logs": [
         {
@@ -2423,6 +2435,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-24T09:27:21Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-24T09:27:22Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Planar-Refine gemerged: trans ~halbiert (Anker 15-19mm), AR +2-6pt, 32/32 Tests"
         }
       ]
     },
@@ -2488,7 +2512,7 @@
       "id": "T-058",
       "title": "POSE E2E-Opt: Lernbasiertes Pose-Refinement (GigaPose/MegaPose-Stil)",
       "description": "",
-      "column": "backlog",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2497,8 +2521,8 @@
       ],
       "session": "",
       "created": "2026-05-22T19:13:52Z",
-      "updated": "2026-05-22T19:45:00Z",
-      "started_at": null,
+      "updated": "2026-05-24T09:34:41Z",
+      "started_at": "2026-05-24T09:29:48Z",
       "completed_at": null,
       "comments": [],
       "logs": [
@@ -2507,6 +2531,36 @@
           "agent": "claude",
           "level": "success",
           "msg": "Lernbasiertes Refinement validiert: Getriebe rot_sym 107.9->23.9 (-84deg!), global rot_sym 32.2->28.6 mit nur 1 trainiertem Teil. top1-in-OK 0.946. Re-Scorer-Embedding (InfoNCE sym-aware) blendet mit Handmetrik."
+        },
+        {
+          "ts": "2026-05-24T09:29:48Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-24T09:29:48Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Deep-Research: Weg zu >80% AR — Fehler-vs-SOTA-Analyse + priorisierte baubare Roadmap (S-046)"
+        },
+        {
+          "ts": "2026-05-24T09:30:23Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "S-046 started: deep web-research for peak-perf roadmap to >80% BOP-AR. Read PROJECT_REPORT/PHASE2_PLAN/REEVAL_T038/RESULTS_PHASE2 + bop_adapter.py. Failure modes grounded: Anker 180deg end-to-end flip tail (NOT cont-Y sym), Zahnrad C_7 in-plane unlearned (MSSD 0.04), RGB-only Z, occlusion tail. Researching stable-pose rot-snap, render-and-compare refiners, SurfEmb/ZebraPose/Implicit-PDF, gear-specific, sim2real-metal, depth-salvage."
+        },
+        {
+          "ts": "2026-05-24T09:34:41Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "DONE: PHASE3_PEAK_PLAN.md committed (87522c6, user-only). Ranked roadmap to >80% AR grounded in BOP-Industrial. TOP-5 levers: M1 stable-pose ROTATION snap (trimesh.compute_stable_poses, training-free, +0.08-0.18, kills Anker tilt-flip+gear tilt) / M2 render+contour refiner (MegaPose RGB / edge; GenFlow coarse 23.5->67.4 ARC; ContourPose=our exact metal class) / M4 Zahnrad 1-D contour yaw-lock (M1 collapses to 7-tooth search, gear 0.36->0.65-0.80) / M3 Anker per-instance C_2 (BOP-Distrib view-dependent sym, if CAD-valid, +0.05-0.12) / M6 shape-bias DR (in flight). HONEST: >0.80 reachable but TIGHT - RGB-only ceiling is T-LESS 79.9 / ITODD 46.0 (depth=+11.5/+24.4, forbidden); planar prior substitutes for depth-Z; central case ~0.80, Zahnrad is the swing. RISKS on running train: 320 OOM, thin >20% gear-GT, 320 not enough for teeth, Sim2Real-Zivid UNMEASURED (biggest). Did NOT touch box/training."
+        },
+        {
+          "ts": "2026-05-24T09:34:41Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
         }
       ]
     },
