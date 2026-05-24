@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T09:09:23Z",
+  "updated": "2026-05-24T09:26:31Z",
   "columns": [
     {
       "id": "backlog",
@@ -2063,7 +2063,7 @@
       "id": "T-048",
       "title": "6.3: Beliebiges-CAD-rein-Demo end-to-end im Notebook",
       "description": "",
-      "column": "backlog",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2073,11 +2073,36 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:16Z",
-      "updated": "2026-05-22T10:10:16Z",
-      "started_at": null,
+      "updated": "2026-05-24T09:19:38Z",
+      "started_at": "2026-05-24T09:14:12Z",
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-05-24T09:14:12Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-24T09:14:12Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "E2E-Finish-Harness: Eval+echte Posen+Viewer+Split-Screen+Report in einem Befehl (S-045)"
+        },
+        {
+          "ts": "2026-05-24T09:19:35Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "E2E-Finish-Harness gebaut: box_src/e2e_finish.sh orchestriert eval->real-pose->viewer->splitscreen->report (+ box_src/e2e_report.py). Dry-Run GRUEN: eval(>20% val vs §0-Baseline AnkerK 0.589/AnkerL 0.606/Zahnrad 0.356), Viewer headless PASS (0 JS-Errors, CAD geladen), split-screen 2350x792, RESULTS_PHASE2.md + PROJECT_REPORT §4.2 gepatcht (idempotent). GPU-Inferenz-Call (Schritt 2 full-mode) verdrahtet, planar_refine optional. commit fe073c3 @ S-045."
+        },
+        {
+          "ts": "2026-05-24T09:19:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
     },
     {
       "id": "T-049",
@@ -2343,7 +2368,7 @@
       "id": "T-055",
       "title": "POSE E2E-Opt: Eval-Harness 20+ Szenen vorher/nachher",
       "description": "",
-      "column": "in_progress",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2352,7 +2377,7 @@
       ],
       "session": "",
       "created": "2026-05-22T18:44:41Z",
-      "updated": "2026-05-22T19:13:52Z",
+      "updated": "2026-05-24T09:26:31Z",
       "started_at": "2026-05-22T19:13:52Z",
       "completed_at": null,
       "comments": [],
@@ -2362,6 +2387,42 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-05-24T09:14:12Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_progress"
+        },
+        {
+          "ts": "2026-05-24T09:14:12Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Planare Tisch-Ebenen-Refinement (Z-Snap aus R+CAD-Kontakt) — fixt Translation-AR-Killer ohne Training (S-044)"
+        },
+        {
+          "ts": "2026-05-24T09:26:20Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Planar-Refine fertig: planar_z_snap + planar_refine (Z-Snap aus min_v(R@v).z auf Tischebene) in bop_adapter.py, generalisierbar (nur CAD+R noetig), Guard max_snap_m=50mm gegen Held-Teile. In e2e_infer.py verdrahtet (PLANAR_REFINE_DEFAULT=True, --no-planar-refine/--tilt-correct Flags, stdlib PLY-Reader). Contract unveraendert."
+        },
+        {
+          "ts": "2026-05-24T09:26:26Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Messung (bestehende GDRNPP val-preds, gefiltert >20% vis, eval_bop.py): trans-MEDIAN base->planar+guard: Anker_Kurz 33.1->15.3mm, Anker_Lang 38.0->18.6mm, Zahnrad 27.2->14.3mm (-54%/-51%/-47%). trans-MEAN: 76.7->67.9 / 80.6->73.1 / 49.2->40.8mm. AR base->guard: Anker_Kurz 0.589->0.645, Anker_Lang 0.606->0.650, Zahnrad 0.356->0.360; AR_MSSD overall 0.164->0.224; OVERALL AR 0.310->0.331. rot_deg unveraendert (Snap=translation-only). Guard kritisch: ohne ihn werden 5-9% Held-Teile (im Greifer/Luft) von ~17mm auf ~530mm zerstoert -> mean+MSPD kaputt; mit Guard (602/905 gesnappt, 303 geschuetzt) sauberer Netto-Gewinn. Tilt-Korrektur: am realen Output NO-OP (konservative Gates feuern nie) -> default AUS gelassen."
+        },
+        {
+          "ts": "2026-05-24T09:26:31Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "pytest gruen: 32/32 (21 bestehende + 11 neue Planar-Tests). Neue Tests: Z-Snap stellt Auflage nach kuenstlichem Z-Offset wieder her, stehendes Teil nicht verschlimmert, Guard skippt Held-Teile/laesst resting durch, idempotent, lowest_contact_z korrekt, Tilt fixt flaches Teil/skippt Stab, detection_to_result(apply_planar). Commit 95a827b (user-only)."
+        },
+        {
+          "ts": "2026-05-24T09:26:31Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
         }
       ]
     },
