@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T11:24:58Z",
+  "updated": "2026-05-24T17:29:11Z",
   "columns": [
     {
       "id": "backlog",
@@ -2100,7 +2100,7 @@
       "id": "T-048",
       "title": "6.3: Beliebiges-CAD-rein-Demo end-to-end im Notebook",
       "description": "",
-      "column": "done",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2110,9 +2110,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:16Z",
-      "updated": "2026-05-24T09:27:22Z",
+      "updated": "2026-05-24T17:29:11Z",
       "started_at": "2026-05-24T09:14:12Z",
-      "completed_at": "2026-05-24T09:27:22Z",
+      "completed_at": null,
       "comments": [],
       "logs": [
         {
@@ -2150,6 +2150,36 @@
           "agent": "claude",
           "level": "success",
           "msg": "E2E-Finish-Harness gemerged (dry-run grün)"
+        },
+        {
+          "ts": "2026-05-24T17:19:50Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: done → in_progress"
+        },
+        {
+          "ts": "2026-05-24T17:19:50Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "E2E-Finish härten: komplette verbesserte Pipeline (GDRNPP+Planar+M2+TTA) mit A/B + Auto-Best + Report, ready für PHASE2_TRAIN_DONE (S-050)"
+        },
+        {
+          "ts": "2026-05-24T17:21:26Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "S-050 START: e2e_finish härten. Worktree .worktrees/S-050 angelegt (branch team/2026-05-22-pose-bop-pivot/S-050). Baseline-Audit: S-045-dry-run grün, pytest 82 passed/6 skip. Verdrahtungslücke bestätigt: e2e_finish probt box_src/planar_refine.py (existiert NICHT) — echte Hebel sind refine_eval.py (planar via bop_adapter.planar_refine), rc_refine_eval.py (M2 refine_rc cpu_edge/megapose), tta via real_pose_result --tta. Plan: e2e_ab.py (A/B 4 Configs + auto-best + decision-flags), e2e_finish rewire, e2e_report A/B-Tabelle, tests."
+        },
+        {
+          "ts": "2026-05-24T17:29:11Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "S-050 GRÜN: e2e_finish gehärtet zu EINEM Befehl mit voller verbesserter Pipeline (planar+M2+TTA) A/B + auto-best + decision-flags + report. Verdrahtungslücke gefixt: toter box_src/planar_refine.py-Probe RAUS, echte Hebel verdrahtet (refine_eval.py planar / rc_refine_eval.py M2 cpu_edge|megapose / tta_pose --tta). NEU box_src/e2e_ab.py = A/B 4 Configs {planar|+M2|+TTA|+M2+TTA} -> mean-AR auto-best -> ab_result.json + AB_LEVERS.md, vs §0+§Phase-1-Baselines. Decision-Flags: Zahnrad-AR<0.70 -> TRAIN_SO3_PHASE3 (train_so3cls_phase3.sh); Anker<0.80 -> CHECK_MEGAPOSE_SETTINGS. 6-Step-Harness (eval->A/B->real-pose->viewer->splitscreen->report). real_pose_result.py: --tta/--emit-preds/--val-all verdrahtet (finish-time/GPU-guard exit3), meta.levers. e2e_report.py: --best-config/--ab-result + §1b A/B-Block + idempotenz-fix (keine blank-line-accumulation, byte-stable über runs). GPU-Box read-only verifiziert: checkpoints anker_kurz/anker_lang/zahnrad da, per-obj val-CSVs + preds_all.csv vorhanden, Pfade in Harness korrigiert. Dry-run grün end-to-end (auto-best=m2_tta synth, viewer PASS 0 JS-errors, splitscreen, beide flags). pytest 96 passed/6 skip (14 neu test_e2e_ab.py). FINISH GPU braucht: GDRNPP-Inferenz, megapose-scorer, +TTA-live-call_fn. commit da23c9b @ S-050."
+        },
+        {
+          "ts": "2026-05-24T17:29:11Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
         }
       ]
     },
@@ -2549,7 +2579,7 @@
       "id": "T-058",
       "title": "POSE E2E-Opt: Lernbasiertes Pose-Refinement (GigaPose/MegaPose-Stil)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2558,9 +2588,9 @@
       ],
       "session": "",
       "created": "2026-05-22T19:13:52Z",
-      "updated": "2026-05-24T11:24:58Z",
+      "updated": "2026-05-24T11:25:40Z",
       "started_at": "2026-05-24T09:29:48Z",
-      "completed_at": null,
+      "completed_at": "2026-05-24T11:25:40Z",
       "comments": [],
       "logs": [
         {
@@ -2670,6 +2700,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-24T11:25:40Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-24T11:25:40Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Arch-Hebel: SO(3)-cls-Kopf (Zahnrad-Basin, Phase-3-ready) + TTA gebaut; Modell-Swap verworfen. 82 Tests"
         }
       ]
     },
