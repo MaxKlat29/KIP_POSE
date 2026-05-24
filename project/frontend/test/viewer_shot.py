@@ -3,12 +3,16 @@
 screenshot it for the split-screen. Also dumps mesh stats to prove the REAL CAD
 (per-part GLBs + cell.glb) loaded, not placeholder boxes.
 """
+import os
 import sys
 from playwright.sync_api import sync_playwright
 
 URL = ("http://127.0.0.1:8000/frontend/index.html"
        "?file=../temp/pose_result.json")
-SHOT = "/Users/Admin/POSE/.worktrees/S-072/project/temp/viewer_render.png"
+# shot path overridable via env/argv so the script is worktree-agnostic (T-038)
+SHOT = (sys.argv[1] if len(sys.argv) > 1
+        else os.environ.get("POSE_SHOT",
+             "/Users/Admin/POSE/.worktrees/S-038/project/temp/viewer_real.png"))
 
 
 def main():

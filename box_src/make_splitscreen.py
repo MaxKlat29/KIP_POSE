@@ -57,8 +57,8 @@ def main():
     d.text((PAD, 10), "POSE — 2D Detektion  ·  3D Pose (echte GDRNPP-Gewichte)",
            fill=(235, 238, 245), font=title_font)
     d.text((PAD, 38),
-           "val scene1/im92 · Detektor (Arm sichtbar) -> GDRNPP model_final.pth "
-           "-> bop_adapter -> echte CAD an predicted Posen",
+           "val scene0/im92 (>20%-gefilterte Pipeline) · Detektor (Arm sichtbar) "
+           "-> GDRNPP model_final.pth -> bop_adapter -> echte CAD an predicted Posen",
            fill=(150, 158, 170), font=sub_font)
 
     lx = PAD

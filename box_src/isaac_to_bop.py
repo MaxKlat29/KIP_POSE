@@ -202,7 +202,11 @@ def render_full_mask(mesh, K, R_m2c, t_m2c_mm, W, H):
     return np.asarray(im) > 0
 
 
-def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale, models=None):
+def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale, models=None,
+                  min_visib=0.0):
+    """min_visib: drop any instance whose visib_fract <= min_visib (under-arm scoping,
+    Max rule: a part that is <=20% visible does not exist — not in GT, not in masks).
+    Returns (key, cam_entry, gt_list, info_list, n_dropped)."""
     idx = gt_raw["image_id"]
     W, H = gt_raw["width"], gt_raw["height"]
 
@@ -240,6 +244,10 @@ def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale, models=Non
     gt_list = []
     info_list = []
     gt_id = 0
+    n_dropped = 0
+    # buffer (instance -> computed fields) so we can apply the >min_visib filter
+    # BEFORE assigning gt_ids/mask names (keeps gt_ids contiguous, T-038 rule).
+    staged = []
     for ins in gt_raw["instances"]:
         oid = obj_id_for(ins["label"])
         if oid is None:
@@ -272,27 +280,43 @@ def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale, models=Non
             visib_fract = 1.0 if px_visib else 0.0
             px_visib_eff = px_visib
 
-        Image.fromarray(mask_visib).save(
+        # T-038 >20% scoping: a part <=min_visib visible is fairly not pose-able.
+        # Cut it from GT + masks entirely (the occlusion stays in the RGB; only the
+        # label/target/eval ignores it). min_visib=0.0 keeps everything (back-compat).
+        if float(visib_fract) <= min_visib:
+            n_dropped += 1
+            continue
+
+        staged.append({
+            "oid": oid, "R_m2c": R_m2c, "t_m2c_mm": t_m2c_mm,
+            "mask_visib": mask_visib, "mask_full": mask_full,
+            "bbox_obj": bbox_obj, "bbox_visib": bbox_visib,
+            "px_all": px_all, "px_visib_eff": px_visib_eff,
+            "visib_fract": visib_fract,
+        })
+
+    for st in staged:
+        Image.fromarray(st["mask_visib"]).save(
             os.path.join(bop_scene_dir, "mask_visib", f"{im_id:06d}_{gt_id:06d}.png"))
-        Image.fromarray(mask_full).save(
+        Image.fromarray(st["mask_full"]).save(
             os.path.join(bop_scene_dir, "mask", f"{im_id:06d}_{gt_id:06d}.png"))
 
         gt_list.append({
-            "obj_id": oid,
-            "cam_R_m2c": [float(x) for x in R_m2c.reshape(-1)],
-            "cam_t_m2c": [float(x) for x in t_m2c_mm],
+            "obj_id": st["oid"],
+            "cam_R_m2c": [float(x) for x in st["R_m2c"].reshape(-1)],
+            "cam_t_m2c": [float(x) for x in st["t_m2c_mm"]],
         })
         info_list.append({
-            "bbox_obj": bbox_obj,
-            "bbox_visib": bbox_visib,
-            "px_count_all": px_all,
-            "px_count_valid": px_all,
-            "px_count_visib": px_visib_eff,
-            "visib_fract": round(float(visib_fract), 4),
+            "bbox_obj": st["bbox_obj"],
+            "bbox_visib": st["bbox_visib"],
+            "px_count_all": st["px_all"],
+            "px_count_valid": st["px_all"],
+            "px_count_visib": st["px_visib_eff"],
+            "visib_fract": round(float(st["visib_fract"]), 4),
         })
         gt_id += 1
 
-    return str(im_id), cam_entry, gt_list, info_list
+    return str(im_id), cam_entry, gt_list, info_list, n_dropped
 
 
 def main():
@@ -310,6 +334,9 @@ def main():
                          "convert_full_to_bop.py to drive train/val multi-scene splits.")
     ap.add_argument("--no-full-mask", action="store_true",
                     help="skip GT-posed mesh rasterisation (mask=mask_visib, visib_fract provisional)")
+    ap.add_argument("--min-visib", type=float, default=0.0,
+                    help="T-038 >20% scoping: drop instances with visib_fract <= this "
+                         "(default 0.0 = keep all; use 0.20 for the pipeline filter)")
     args = ap.parse_args()
 
     raw = args.raw_dir
@@ -343,20 +370,26 @@ def main():
     scene_camera, scene_gt, scene_gt_info = {}, {}, {}
     im_id = args.start_im
     n_inst = 0
+    n_dropped_total = 0
     for gf in gt_files:
         gt_raw = json.load(open(gf))
-        key, cam, gtl, info = convert_frame(raw, gt_raw, scene_dir, im_id, args.depth_scale, models)
+        key, cam, gtl, info, n_drop = convert_frame(
+            raw, gt_raw, scene_dir, im_id, args.depth_scale, models,
+            min_visib=args.min_visib)
         scene_camera[key] = cam
         scene_gt[key] = gtl
         scene_gt_info[key] = info
         n_inst += len(gtl)
+        n_dropped_total += n_drop
         im_id += 1
 
     json.dump(scene_camera, open(os.path.join(scene_dir, "scene_camera.json"), "w"), indent=2)
     json.dump(scene_gt, open(os.path.join(scene_dir, "scene_gt.json"), "w"), indent=2)
     json.dump(scene_gt_info, open(os.path.join(scene_dir, "scene_gt_info.json"), "w"), indent=2)
+    drop_note = (f", dropped {n_dropped_total} (visib_fract<={args.min_visib})"
+                 if args.min_visib > 0 else "")
     print(f"[isaac_to_bop] scene {args.scene_id:06d}: {im_id - args.start_im} frames, "
-          f"{n_inst} GT instances -> {scene_dir}")
+          f"{n_inst} GT instances{drop_note} -> {scene_dir}")
     if models is not None:
         print("[isaac_to_bop] mask/ = true full silhouette (GT-posed mesh raster), "
               "mask_visib/ = arm-occluded visible, scene_gt_info.visib_fract computed.")

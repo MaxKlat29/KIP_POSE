@@ -111,7 +111,9 @@ def main():
     ap.add_argument("--epochs", type=int, default=100)
     ap.add_argument("--imgsz", type=int, default=1280)
     ap.add_argument("--model", default="yolov8s-obb.pt")
-    ap.add_argument("--max-occ", type=float, default=0.85)
+    ap.add_argument("--max-occ", type=float, default=0.80,
+                    help="T-038 uniform >20% scoping: drop boxes with occlusion>0.80 "
+                         "(= visib<=0.20), matching the BOP-GT + eval filter")
     ap.add_argument("--batch", type=int, default=8)
     a = ap.parse_args()
 
