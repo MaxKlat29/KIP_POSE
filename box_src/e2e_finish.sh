@@ -92,6 +92,8 @@ DRY_POSE="${DRY_POSE:-}"   # auto-detected below if empty
 # defaults
 DRY_RUN=0
 PLANAR_REFINE=0
+REFINE_RC=0
+RC_SCORER="cpu_edge"
 SKIP_VIEWER=0
 SCENES="0 1"
 PRIMARY_SCENE=0
@@ -103,6 +105,8 @@ while [[ $# -gt 0 ]]; do
     --dry-run)        DRY_RUN=1; shift ;;
     --planar-refine)  PLANAR_REFINE=1; shift ;;
     --no-planar-refine) PLANAR_REFINE=0; shift ;;
+    --refine-rc)      REFINE_RC=1; shift ;;
+    --rc-scorer)      RC_SCORER="${2:-cpu_edge}"; shift 2 ;;
     --skip-viewer)    SKIP_VIEWER=1; shift ;;
     --scenes)         SCENES="${2:-}"; shift 2 ;;
     --scene)          PRIMARY_SCENE="${2:-0}"; shift 2 ;;
@@ -137,6 +141,20 @@ if [[ "$PLANAR_REFINE" -eq 1 && "$PLANAR_REFINE_AVAILABLE" -eq 0 ]]; then
   PLANAR_REFINE=0
 fi
 [[ "$PLANAR_REFINE_AVAILABLE" -eq 1 ]] && say "planar refiner available: $REFINER"
+
+# Detect the M2 render-and-compare refiner (T-058). Wired but optional: pass
+# --refine-rc through ONLY if project/refine_rc.py is present.
+REFINE_RC_AVAILABLE=0
+RC_MODULE="$PROJECT_DIR/refine_rc.py"
+[[ -f "$RC_MODULE" ]] && REFINE_RC_AVAILABLE=1
+if [[ "$REFINE_RC" -eq 1 && "$REFINE_RC_AVAILABLE" -eq 0 ]]; then
+  say "WARN --refine-rc requested but project/refine_rc.py not found — continuing WITHOUT RC"
+  REFINE_RC=0
+fi
+[[ "$REFINE_RC_AVAILABLE" -eq 1 ]] && say "M2 RC refiner available: $RC_MODULE (scorer=$RC_SCORER)"
+if [[ "$REFINE_RC" -eq 1 && "$RC_SCORER" == "megapose" ]]; then
+  say "NOTE RC scorer=megapose is the GPU path — finish-time validation (GPU must be free)"
+fi
 
 # =============================================================================
 # STEP 1 — BOP-EVAL  (symmetry-aware, >20% val, all objects, vs §0 baseline)
@@ -206,20 +224,32 @@ else
   REFINE_ARGS=""
   if [[ "$PLANAR_REFINE" -eq 1 ]]; then
     REFINE_ARGS="--planar-refine"
-    say "planar refine ENABLED — passing $REFINE_ARGS to real_pose_result.py"
+    say "planar refine ENABLED — passing --planar-refine to real_pose_result.py"
   fi
-  # ship the real-pose script + (optional) refiner to the box, run it inside the
-  # gdrnpp/bop venv, and pull pose_result.json + det_overlay.png back.
+  if [[ "$REFINE_RC" -eq 1 ]]; then
+    REFINE_ARGS="$REFINE_ARGS --refine-rc --rc-scorer $RC_SCORER"
+    say "M2 RC refine ENABLED — passing --refine-rc --rc-scorer $RC_SCORER to real_pose_result.py"
+  fi
+  # ship the real-pose script + adapter + (optional) RC refiner to the box, run it
+  # inside the gdrnpp/bop venv, and pull pose_result.json + det_overlay.png back.
   REMOTE_CMD="mkdir -p '$REMOTE_RESULTS'; \
     /mnt/data/bop/bop-venv/bin/python '$REMOTE_REPO/box_src/real_pose_result.py' \
       --dataset-dir '$DATASET_DIR' --split val \
       --scene $PRIMARY_SCENE --im $PRIMARY_IM \
       --preds '$PREDS_CSV' \
       --out-json '$REMOTE_POSE' --out-overlay '$REMOTE_OVERLAY' $REFINE_ARGS"
-  say "  scp real_pose_result.py + e2e_report.py -> box"
+  say "  scp real_pose_result.py + bop_adapter.py + refine_rc.py -> box"
   scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
       "$HERE/real_pose_result.py" "max@100.85.216.95:$REMOTE_REPO/box_src/real_pose_result.py" \
       || fail "scp real_pose_result.py to box failed" 22
+  scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+      "$PROJECT_DIR/bop_adapter.py" "max@100.85.216.95:$REMOTE_REPO/project/bop_adapter.py" \
+      || fail "scp bop_adapter.py to box failed" 22
+  if [[ "$REFINE_RC_AVAILABLE" -eq 1 ]]; then
+    scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+        "$RC_MODULE" "max@100.85.216.95:$REMOTE_REPO/project/refine_rc.py" \
+        || fail "scp refine_rc.py to box failed" 22
+  fi
   "$GPU_RUN" \
     -p "$REMOTE_POSE:$POSE_JSON" \
     -p "$REMOTE_OVERLAY:$DET_OVERLAY" \

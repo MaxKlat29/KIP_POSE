@@ -33,9 +33,20 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-# the PRODUCTION adapter (same module the laptop e2e_infer.py imports)
-sys.path.insert(0, "/mnt/data/kip_pose/project")
+# the PRODUCTION adapter (same module the laptop e2e_infer.py imports). Prefer a
+# sibling ../project (so a scp'd scratch copy works), then the box repo location.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+for _p in (os.path.join(_HERE, "..", "project"), "/mnt/data/kip_pose/project"):
+    if os.path.isfile(os.path.join(_p, "bop_adapter.py")):
+        sys.path.insert(0, os.path.abspath(_p))
+        break
 import bop_adapter as BOP  # noqa: E402
+try:                                   # M2 RC refiner (T-058), optional
+    import refine_rc as RC  # noqa: E402
+except Exception:
+    RC = None
+
+OBJ_NFOLD = {1: None, 2: None, 6: 7}   # C_N per obj_id (models_info)
 
 SCHEMA_VERSION = "1.0.0"
 COORD_CONVENTION = ("Z-up world; column rotation world = R @ body; "
@@ -82,6 +93,63 @@ def load_gt_bboxes(dataset_dir, split, scene_id, im_id):
     return boxes
 
 
+_MESH_CACHE = {}       # obj_id -> trimesh.Trimesh (WITH faces — needed for stable poses)
+
+
+def _mesh(dataset_dir, obj_id):
+    """Load the BOP CAD trimesh (mm, WITH faces) for obj_id. None if missing.
+
+    Faces matter: compute_stable_poses on a faceless vertex cloud degenerates
+    (hangs / no stable poses). Always load the full mesh."""
+    if obj_id in _MESH_CACHE:
+        return _MESH_CACHE[obj_id]
+    m = None
+    for sub in ("models_eval", "models"):
+        p = os.path.join(dataset_dir, sub, f"obj_{int(obj_id):06d}.ply")
+        if os.path.isfile(p):
+            try:
+                import trimesh
+                m = trimesh.load(p, process=False)
+                break
+            except Exception:
+                pass
+    _MESH_CACHE[obj_id] = m
+    return m
+
+
+def _mesh_verts_mm(dataset_dir, obj_id):
+    """CAD vertices (mm) for obj_id. None if missing."""
+    m = _mesh(dataset_dir, obj_id)
+    return None if m is None else np.asarray(m.vertices, dtype=np.float64)
+
+
+def _matched_masks(dataset_dir, split, scene_id, im_id, preds):
+    """pred-index -> matched GT-visib mask (greedy by obj_id + cam-t proximity).
+
+    Mirrors the bbox greedy match; used to feed the RC refiner a real mask."""
+    scene_dir = os.path.join(dataset_dir, split, f"{scene_id:06d}")
+    gt = json.load(open(os.path.join(scene_dir, "scene_gt.json")))[str(im_id)]
+    from PIL import Image as _I
+    used, out = set(), {}
+    for pi, p in enumerate(preds):
+        tp = np.asarray(p["t"], float).reshape(-1)
+        best, bd = None, None
+        for gi, inst in enumerate(gt):
+            if gi in used or int(inst["obj_id"]) != p["obj_id"]:
+                continue
+            tg = np.array(inst["cam_t_m2c"], float)
+            d = float(np.linalg.norm(tp - tg))
+            if bd is None or d < bd:
+                bd, best = d, gi
+        if best is None:
+            continue
+        used.add(best)
+        mp = os.path.join(scene_dir, "mask_visib", f"{im_id:06d}_{best:06d}.png")
+        if os.path.isfile(mp):
+            out[pi] = np.array(_I.open(mp)) > 0
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset-dir", required=True)
@@ -91,6 +159,13 @@ def main():
     ap.add_argument("--preds", required=True)
     ap.add_argument("--out-json", required=True)
     ap.add_argument("--out-overlay", required=True)
+    ap.add_argument("--planar-refine", action="store_true",
+                    help="planar Z-snap on the world pose (T-055)")
+    ap.add_argument("--refine-rc", action="store_true",
+                    help="M2 multi-hypothesis render-and-compare refiner (T-058)")
+    ap.add_argument("--rc-scorer", default="cpu_edge",
+                    choices=["cpu_edge", "megapose"],
+                    help="RC scorer: cpu_edge (no GPU) | megapose (GPU, finish-time)")
     a = ap.parse_args()
 
     scene_dir = os.path.join(a.dataset_dir, a.split, f"{a.scene:06d}")
@@ -110,9 +185,60 @@ def main():
         f"[real_pose] frame scene={a.scene} im={a.im}: {len(preds)} real GDRNPP "
         f"predictions for obj_ids {sorted(trained)}\n")
 
+    rgb_np = np.asarray(img)
+    H, W = rgb_np.shape[:2]
+    do_rc = a.refine_rc and RC is not None
+    if a.refine_rc and RC is None:
+        sys.stderr.write("[real_pose] WARN --refine-rc but refine_rc.py not importable — skipping RC\n")
+
+    def _build_rc_refiner(obj_id, mask):
+        """Per-detection RC refiner callback (refine_rc.refine_detection). The
+        mask is the matched GT-visib mask; the RGB crop drives the edge score.
+        scorer=megapose is finish-time (GPU); cpu_edge runs here (no GPU)."""
+        if not do_rc or mask is None:
+            return None
+        verts_mm = _mesh_verts_mm(a.dataset_dir, obj_id)
+        if verts_mm is None:
+            return None
+        ys, xs = np.where(mask)
+        if len(xs) == 0:
+            return None
+        bbox = [max(0, int(xs.min()) - 6), max(0, int(ys.min()) - 6),
+                min(W, int(xs.max()) + 6), min(H, int(ys.max()) + 6)]
+        crop = rgb_np[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+        ie = RC.image_edges(crop, bbox=bbox, full_hw=(H, W))
+        try:                                   # pass the MESH (with faces) — not verts
+            downs, _ = BOP.stable_pose_body_downs(mesh=_mesh(a.dataset_dir, obj_id),
+                                                  prob_min=0.02, max_k=6,
+                                                  cache_key=obj_id)
+        except Exception:
+            downs = None
+        mk = None
+        if a.rc_scorer == "megapose":
+            mk = {"crop_rgb": crop, "K_full": K, "bbox": bbox,
+                  "obj_label": f"obj_{int(obj_id):06d}",
+                  "mesh_dir": os.path.join(a.dataset_dir, "models_eval")}
+
+        def _refine(R_world, t_world):
+            R_ref, info = RC.refine_detection(
+                R_world, verts_mm=verts_mm, t_world_m=t_world,
+                table_origin_m=TABLE_ORIGIN_SCENE, R_w2c=R_w2c, t_w2c_mm=t_w2c,
+                K=K, hw=(H, W), target_mask=mask, image_edge_mask=ie,
+                sym_axis=(0.0, 1.0, 0.0), n_fold=OBJ_NFOLD.get(obj_id),
+                stable_downs=downs, scorer=a.rc_scorer, megapose_kwargs=mk)
+            sys.stderr.write(
+                f"[rc] obj{obj_id}: {info['n_hyps']} hyps scorer={info['scorer']} "
+                f"best={info.get('best_tag')} switched={info.get('switched')}\n")
+            return R_ref
+        return _refine
+
+    # masks per matched GT instance (for RC) — same greedy match as the bbox loop.
+    masks_for = _matched_masks(a.dataset_dir, a.split, a.scene, a.im, preds)
+
     # --- REAL chain: GDRNPP pose -> production bop_adapter -> pose_result ---
     results = []
     for i, p in enumerate(preds):
+        rc_refiner = _build_rc_refiner(p["obj_id"], masks_for.get(i))
         r = BOP.detection_to_result(
             instance_id=i,
             obj_id=p["obj_id"],
@@ -123,6 +249,10 @@ def main():
             table_origin_m=TABLE_ORIGIN_SCENE,
             bbox_2d=[0, 0, 1, 1],  # placeholder; replaced from GT-info below
             confidence=p["score"],
+            apply_planar=a.planar_refine,
+            mesh_verts_m=(_mesh_verts_mm(a.dataset_dir, p["obj_id"]) / 1000.0
+                          if a.planar_refine else None),
+            rc_refiner=rc_refiner,
         )
         results.append((p["obj_id"], r))
 

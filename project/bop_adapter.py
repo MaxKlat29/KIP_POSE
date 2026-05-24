@@ -906,7 +906,8 @@ def detection_to_result(*, instance_id, obj_id, R_m2c, t_m2c_mm,
                         stable_pose_snap=False, stable_downs=None, stable_probs=None,
                         max_tilt_snap_deg=DEFAULT_MAX_TILT_SNAP_DEG,
                         contour_yaw_lock=False, target_mask=None, K=None,
-                        n_fold=None, sym_axis=(0.0, 1.0, 0.0), mesh=None):
+                        n_fold=None, sym_axis=(0.0, 1.0, 0.0), mesh=None,
+                        rc_refiner=None):
     """Eine BOP-Detektion -> ein pose_result-`results[]`-Eintrag (Dict).
 
     Bündelt §3.2 (Transform) + §3.3 (Kanonisierung) + §3.5 (planares Refinement,
@@ -937,6 +938,13 @@ def detection_to_result(*, instance_id, obj_id, R_m2c, t_m2c_mm,
     R_world, t_world = bop_pose_to_world(
         R_m2c_can, t_m2c_mm, R_w2c, t_w2c_mm, table_origin_m,
         R_model_to_body=R_model_to_body)
+    # M2 Multi-Hypothesen-Render-and-Compare (T-058): NACH GDRNPP-Coarse + Welt-
+    # Transform, VOR dem Z-Snap (eine geflippte/becken-falsche Coarse-Rotation wird
+    # hier auf die best-render-matchende Hypothese korrigiert, bevor Z auf die
+    # Tischebene gesnappt wird). Optionaler Callback (refine_rc.refine_detection),
+    # default None (Refiner AUS bis validiert). RGB-only, Contract unverändert.
+    if rc_refiner is not None:
+        R_world = _as_R(rc_refiner(R_world, t_world))
     # M1 + Z-Snap (+ optional Tilt) via planar_refine.
     if (apply_planar or stable_pose_snap) and mesh_verts_m is not None:
         R_world, t_world, _ = planar_refine(

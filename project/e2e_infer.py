@@ -51,6 +51,13 @@ from PIL import Image
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import bop_adapter as BOP
 
+# M2 Multi-Hypothesen-Render-and-Compare-Refiner (T-058). Optional importiert —
+# nur nötig, wenn refine_rc aktiv ist. Fehlt das Modul, läuft die Kette ohne RC.
+try:
+    import refine_rc as RC
+except Exception:  # pragma: no cover
+    RC = None
+
 # ── Pfade (relativ zu diesem Skript, CWD-unabhängig) ──────────────────────────
 HERE = pathlib.Path(__file__).resolve().parent          # project/
 MODELS = HERE / "models"
@@ -75,6 +82,15 @@ TABLE_ORIGIN_SCENE = (0.0, 0.0, 0.08)
 PLANAR_REFINE_DEFAULT = True
 PLANAR_TABLE_Z = 0.0
 PLANAR_TILT_CORRECT = False
+
+# M2 Render-and-Compare-Refiner (T-058). DEFAULT AUS bis validiert (GPU-Pfad beim
+# Finish, CPU-Kanten-Scorer als training-freier Fallback). Hinter Flag refine_rc.
+# scorer: "cpu_edge" (kein GPU, default) | "megapose" (GPU, finish-time).
+REFINE_RC_DEFAULT = False
+REFINE_RC_SCORER = "cpu_edge"
+# C_N pro obj_id (aus models_info): Anker continuous-Y -> kein discrete N; Zahnrad
+# C_7 (-> Yaw-Hypothesen). Generalisierbar via PART_SYMMETRY im Adapter.
+OBJ_NFOLD = {1: None, 2: None, 6: 7}
 # CAD-Meshes (BOP models, mm) für den Z-Snap. Erst project/cad_input, dann die
 # BOP-models-Lage. Lazy geladen, in Metern gecacht. Fehlt das Mesh -> Skip
 # (kein Snap, Pose unverändert) statt hart zu brechen.
@@ -477,15 +493,57 @@ def call_gdrnpp(crop, K, bbox, obj_id, cfg=None):
         return _gdrnpp_mock(crop, K, bbox, obj_id)      # graceful bis Checkpoint da
 
 
+def _make_rc_refiner(obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
+                     full_hw, target_mask=None, scorer=REFINE_RC_SCORER, warn=print):
+    """Baut den per-Detektion-RC-Refiner-Callback (refine_rc.refine_detection).
+
+    Der Callback bekommt (R_world, t_world) der Coarse-Pose und liefert die
+    verfeinerte Welt-Rotation. None, wenn RC nicht verfügbar / kein Mesh. RGB-only:
+    Kanten aus dem Crop, Silhouetten-Render aus dem CAD (mm).
+    """
+    if RC is None or mesh_m is None:
+        return None
+    verts_mm = np.asarray(mesh_m, float) * 1000.0           # m -> mm (Renderer-Einheit)
+    # Bildkanten des Crops, ins Vollbild an die bbox eingebettet (passt zum
+    # Vollbild-Silhouetten-Render). Metall -> starke Kanten (ContourPose-Idee).
+    image_edge_mask = RC.image_edges(crop, bbox=bbox, full_hw=full_hw)
+    # Ruhelagen-Body-Downs (für die Ruhelagen-Hypothesen) — optional, via trimesh.
+    stable_downs = None
+    try:
+        stable_downs, _ = BOP.stable_pose_body_downs(
+            mesh_verts_mm=verts_mm, prob_min=0.02, max_k=6, cache_key=obj_id)
+    except Exception as exc:  # pragma: no cover
+        warn(f"[rc] keine Ruhelagen für obj{obj_id} ({exc!r}) — ohne rest-Hyps")
+    n_fold = OBJ_NFOLD.get(obj_id)
+    mk = None
+    if scorer == "megapose":
+        mk = {"crop_rgb": crop, "K_full": K, "bbox": bbox,
+              "obj_label": f"obj_{int(obj_id):06d}"}
+
+    def _refine(R_world, t_world):
+        R_ref, info = RC.refine_detection(
+            R_world, verts_mm=verts_mm, t_world_m=t_world,
+            table_origin_m=table_origin, R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K,
+            hw=full_hw, target_mask=target_mask, image_edge_mask=image_edge_mask,
+            sym_axis=(0.0, 1.0, 0.0), n_fold=n_fold, stable_downs=stable_downs,
+            scorer=scorer, megapose_kwargs=mk)
+        warn(f"[rc] obj{obj_id}: {info['n_hyps']} Hyps, scorer={info['scorer']}, "
+             f"best={info.get('best_tag')} switched={info.get('switched')}")
+        return R_ref
+
+    return _refine
+
+
 def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
                    planar_refine=PLANAR_REFINE_DEFAULT,
-                   tilt_correct=PLANAR_TILT_CORRECT):
+                   tilt_correct=PLANAR_TILT_CORRECT,
+                   refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER):
     """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3) ->
-    planares Tisch-Ebenen-Refinement (T-055, training-frei).
+    [M2 Render-and-Compare-Refiner, optional] -> planares Z-Snap (T-055).
 
     Kette pro Detektion:
       Crop+bbox -> call_gdrnpp -> (R_m2c, t_m2c) -> BOP.detection_to_result
-      (inkl. Planar-Z-Snap aus R+CAD wenn planar_refine).
+      (M2-RC-Refine wenn refine_rc, dann Planar-Z-Snap aus R+CAD wenn planar_refine).
     Liefert die 'aligned'-Liste (Format wie build_pose_result erwartet:
       {instance_id, part, face_name, R_world(9), t_world(3), confidence,
        bbox_2d(4), upright}).
@@ -497,6 +555,7 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
     K, R_w2c, t_w2c = load_scene_camera_state(rgb, warn=warn)
     mode = "MOCK" if cfg.mock else "GDRNPP"
     n_snapped = 0
+    n_rc = 0
     aligned = []
     for d in dets:
         bbox = d["bbox_2d"]
@@ -506,14 +565,25 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
             continue
         crop = _crop(rgb, bbox)
         R_m2c, t_m2c = call_gdrnpp(crop, K, bbox, obj_id, cfg=cfg)
-        mesh_m = _load_mesh_verts_m(obj_id, warn=warn) if planar_refine else None
+        # Mesh wird für Z-Snap UND den RC-Refiner gebraucht.
+        need_mesh = planar_refine or refine_rc
+        mesh_m = _load_mesh_verts_m(obj_id, warn=warn) if need_mesh else None
+        rc_refiner = None
+        if refine_rc:
+            rc_refiner = _make_rc_refiner(
+                obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
+                full_hw=(H, W), target_mask=d.get("mask"), scorer=rc_scorer,
+                warn=warn)
+            if rc_refiner is not None:
+                n_rc += 1
         r = BOP.detection_to_result(
             instance_id=d.get("instance_id", len(aligned)),
             obj_id=obj_id, R_m2c=R_m2c, t_m2c_mm=t_m2c,
             R_w2c=R_w2c, t_w2c_mm=t_w2c, table_origin_m=table_origin,
             bbox_2d=bbox, confidence=d.get("det_conf", 1.0),
             apply_planar=(planar_refine and mesh_m is not None),
-            mesh_verts_m=mesh_m, table_z=PLANAR_TABLE_Z, tilt_correct=tilt_correct)
+            mesh_verts_m=mesh_m, table_z=PLANAR_TABLE_Z, tilt_correct=tilt_correct,
+            rc_refiner=rc_refiner)
         if planar_refine and mesh_m is not None:
             n_snapped += 1
         # build_pose_result erwartet 'face_name'; detection_to_result liefert 'face'.
@@ -521,7 +591,8 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
         aligned.append(r)
     snap = (f", Planar-Z-Snap auf {n_snapped}/{len(aligned)}"
             if planar_refine else " (Planar-Refine AUS)")
-    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3){snap}")
+    rc = f", RC-Refine ({rc_scorer}) auf {n_rc}/{len(aligned)}" if refine_rc else ""
+    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3){snap}{rc}")
     return aligned
 
 
@@ -634,14 +705,16 @@ def build_pose_result(img_path, aligned, table_origin=TABLE_ORIGIN_SCENE):
 
 # ── Orchestrierung ────────────────────────────────────────────────────────────
 def run(image, out_path, cfg=None, warn=print,
-        planar_refine=PLANAR_REFINE_DEFAULT, tilt_correct=PLANAR_TILT_CORRECT):
+        planar_refine=PLANAR_REFINE_DEFAULT, tilt_correct=PLANAR_TILT_CORRECT,
+        refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
 
-    Kette (ADR-018, Viktor §3/§4 + T-055 §3.5):
+    Kette (ADR-018, Viktor §3/§4 + T-055 §3.5 + T-058 M2):
       Detektor (Stufe 1, OBB->AABB §4) -> pro Detektion Crop+bbox ->
       GDRNPP-Inferenz call_gdrnpp (Stufe 3; MOCK bis Kais Checkpoint da) ->
-      (R_m2c, t_m2c) -> BOP-Adapter (§3) -> Planar-Z-Snap auf Tischebene (§3.5,
-      wenn planar_refine) -> pose_result (Stufe 4, schema-valide).
+      (R_m2c, t_m2c) -> BOP-Adapter (§3) -> [M2 Render-and-Compare-Refiner, wenn
+      refine_rc] -> Planar-Z-Snap auf Tischebene (§3.5, wenn planar_refine) ->
+      pose_result (Stufe 4, schema-valide).
     """
     cfg = cfg or GdrnppConfig()
     if not pathlib.Path(image).exists():
@@ -655,7 +728,8 @@ def run(image, out_path, cfg=None, warn=print,
     _SCENE_CAM_STATE.update({"K": K, "R_w2c": R_w2c, "t_w2c": t_w2c})
     aligned = estimate_poses(rgb, dets, table_origin=TABLE_ORIGIN_SCENE,
                              cfg=cfg, warn=warn, planar_refine=planar_refine,
-                             tilt_correct=tilt_correct)
+                             tilt_correct=tilt_correct, refine_rc=refine_rc,
+                             rc_scorer=rc_scorer)
     doc = build_pose_result(image, aligned, table_origin=TABLE_ORIGIN_SCENE)
     errors = check_pose_result(doc) + _check_with_jsonschema(doc)
     if errors:
@@ -712,11 +786,17 @@ def main(argv=None):
                     help="planares Tisch-Ebenen-Refinement (Z-Snap) AUS (default an)")
     ap.add_argument("--tilt-correct", action="store_true",
                     help="konservative Tilt-zur-Tischnormalen-Korrektur an (default aus)")
+    ap.add_argument("--refine-rc", action="store_true",
+                    help="M2 Multi-Hypothesen-Render-and-Compare-Refiner an (default aus)")
+    ap.add_argument("--rc-scorer", default=REFINE_RC_SCORER,
+                    choices=["cpu_edge", "megapose"],
+                    help="RC-Scorer: cpu_edge (kein GPU, default) | megapose (GPU)")
     a = ap.parse_args(argv)
     cfg = GdrnppConfig(checkpoint=a.checkpoint, mock=(True if a.mock else None))
     out = a.out or str(HERE / "temp" / "pose_result.json")
     doc = run(a.image, out, cfg=cfg, planar_refine=not a.no_planar_refine,
-              tilt_correct=a.tilt_correct)
+              tilt_correct=a.tilt_correct, refine_rc=a.refine_rc,
+              rc_scorer=a.rc_scorer)
     print(f"\n[e2e] {len(doc['results'])} Teile -> {out}")
     for r in doc["results"]:
         print(f"  #{r['instance_id']:>2} {r['part']:<22} {r['face']:<10} "
