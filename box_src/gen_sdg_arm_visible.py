@@ -57,8 +57,12 @@ def parse_args():
     p.add_argument("--usd-dir", required=True)
     p.add_argument("--output", required=True)
     p.add_argument("--num-scenes", type=int, default=20)
-    p.add_argument("--min-obj", type=int, default=6)
-    p.add_argument("--max-obj", type=int, default=14)
+    # T-038 Phase-2: 0..10 parts INCLUDING EMPTY (0) and sparse (1-3). The model
+    # must also recognise empty / nearly-empty cells, not just crowded trays.
+    # n_obj is sampled inclusive [min,max]; min=0 => some scenes render the bare
+    # cell (0 GT, arm + cart only) which the converter writes as a 0-GT frame.
+    p.add_argument("--min-obj", type=int, default=0)
+    p.add_argument("--max-obj", type=int, default=10)
     p.add_argument("--dr-strong", action="store_true",
                    help="T-038 Phase-2: STRONGER domain randomization — per-object "
                         "material roughness/metallic/tint, denser clutter, wider "
@@ -70,16 +74,21 @@ def parse_args():
     # calibrated GST_Scene cart/tray surface (measured -0.007 m)
     p.add_argument("--table-z", type=float, default=-0.007)
     p.add_argument("--settle", type=int, default=200)
-    # spawn-region: the open work area in front of / under the arm so the arm
-    # genuinely occludes some parts. Keeps the calibrated on-surface bounds.
     p.add_argument("--focus-frac", type=float, default=0.6,
                    help="fraction of spawned objects forced to be focus parts")
-    # spawn region (metres, world). Default = open front-left work area in front
-    # of the LARA5 arm so MOST parts are camera-visible, while the arm still
-    # occludes a fraction (occlusion training signal). Calibrated on-surface.
-    p.add_argument("--spawn-x", default="0.18,0.52", help="xmin,xmax (m)")
-    p.add_argument("--spawn-y", default="0.08,0.50", help="ymin,ymax (m)")
+    # T-038 Phase-2: spawn over the WHOLE TABLE, not the narrow inner-table zone.
+    # Defaults mirror Marc's datagenerationscript.py SPAWN_BOUNDS (random mode) —
+    # the full calibrated cart-surface extent. Parts may land anywhere on the
+    # table; the LARA5 arm still occludes whatever ends up behind it (occlusion
+    # training signal preserved). x: 0.726 m wide, y: 0.495 m deep.
+    p.add_argument("--spawn-x", default="0.05732,0.78332", help="xmin,xmax (m) — full table")
+    p.add_argument("--spawn-y", default="0.04157,0.53698", help="ymin,ymax (m) — full table")
     p.add_argument("--spawn-z", default="0.30,0.55", help="zmin,zmax drop height (m)")
+    # Smoke/debug only: force an explicit per-scene part-count sequence instead of
+    # sampling [min,max]. e.g. "0,8,1,10,3" guarantees an empty scene + a full
+    # one for the smoke proof. Empty when omitted (normal RNG sampling).
+    p.add_argument("--force-counts", default="",
+                   help="comma list of n_obj per scene (smoke proof; overrides min/max)")
     return p.parse_args()
 
 
@@ -187,6 +196,9 @@ def main():
     for x in annots.values(): x.attach([rp])
     tl = omni.timeline.get_timeline_interface(); rng = np.random.default_rng(a.seed)
     base_eye = np.array([0.46, 0.27, 0.95]); t0 = time.time(); done = 0
+    force_counts = [int(v) for v in a.force_counts.split(",") if v.strip() != ""]
+    if force_counts:
+        log(f"FORCE-COUNTS (smoke): per-scene n_obj = {force_counts}")
 
     def part_world_transforms(stage):
         """{prim_path: {'T_w': 4x4 row-major (object->world, scene-metres)}} for
@@ -309,7 +321,11 @@ def main():
         focal = float(rng.uniform(14, 24) if a.dr_strong else rng.uniform(16, 22))
         cam_focal.Set(focal)
 
-        n_obj = int(rng.integers(a.min_obj, a.max_obj + 1))
+        if force_counts:
+            n_obj = force_counts[(sidx - a.start) % len(force_counts)]
+        else:
+            # inclusive [min,max]; min=0 => empty scenes appear (bare cell, 0 GT)
+            n_obj = int(rng.integers(a.min_obj, a.max_obj + 1))
         tl.stop()
         for _ in range(5): app.update()
         dg.cleanup_spawned_objects(stage)
@@ -372,9 +388,10 @@ def main():
         json.dump({"boxes": obbs}, open(os.path.join(a.output, f"obb_2d_{sidx:04d}.json"), "w"), indent=2)
 
         done += 1
-        if done % 5 == 0 or done <= 3:
+        if len(path2label) == 0 or done % 5 == 0 or done <= 3:
             r = done / max(1e-6, time.time() - t0)
-            log(f"scene {sidx}: {len(path2label)} parts, {len(obbs)} boxes | "
+            tag = " [EMPTY 0-GT]" if len(path2label) == 0 else ""
+            log(f"scene {sidx}: {len(path2label)} parts, {len(obbs)} boxes{tag} | "
                 f"{r:.2f}/s | ETA {(a.num_scenes - sidx - 1)/max(1e-6, r)/60:.1f}min")
 
     tl.stop()
