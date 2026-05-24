@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T09:54:53Z",
+  "updated": "2026-05-24T10:43:14Z",
   "columns": [
     {
       "id": "backlog",
@@ -1855,7 +1855,7 @@
       "id": "T-041",
       "title": "4.3: 6D-Alignment robust (Mask-MSE-Yaw + upright) -> pose_result",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P1",
@@ -1865,9 +1865,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:12Z",
-      "updated": "2026-05-24T09:54:53Z",
+      "updated": "2026-05-24T09:56:28Z",
       "started_at": "2026-05-24T09:35:49Z",
-      "completed_at": null,
+      "completed_at": "2026-05-24T09:56:28Z",
       "comments": [],
       "logs": [
         {
@@ -1893,6 +1893,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-24T09:56:28Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-24T09:56:28Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Training-frei ausgereizt: nur Z-Snap hilft; M1/M4/M3 null (Gründe dok). Rotation braucht Retrain+Refiner"
         }
       ]
     },
@@ -2537,7 +2549,7 @@
       "id": "T-058",
       "title": "POSE E2E-Opt: Lernbasiertes Pose-Refinement (GigaPose/MegaPose-Stil)",
       "description": "",
-      "column": "done",
+      "column": "in_progress",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2546,9 +2558,9 @@
       ],
       "session": "",
       "created": "2026-05-22T19:13:52Z",
-      "updated": "2026-05-24T09:35:48Z",
+      "updated": "2026-05-24T10:43:14Z",
       "started_at": "2026-05-24T09:29:48Z",
-      "completed_at": "2026-05-24T09:35:48Z",
+      "completed_at": null,
       "comments": [],
       "logs": [
         {
@@ -2598,6 +2610,24 @@
           "agent": "claude",
           "level": "success",
           "msg": "Deep-Research: PHASE3_PEAK_PLAN.md — >80% erreichbar, Top-Hebel M1/M4/M3 training-frei"
+        },
+        {
+          "ts": "2026-05-24T09:56:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: done → in_progress"
+        },
+        {
+          "ts": "2026-05-24T09:56:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "M2: Multi-Hypothesis Render-and-Compare-Refiner (MegaPose-RGB) startklar bauen — loest Anker-Flips + Zahnrad-Basin, validiert beim Finish (S-048)"
+        },
+        {
+          "ts": "2026-05-24T10:43:14Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "M2 multi-hypothesis render-and-compare refiner gebaut (S-048): Hypothesen-Generator (coarse+180-flips+C_N-yaws+stable-poses+tilts, dedup, generalisierbar) + CPU-Kanten/Silhouetten-Scorer + MegaPose-RGB-Contract. Integriert in e2e_infer.py + bop_adapter.detection_to_result(rc_refiner) + real_pose_result.py --refine-rc + e2e_finish.sh, hinter Flag refine_rc default AUS, RGB-only, Contract unveraendert. EHRLICH gemessen (box, CPU, val n=1077): CPU-Kanten-Scorer korrigiert Anker-Flip NICHT - offenes Gate verschlechtert AR (Anker 0.645/0.650->0.533/0.577, overall 0.331->0.294, switched 460/519); striktes Gate 0.15 neutral (0.330=raw, 2/519). Kein training-freier Teilgewinn - Silhouette/Kante trennt 180-Flip auf realem RGB nicht (deckt M3/T-041). MegaPose-GPU-Pfad verdrahtet+finish-validierbar (box_src/megapose_refine.py self-check OK; voller chain real_pose_result --refine-rc cpu_edge laeuft e2e gruen auf realer val-Frame). pytest 57 gruen (12 neu). Doc: M2_REFINER.md."
         }
       ]
     },
