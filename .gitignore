@@ -56,6 +56,8 @@ kit/
 project/training_data/
 # Scratch/Zwischenstände (Previews, Render-/Train-Skripte, pose_result-Outputs).
 project/temp/
+# E2E-Finish-Harness pulled eval reports (transient; e2e_finish.sh regeneriert sie).
+results/
 # Trainierte Checkpoints + Metriken (groß; via setup.ipynb erzeugbar).
 project/models/*.pt
 project/models/*.metrics.json
