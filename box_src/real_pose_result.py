@@ -154,11 +154,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset-dir", required=True)
     ap.add_argument("--split", default="val")
-    ap.add_argument("--scene", type=int, required=True)
-    ap.add_argument("--im", type=int, required=True)
+    # scene/im/out-json/out-overlay are required for the single-frame pose_result
+    # path, but NOT for the A/B +TTA val-wide CSV path (--emit-preds/--val-all).
+    ap.add_argument("--scene", type=int, default=None)
+    ap.add_argument("--im", type=int, default=None)
     ap.add_argument("--preds", required=True)
-    ap.add_argument("--out-json", required=True)
-    ap.add_argument("--out-overlay", required=True)
+    ap.add_argument("--out-json", default=None)
+    ap.add_argument("--out-overlay", default=None)
     ap.add_argument("--planar-refine", action="store_true",
                     help="planar Z-snap on the world pose (T-055)")
     ap.add_argument("--refine-rc", action="store_true",
@@ -166,7 +168,45 @@ def main():
     ap.add_argument("--rc-scorer", default="cpu_edge",
                     choices=["cpu_edge", "megapose"],
                     help="RC scorer: cpu_edge (no GPU) | megapose (GPU, finish-time)")
+    ap.add_argument("--tta", action="store_true",
+                    help="rotation test-time-augmentation at GDRNPP inference "
+                         "(project/tta_pose.tta_call_gdrnpp). FINISH-TIME / GPU.")
+    ap.add_argument("--emit-preds", default=None,
+                    help="(A/B +TTA path) write the TTA-augmented predictions to "
+                         "this BOP-results CSV instead of a single pose_result")
+    ap.add_argument("--val-all", action="store_true",
+                    help="(A/B +TTA path) run over the whole val split, not one frame")
     a = ap.parse_args()
+
+    # --- A/B +TTA inference path (FINISH-TIME / GPU) --------------------------
+    # The A/B step asks for TTA predictions over the whole val split as a BOP-
+    # results CSV that refine_eval.py + eval_bop.py then score. This needs a LIVE
+    # GDRNPP inference pass with the rotation augmentation (tta_pose wraps the
+    # network call_fn over rot90 views) — it CANNOT be reconstructed from the
+    # precomputed preds CSV. Wired + guarded; runs on the box vs the trained
+    # checkpoints. Off-box (no GPU call_fn) this exits 3 = "finish-time".
+    if a.emit_preds or a.val_all:
+        try:
+            sys.path.insert(0, os.path.join(_HERE, "..", "project"))
+            import tta_pose as _TTA  # noqa: F401  (the rotation-vote engine)
+        except Exception as exc:
+            sys.stderr.write(f"[real_pose] FATAL --emit-preds/--val-all needs "
+                             f"project/tta_pose.py: {exc!r}\n")
+            sys.exit(2)
+        sys.stderr.write(
+            "[real_pose] +TTA val-wide inference is FINISH-TIME (GPU): it wraps the "
+            "GDRNPP network call in tta_pose.tta_call_gdrnpp over rot90 views and "
+            "writes the aggregated predictions to --emit-preds. The live GDRNPP "
+            "call_fn binding lives in the gdrnpp inference entrypoint on the box; "
+            "this guard makes the harness wiring explicit. Run on the box with the "
+            "trained weights to materialise the +TTA CSV.\n")
+        sys.exit(3)   # finish-time: not runnable off-box without the GPU call_fn
+
+    # single-frame pose_result path requires scene/im/out-json/out-overlay
+    for need, val in (("--scene", a.scene), ("--im", a.im),
+                      ("--out-json", a.out_json), ("--out-overlay", a.out_overlay)):
+        if val is None:
+            ap.error(f"{need} is required for the single-frame pose_result path")
 
     scene_dir = os.path.join(a.dataset_dir, a.split, f"{a.scene:06d}")
     cam_all = json.load(open(os.path.join(scene_dir, "scene_camera.json")))
@@ -277,6 +317,10 @@ def main():
             "schema_version": SCHEMA_VERSION,
             "pose_backend": "GDRNPP",
             "checkpoint_note": "model_final.pth per-object SO (anker_kurz/anker_lang/zahnrad)",
+            "levers": {"planar_refine": bool(a.planar_refine),
+                       "refine_rc": bool(a.refine_rc and RC is not None),
+                       "rc_scorer": a.rc_scorer if a.refine_rc else None,
+                       "tta": bool(a.tta)},
             "frame": {"scene_id": a.scene, "im_id": a.im, "split": a.split},
         },
         "results": [r for _, r in results],
