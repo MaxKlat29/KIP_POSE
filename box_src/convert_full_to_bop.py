@@ -51,7 +51,7 @@ def chunk(lst, n):
     return [lst[i:i + n] for i in range(0, len(lst), n)]
 
 
-def run_scene(py, raw_dir, bop_root, split, scene_id, frames, depth_scale):
+def run_scene(py, raw_dir, bop_root, split, scene_id, frames, depth_scale, min_visib=0.0):
     cmd = [
         py, CONVERTER,
         "--raw-dir", raw_dir,
@@ -61,6 +61,7 @@ def run_scene(py, raw_dir, bop_root, split, scene_id, frames, depth_scale):
         "--start-im", "0",
         "--depth-scale", str(depth_scale),
         "--frame-list", ",".join(str(i) for i in frames),
+        "--min-visib", str(min_visib),
     ]
     print(f"[convert_full] -> {split}/{scene_id:06d}  ({len(frames)} frames)", flush=True)
     r = subprocess.run(cmd)
@@ -128,6 +129,9 @@ def main():
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--fresh", action="store_true",
                     help="wipe existing train_pbr/ and val/ first")
+    ap.add_argument("--min-visib", type=float, default=0.0,
+                    help="T-038 >20% scoping passthrough: drop instances with "
+                         "visib_fract <= this at convert-time (use 0.20 for the filter)")
     args = ap.parse_args()
 
     frames = discover_frames(args.raw_dir)
@@ -154,9 +158,11 @@ def main():
     val_scenes = chunk(val_frames, args.scene_size)
 
     for sid, fr in enumerate(train_scenes):
-        run_scene(args.python, args.raw_dir, args.bop_root, "train_pbr", sid, fr, args.depth_scale)
+        run_scene(args.python, args.raw_dir, args.bop_root, "train_pbr", sid, fr,
+                  args.depth_scale, args.min_visib)
     for sid, fr in enumerate(val_scenes):
-        run_scene(args.python, args.raw_dir, args.bop_root, "val", sid, fr, args.depth_scale)
+        run_scene(args.python, args.raw_dir, args.bop_root, "val", sid, fr,
+                  args.depth_scale, args.min_visib)
 
     write_camera_json(args.raw_dir, args.bop_root)
     write_dataset_info(args.bop_root, len(train_scenes), len(val_scenes),

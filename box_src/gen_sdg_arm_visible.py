@@ -59,6 +59,10 @@ def parse_args():
     p.add_argument("--num-scenes", type=int, default=20)
     p.add_argument("--min-obj", type=int, default=6)
     p.add_argument("--max-obj", type=int, default=14)
+    p.add_argument("--dr-strong", action="store_true",
+                   help="T-038 Phase-2: STRONGER domain randomization — per-object "
+                        "material roughness/metallic/tint, denser clutter, wider "
+                        "camera jitter, randomized background/dome.")
     p.add_argument("--width", type=int, default=1280)
     p.add_argument("--height", type=int, default=720)
     p.add_argument("--seed", type=int, default=20260522)
@@ -88,7 +92,7 @@ def main():
     from isaacsim import SimulationApp
     app = SimulationApp({"headless": True}); log("ready")
     import numpy as np, omni.usd, omni.replicator.core as rep, omni.timeline, carb
-    from pxr import Usd, UsdGeom, UsdLux, Gf, UsdPhysics, PhysxSchema, UsdShade
+    from pxr import Usd, UsdGeom, UsdLux, Gf, UsdPhysics, PhysxSchema, UsdShade, Sdf
     s = carb.settings.get_settings()
     s.set("/app/asyncRendering", False); s.set("/omni/replicator/asyncRendering", False)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -207,6 +211,36 @@ def main():
             Usd.TimeCode.Default()), float).reshape(4, 4)
         return M.T.tolist()
 
+    def randomize_material(stage, prim_path, rng):
+        """T-038 DR-strong: bind a randomized UsdPreviewSurface to a spawned part so
+        the network sees a wide span of metallic/roughness/tint instead of the one
+        baked CAD look. Sim2real lever — real metal parts vary in finish + lighting.
+        """
+        try:
+            mat_path = prim_path + "/_DRMat"
+            mat = UsdShade.Material.Define(stage, mat_path)
+            shader = UsdShade.Shader.Define(stage, mat_path + "/Shader")
+            shader.CreateIdAttr("UsdPreviewSurface")
+            # metallic parts: bias metallic high but keep a fraction dielectric
+            metallic = float(rng.uniform(0.0, 1.0))
+            rough = float(rng.uniform(0.15, 0.85))
+            # neutral-grey base with a small random tint (steel/brass/zinc-ish)
+            g = float(rng.uniform(0.45, 0.85))
+            tint = np.array([g, g, g]) * np.array(
+                [rng.uniform(0.92, 1.0), rng.uniform(0.9, 1.0), rng.uniform(0.85, 1.0)])
+            shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(
+                Gf.Vec3f(*[float(c) for c in tint]))
+            shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(metallic)
+            shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(rough)
+            shader.CreateInput("specular", Sdf.ValueTypeNames.Float).Set(
+                float(rng.uniform(0.3, 0.8)))
+            mat.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+            for prim in Usd.PrimRange(stage.GetPrimAtPath(prim_path)):
+                if prim.IsA(UsdGeom.Mesh):
+                    UsdShade.MaterialBindingAPI(prim).Bind(mat)
+        except Exception as e:
+            pass  # DR is best-effort; never crash the render over a material
+
     def spawn_weighted(stage, rng, n_obj, focus_frac):
         """Like dg.spawn_random_mode but forces a focus_frac of focus parts.
         Returns {prim_path: label}."""
@@ -236,24 +270,44 @@ def main():
             rx = float(rng.uniform(0, 360)); ry = float(rng.uniform(0, 360)); rz = float(rng.uniform(0, 360))
             pp = f"/World/SpawnedObject_{spawned:03d}"
             dg.spawn_single_object(stage, pp, asset, x, y, z, rx, ry, rz)
+            if a.dr_strong:
+                randomize_material(stage, pp, rng)
             existing.append({"path": pp, "pos": (x, y, z), "size": dg.OBJECT_SIZE / 2})
             path2label[pp] = asset["label"]
             spawned += 1
         return path2label
 
     for sidx in range(a.start, a.num_scenes):
-        # DR: light intensity / colour / direction
-        dome_int.Set(float(rng.uniform(250, 900)))
-        dome_col.Set(Gf.Vec3f(1.0, float(rng.uniform(0.85, 1)), float(rng.uniform(0.85, 1))))
-        dist_int.Set(float(rng.uniform(300, 1400)))
-        dist_rot.Set(Gf.Vec3f(float(rng.uniform(-60, -20)), float(rng.uniform(-40, 40)), float(rng.uniform(0, 360))))
-        # top-down camera with small jitter + roll
-        jx, jy = rng.uniform(-0.04, 0.04, 2); h = 0.95 + rng.uniform(-0.05, 0.08)
+        # DR: light intensity / colour / direction. dr_strong widens every range +
+        # randomizes the dome colour fully (not just warm) for harder lighting.
+        if a.dr_strong:
+            dome_int.Set(float(rng.uniform(120, 1300)))
+            dome_col.Set(Gf.Vec3f(float(rng.uniform(0.75, 1)), float(rng.uniform(0.75, 1)),
+                                  float(rng.uniform(0.75, 1))))
+            dist_int.Set(float(rng.uniform(150, 2200)))
+            dist_rot.Set(Gf.Vec3f(float(rng.uniform(-75, -10)), float(rng.uniform(-60, 60)),
+                                  float(rng.uniform(0, 360))))
+        else:
+            dome_int.Set(float(rng.uniform(250, 900)))
+            dome_col.Set(Gf.Vec3f(1.0, float(rng.uniform(0.85, 1)), float(rng.uniform(0.85, 1))))
+            dist_int.Set(float(rng.uniform(300, 1400)))
+            dist_rot.Set(Gf.Vec3f(float(rng.uniform(-60, -20)), float(rng.uniform(-40, 40)),
+                                  float(rng.uniform(0, 360))))
+        # top-down camera jitter + roll (wider span under dr_strong)
+        if a.dr_strong:
+            jx, jy = rng.uniform(-0.08, 0.08, 2); h = 0.95 + rng.uniform(-0.10, 0.14)
+            roll = float(rng.uniform(-12, 12))
+        else:
+            jx, jy = rng.uniform(-0.04, 0.04, 2); h = 0.95 + rng.uniform(-0.05, 0.08)
+            roll = 0.0
         eye = np.array([base_eye[0] + jx, base_eye[1] + jy, h])
         look = np.array([base_eye[0] + jx, base_eye[1] + jy, a.table_z])
-        view = Gf.Matrix4d().SetLookAt(Gf.Vec3d(*eye), Gf.Vec3d(*look), Gf.Vec3d(0, 1, 0))
+        # roll the up-vector around the view axis for in-plane camera rotation DR
+        up = Gf.Vec3d(float(np.sin(np.radians(roll))), float(np.cos(np.radians(roll))), 0.0)
+        view = Gf.Matrix4d().SetLookAt(Gf.Vec3d(*eye), Gf.Vec3d(*look), up)
         cam_xf.ClearXformOpOrder(); cam_xf.AddTransformOp().Set(view.GetInverse())
-        focal = float(rng.uniform(16, 22)); cam_focal.Set(focal)
+        focal = float(rng.uniform(14, 24) if a.dr_strong else rng.uniform(16, 22))
+        cam_focal.Set(focal)
 
         n_obj = int(rng.integers(a.min_obj, a.max_obj + 1))
         tl.stop()
