@@ -67,6 +67,97 @@ COORD_CONVENTION = ("Z-up world; column rotation world = R @ body; "
 # damit die Teile mit dem cell.glb (echtes CAD, Welt-Frame) fluchten.
 TABLE_ORIGIN_SCENE = (0.0, 0.0, 0.08)
 
+# Planares Tisch-Ebenen-Refinement (T-055): Z-Snap der Welt-Pose auf die
+# Tischebene. Default AN für den planaren Setup (alle Teile ruhen auf dem Tisch).
+# Im Contract-Frame ist die Tischfläche bei Welt-z = 0.0 (t_world ist bereits
+# relativ zum Tisch-Nullpunkt). Tilt-Korrektur default AUS (konservativ, hilft
+# am realen Schätzer netto nicht — siehe T-055-Messung).
+PLANAR_REFINE_DEFAULT = True
+PLANAR_TABLE_Z = 0.0
+PLANAR_TILT_CORRECT = False
+# CAD-Meshes (BOP models, mm) für den Z-Snap. Erst project/cad_input, dann die
+# BOP-models-Lage. Lazy geladen, in Metern gecacht. Fehlt das Mesh -> Skip
+# (kein Snap, Pose unverändert) statt hart zu brechen.
+_MESH_CACHE: dict = {}
+_CAD_DIRS = [HERE / "cad_input" / "models", HERE / "bop" / "pose_isaac" / "models_eval",
+             HERE / "bop" / "pose_isaac" / "models", HERE / "models" / "cad"]
+
+
+def _load_mesh_verts_m(obj_id, warn=print):
+    """CAD-Mesh-Vertices (Body-Frame, **Meter**) für obj_id. None wenn keins da.
+
+    Liest die BOP-PLY (Vertices in mm) und skaliert auf Meter (Contract-Einheit).
+    Generalisierbar: jedes Teil mit obj_<id>.ply funktioniert. Stdlib-PLY-Parser
+    (ASCII + binär-little-endian), kein extra Dependency — der Adapter braucht nur
+    die Vertex-Wolke (Faces egal für den tiefsten-Punkt-Snap)."""
+    if obj_id in _MESH_CACHE:
+        return _MESH_CACHE[obj_id]
+    verts = None
+    for d in _CAD_DIRS:
+        p = d / f"obj_{int(obj_id):06d}.ply"
+        if p.exists():
+            try:
+                verts = _read_ply_verts(p) / 1000.0      # mm -> m
+                warn(f"[planar] CAD-Mesh {p.name} ({verts.shape[0]} Vertices) geladen")
+                break
+            except Exception as exc:
+                warn(f"[planar] CAD-Mesh {p} unlesbar ({exc!r})")
+    _MESH_CACHE[obj_id] = verts
+    return verts
+
+
+def _read_ply_verts(path):
+    """Minimaler PLY-Vertex-Reader (ASCII + binary_little_endian). -> (N,3) float64."""
+    import struct
+    with open(path, "rb") as f:
+        if f.readline().strip() != b"ply":
+            raise ValueError("kein PLY")
+        fmt = None; n_vert = 0; props = []; in_vertex = False
+        while True:
+            line = f.readline()
+            if not line:
+                raise ValueError("PLY-Header unvollständig")
+            s = line.strip().split()
+            if not s:
+                continue
+            if s[0] == b"format":
+                fmt = s[1]
+            elif s[0] == b"element":
+                in_vertex = (s[1] == b"vertex")
+                if in_vertex:
+                    n_vert = int(s[2])
+            elif s[0] == b"property" and in_vertex and s[1] != b"list":
+                props.append((s[2].decode(), s[1].decode()))
+            elif s[0] == b"end_header":
+                break
+        names = [n for n, _ in props]
+        xi, yi, zi = names.index("x"), names.index("y"), names.index("z")
+        if fmt == b"ascii":
+            verts = []
+            for _ in range(n_vert):
+                vals = f.readline().split()
+                verts.append((float(vals[xi]), float(vals[yi]), float(vals[zi])))
+            return np.asarray(verts, dtype=np.float64)
+        # binary_little_endian
+        type_map = {"float": "f", "float32": "f", "double": "d", "float64": "d",
+                    "uchar": "B", "uint8": "B", "char": "b", "int8": "b",
+                    "ushort": "H", "uint16": "H", "short": "h", "int16": "h",
+                    "uint": "I", "uint32": "I", "int": "i", "int32": "i"}
+        offsets = []; size = 0; xyz_off = {}
+        for n, t in props:
+            c = type_map[t]; sz = struct.calcsize("<" + c)
+            if n in ("x", "y", "z"):
+                xyz_off[n] = (size, c)
+            size += sz
+        buf = f.read(size * n_vert)
+        verts = np.empty((n_vert, 3), dtype=np.float64)
+        for i in range(n_vert):
+            base = i * size
+            for j, ax in enumerate(("x", "y", "z")):
+                off, c = xyz_off[ax]
+                verts[i, j] = struct.unpack_from("<" + c, buf, base + off)[0]
+        return verts
+
 
 def available_parts():
     """Teile-Namen — Single-Source = bop_adapter.OBJ_ID_TO_PART (§1.2, eingefroren).
@@ -386,11 +477,15 @@ def call_gdrnpp(crop, K, bbox, obj_id, cfg=None):
         return _gdrnpp_mock(crop, K, bbox, obj_id)      # graceful bis Checkpoint da
 
 
-def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print):
-    """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3).
+def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
+                   planar_refine=PLANAR_REFINE_DEFAULT,
+                   tilt_correct=PLANAR_TILT_CORRECT):
+    """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3) ->
+    planares Tisch-Ebenen-Refinement (T-055, training-frei).
 
     Kette pro Detektion:
-      Crop+bbox -> call_gdrnpp -> (R_m2c, t_m2c) -> BOP.detection_to_result.
+      Crop+bbox -> call_gdrnpp -> (R_m2c, t_m2c) -> BOP.detection_to_result
+      (inkl. Planar-Z-Snap aus R+CAD wenn planar_refine).
     Liefert die 'aligned'-Liste (Format wie build_pose_result erwartet:
       {instance_id, part, face_name, R_world(9), t_world(3), confidence,
        bbox_2d(4), upright}).
@@ -401,6 +496,7 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print):
     H, W = rgb.shape[:2]
     K, R_w2c, t_w2c = load_scene_camera_state(rgb, warn=warn)
     mode = "MOCK" if cfg.mock else "GDRNPP"
+    n_snapped = 0
     aligned = []
     for d in dets:
         bbox = d["bbox_2d"]
@@ -410,15 +506,22 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print):
             continue
         crop = _crop(rgb, bbox)
         R_m2c, t_m2c = call_gdrnpp(crop, K, bbox, obj_id, cfg=cfg)
+        mesh_m = _load_mesh_verts_m(obj_id, warn=warn) if planar_refine else None
         r = BOP.detection_to_result(
             instance_id=d.get("instance_id", len(aligned)),
             obj_id=obj_id, R_m2c=R_m2c, t_m2c_mm=t_m2c,
             R_w2c=R_w2c, t_w2c_mm=t_w2c, table_origin_m=table_origin,
-            bbox_2d=bbox, confidence=d.get("det_conf", 1.0))
+            bbox_2d=bbox, confidence=d.get("det_conf", 1.0),
+            apply_planar=(planar_refine and mesh_m is not None),
+            mesh_verts_m=mesh_m, table_z=PLANAR_TABLE_Z, tilt_correct=tilt_correct)
+        if planar_refine and mesh_m is not None:
+            n_snapped += 1
         # build_pose_result erwartet 'face_name'; detection_to_result liefert 'face'.
         r["face_name"] = r.pop("face")
         aligned.append(r)
-    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3)")
+    snap = (f", Planar-Z-Snap auf {n_snapped}/{len(aligned)}"
+            if planar_refine else " (Planar-Refine AUS)")
+    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3){snap}")
     return aligned
 
 
@@ -530,13 +633,15 @@ def build_pose_result(img_path, aligned, table_origin=TABLE_ORIGIN_SCENE):
 
 
 # ── Orchestrierung ────────────────────────────────────────────────────────────
-def run(image, out_path, cfg=None, warn=print):
+def run(image, out_path, cfg=None, warn=print,
+        planar_refine=PLANAR_REFINE_DEFAULT, tilt_correct=PLANAR_TILT_CORRECT):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
 
-    Kette (ADR-018, Viktor §3/§4):
+    Kette (ADR-018, Viktor §3/§4 + T-055 §3.5):
       Detektor (Stufe 1, OBB->AABB §4) -> pro Detektion Crop+bbox ->
       GDRNPP-Inferenz call_gdrnpp (Stufe 3; MOCK bis Kais Checkpoint da) ->
-      (R_m2c, t_m2c) -> BOP-Adapter (§3) -> pose_result (Stufe 4, schema-valide).
+      (R_m2c, t_m2c) -> BOP-Adapter (§3) -> Planar-Z-Snap auf Tischebene (§3.5,
+      wenn planar_refine) -> pose_result (Stufe 4, schema-valide).
     """
     cfg = cfg or GdrnppConfig()
     if not pathlib.Path(image).exists():
@@ -549,7 +654,8 @@ def run(image, out_path, cfg=None, warn=print):
     K, R_w2c, t_w2c = load_scene_camera(image, W, H, warn=warn)
     _SCENE_CAM_STATE.update({"K": K, "R_w2c": R_w2c, "t_w2c": t_w2c})
     aligned = estimate_poses(rgb, dets, table_origin=TABLE_ORIGIN_SCENE,
-                             cfg=cfg, warn=warn)
+                             cfg=cfg, warn=warn, planar_refine=planar_refine,
+                             tilt_correct=tilt_correct)
     doc = build_pose_result(image, aligned, table_origin=TABLE_ORIGIN_SCENE)
     errors = check_pose_result(doc) + _check_with_jsonschema(doc)
     if errors:
@@ -602,10 +708,15 @@ def main(argv=None):
                     help="GDRNPP-Checkpoint (.pth). Fehlt -> MOCK-Modus.")
     ap.add_argument("--mock", action="store_true",
                     help="MOCK-Pose-Backend erzwingen (auch wenn Checkpoint da ist)")
+    ap.add_argument("--no-planar-refine", action="store_true",
+                    help="planares Tisch-Ebenen-Refinement (Z-Snap) AUS (default an)")
+    ap.add_argument("--tilt-correct", action="store_true",
+                    help="konservative Tilt-zur-Tischnormalen-Korrektur an (default aus)")
     a = ap.parse_args(argv)
     cfg = GdrnppConfig(checkpoint=a.checkpoint, mock=(True if a.mock else None))
     out = a.out or str(HERE / "temp" / "pose_result.json")
-    doc = run(a.image, out, cfg=cfg)
+    doc = run(a.image, out, cfg=cfg, planar_refine=not a.no_planar_refine,
+              tilt_correct=a.tilt_correct)
     print(f"\n[e2e] {len(doc['results'])} Teile -> {out}")
     for r in doc["results"]:
         print(f"  #{r['instance_id']:>2} {r['part']:<22} {r['face']:<10} "

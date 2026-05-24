@@ -278,6 +278,171 @@ def test_detection_to_result_shape():
     assert np.allclose(np.array(r["R_world"]).reshape(3, 3), R_world, atol=1e-6)
 
 
+# ── Planares Tisch-Ebenen-Refinement (§3.5 / T-055) ───────────────────────────
+def _box_verts(hx, hy, hz):
+    """8 Eckpunkte einer achsenparallelen Box mit Halb-Ausdehnungen (Body-Frame)."""
+    import itertools
+    return np.array([[sx * hx, sy * hy, sz * hz]
+                     for sx, sy, sz in itertools.product((-1, 1), (-1, 1), (-1, 1))],
+                    dtype=np.float64)
+
+
+def test_lowest_contact_z_identity():
+    """Bei R=I ist der tiefste Punkt -hz (Box-Unterkante im Body-Frame)."""
+    V = _box_verts(0.01, 0.05, 0.01)                 # 2cm x 10cm x 2cm Box
+    assert abs(A.lowest_contact_z(np.eye(3), V) - (-0.01)) < 1e-12
+
+
+def test_lowest_contact_z_rotated():
+    """Body 90° um X gedreht: die lange Y-Achse zeigt in Welt-Z -> tiefster Punkt -hy."""
+    V = _box_verts(0.01, 0.05, 0.01)
+    R = A.axis_angle_matrix([1, 0, 0], np.radians(90.0))  # body-Y -> world-±Z
+    assert abs(A.lowest_contact_z(R, V) - (-0.05)) < 1e-9
+
+
+def test_z_snap_restores_resting_height_after_offset():
+    """Liegendes Teil mit künstlichem Z-Offset: Z-Snap stellt die Auflage (z=0) her."""
+    V = _box_verts(0.02, 0.05, 0.015)                # flach liegende Quader-Box
+    R = np.eye(3)                                     # liegt flach
+    # korrekte ruhende Höhe: tiefster Punkt auf z=0 -> origin.z = +hz = 0.015
+    t_true = np.array([0.1, -0.2, 0.015])
+    # künstlicher Z-Fehler (RGB-Tiefenfehler), x/y unverändert:
+    t_noisy = t_true + np.array([0.0, 0.0, 0.042])
+    t_snapped, dz = A.planar_z_snap(R, t_noisy, V, table_z=0.0)
+    assert np.allclose(t_snapped[:2], t_noisy[:2], atol=1e-12)   # x/y unangetastet
+    assert abs(t_snapped[2] - t_true[2]) < 1e-9                  # Auflage wiederhergestellt
+    # der tiefste Welt-Punkt sitzt jetzt exakt auf der Tischebene:
+    contact = t_snapped[2] + A.lowest_contact_z(R, V)
+    assert abs(contact) < 1e-9
+    assert dz < 0                                                # nach unten korrigiert
+
+
+def test_z_snap_idempotent():
+    """Zweimal snappen == einmal (Fixpunkt; das Teil ruht schon)."""
+    V = _box_verts(0.02, 0.05, 0.015)
+    R = A.axis_angle_matrix([0, 0, 1], np.radians(33.0))   # nur Yaw, liegt flach
+    t = np.array([0.05, 0.05, 0.5])
+    t1, _ = A.planar_z_snap(R, t, V, table_z=0.0)
+    t2, dz2 = A.planar_z_snap(R, t1, V, table_z=0.0)
+    assert np.allclose(t1, t2, atol=1e-12)
+    assert abs(dz2) < 1e-12
+
+
+def test_z_snap_works_for_standing_part_too():
+    """Stehendes/hochkant Teil: Z-Snap setzt korrekt den tiefsten Punkt auf z=0
+    (verschlimmert NICHTS, x/y/Rotation unverändert)."""
+    V = _box_verts(0.01, 0.05, 0.01)
+    R = A.axis_angle_matrix([1, 0, 0], np.radians(90.0))   # steht hochkant (Y->Z)
+    t = np.array([0.0, 0.0, 0.2])
+    t_snapped, dz = A.planar_z_snap(R, t, V, table_z=0.0)
+    contact = t_snapped[2] + A.lowest_contact_z(R, V)
+    assert abs(contact) < 1e-9                              # tiefster Punkt auf Tisch
+    assert np.allclose(t_snapped[:2], t[:2], atol=1e-12)   # x/y unangetastet
+
+
+def test_z_snap_guard_skips_far_off_part():
+    """Guard: ein weit über dem Tisch platziertes Teil (Greifer/in der Luft) wird
+    NICHT gesnappt — der Planar-Prior gilt dort nicht (T-055-Held-Teil-Schutz)."""
+    V = _box_verts(0.02, 0.05, 0.015)
+    R = np.eye(3)
+    # Teil 0.5m über dem Tisch -> dz ~ -0.515m, weit über dem Guard (0.05m).
+    t_far = np.array([0.0, 0.0, 0.5])
+    _, t_out, info = A.planar_refine(R, t_far, V, table_z=0.0, max_snap_m=0.05)
+    assert info["snap_skipped"] is True and info["z_snap"] is False
+    assert np.allclose(t_out, t_far, atol=1e-12)         # Pose unverändert
+    # mit max_snap_m=None (kein Guard) WIRD gesnappt:
+    _, t_snap, info2 = A.planar_refine(R, t_far, V, table_z=0.0, max_snap_m=None)
+    assert info2["z_snap"] is True
+    assert abs(t_snap[2] + A.lowest_contact_z(R, V)) < 1e-9
+
+
+def test_z_snap_guard_allows_resting_part():
+    """Guard lässt resting-Teile (kleiner Tiefenfehler) durch."""
+    V = _box_verts(0.02, 0.05, 0.015)
+    R = np.eye(3)
+    t = np.array([0.0, 0.0, 0.015 + 0.03])               # 30mm Tiefenfehler < 50mm Guard
+    _, t_out, info = A.planar_refine(R, t, V, table_z=0.0, max_snap_m=0.05)
+    assert info["z_snap"] is True and info["snap_skipped"] is False
+    assert abs(t_out[2] - 0.015) < 1e-9                  # auf die Auflage gesnappt
+
+
+def test_planar_refine_default_only_z_snap():
+    """planar_refine() default: nur Z-Snap, Rotation BLEIBT (tilt_correct aus).
+    Höhe innerhalb des Guards (resting), daher wird gesnappt."""
+    V = _box_verts(0.02, 0.05, 0.015)
+    R = A.axis_angle_matrix([0, 0, 1], np.radians(20.0))    # flach, nur Yaw
+    t = np.array([0.1, 0.1, 0.015 + 0.025])                 # 25mm Tiefenfehler < 50mm Guard
+    R_out, t_out, info = A.planar_refine(R, t, V, table_z=0.0)
+    assert np.allclose(R_out, R, atol=1e-12)               # Rotation unverändert
+    assert info["z_snap"] is True and info["tilt"] is False
+    assert abs(t_out[2] + A.lowest_contact_z(R, V)) < 1e-9
+
+
+def _flat_plate_verts(hx, hy, n=12):
+    """Dichtes, planares Bodengitter (z=-eps) + dünner Korpus darüber.
+
+    Modelliert ein Teil mit einer echten planaren Auflagefläche: ein nxn-Gitter
+    bei z=-0.003 (die Auflage) plus ein paar Punkte darüber. So fällt eine ganze
+    Vertex-Fläche ins Kontakt-Band -> die Tilt-Heuristik greift (wie bei einem
+    realen CAD-Mesh mit flacher Unterseite)."""
+    gx = np.linspace(-hx, hx, n)
+    gy = np.linspace(-hy, hy, n)
+    floor = np.array([[x, y, -0.003] for x in gx for y in gy], dtype=np.float64)
+    top = np.array([[x, y, 0.003] for x in (-hx, hx) for y in (-hy, hy)], dtype=np.float64)
+    return np.vstack([floor, top])
+
+
+def test_planar_tilt_correct_fixes_small_tilt_on_flat_part():
+    """Konservative Tilt-Korrektur: ein flach liegendes Teil mit echter planarer
+    Auflagefläche + KLEINER Kippung wird zur Tischnormalen geradegerückt."""
+    V = _flat_plate_verts(0.03, 0.04, n=12)          # planare Bodenfläche
+    tilt = np.radians(6.0)                            # kleine Kippung um X
+    R = A.axis_angle_matrix([1, 0, 0], tilt)
+    t = np.array([0.0, 0.0, 0.1])
+    R_out, t_out, info = A.planar_refine(R, t, V, table_z=0.0, tilt_correct=True)
+    assert info["tilt"] is True
+    # nach der Korrektur liegt die Plattennormale (~Body-Z) ~ auf Welt-Z:
+    plate_normal_world = R_out[:, 2] / np.linalg.norm(R_out[:, 2])
+    cos = abs(float(plate_normal_world @ np.array([0.0, 0.0, 1.0])))
+    assert cos > 0.999                               # praktisch flach
+
+
+def test_planar_tilt_correct_skips_standing_part():
+    """Stehendes/kantiges Teil: Tilt-Korrektur fasst die Rotation NICHT an
+    (Auflage ist kein planares Band -> keine Verschlimmerung)."""
+    V = _box_verts(0.01, 0.06, 0.01)                 # langer dünner Stab
+    R = A.axis_angle_matrix([1, 0, 0], np.radians(90.0))   # steht hochkant
+    t = np.array([0.0, 0.0, 0.1])
+    R_out, t_out, info = A.planar_refine(R, t, V, table_z=0.0, tilt_correct=True)
+    # Rotation darf NICHT verändert worden sein (nur Z-Snap):
+    assert np.allclose(R_out, R, atol=1e-12)
+    assert info["tilt"] is False
+
+
+def test_detection_to_result_with_planar_snap():
+    """detection_to_result(apply_planar=True): t_world.z wird auf die Tischebene
+    gesnappt, Schema-Form bleibt; ohne Mesh kein Snap (kein Crash)."""
+    rng = np.random.default_rng(31)
+    V = _box_verts(0.02, 0.05, 0.015)
+    R_world = A.axis_angle_matrix([0, 0, 1], np.radians(45.0))  # flach, Yaw
+    R_w2c = np.eye(3); t_w2c = np.zeros(3); table_origin = [0.0, 0.0, 0.0]
+    # absichtlich falsche Höhe (z weit über dem Tisch):
+    R_m2c, t_m2c = world_to_bop(R_world, [0.1, 0.0, 0.25], R_w2c, t_w2c, table_origin)
+    r = A.detection_to_result(
+        instance_id=0, obj_id=4, R_m2c=R_m2c, t_m2c_mm=t_m2c,
+        R_w2c=R_w2c, t_w2c_mm=t_w2c, table_origin_m=table_origin,
+        bbox_2d=[1, 2, 3, 4], confidence=0.8,
+        apply_planar=True, mesh_verts_m=V, table_z=0.0, max_snap_m=None)
+    contact = r["t_world"][2] + A.lowest_contact_z(np.array(r["R_world"]).reshape(3, 3), V)
+    assert abs(contact) < 1e-9                        # auf der Tischebene
+    # ohne Mesh: kein Snap, Pose unverändert (Höhe bleibt 0.25):
+    r2 = A.detection_to_result(
+        instance_id=0, obj_id=4, R_m2c=R_m2c, t_m2c_mm=t_m2c,
+        R_w2c=R_w2c, t_w2c_mm=t_w2c, table_origin_m=table_origin,
+        bbox_2d=[1, 2, 3, 4], confidence=0.8, apply_planar=True, mesh_verts_m=None)
+    assert abs(r2["t_world"][2] - 0.25) < 1e-9
+
+
 # ── Self-Runner (ohne pytest) ─────────────────────────────────────────────────
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
