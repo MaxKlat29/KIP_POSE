@@ -50,9 +50,36 @@ ts()   { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 say()  { echo "[$(ts)] [phase2] $*"; }
 fail() { say "STAGE FAILED: $*"; say "PHASE2_FAILED"; exit "${2:-1}"; }
 
-say "=== PHASE-2 AUTONOMOUS CHAIN START (T-050) ==="
-say "repo=$REPO  raw=$RAW  bop=$BOP  expect_scenes=$EXPECT_SCENES"
+# [T-068] --from-train : skip stages 1-3 (WAIT-RENDER, CONVERT, SYM-CHECK+deploy)
+# and resume at stage 4 (SMOKE) + stage 5 (RETRAIN). Used by the T-068 relaunch:
+# the render finished, the BOP convert (8000->train/val, ~3.4h) is DONE, and the
+# sym-check + deploy (fps/keypoints) are DONE. Re-running them with --fresh would
+# throw away 3.4h of conversion for nothing. This flag verifies the convert+deploy
+# artifacts exist, then jumps straight to the smoke + training stages.
+FROM_TRAIN=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --from-train) FROM_TRAIN=1; shift ;;
+        *) say "WARN ignoring unknown arg: $1"; shift ;;
+    esac
+done
 
+say "=== PHASE-2 AUTONOMOUS CHAIN START (T-050) ==="
+say "repo=$REPO  raw=$RAW  bop=$BOP  expect_scenes=$EXPECT_SCENES  from_train=$FROM_TRAIN"
+
+if [ "$FROM_TRAIN" -eq 1 ]; then
+    say "MODE: --from-train — skipping WAIT-RENDER + CONVERT + SYM-CHECK (already done)."
+    # Verify the upstream artifacts the smoke + training stages depend on, so we
+    # fail loudly here instead of hours into a run if convert/deploy didn't land.
+    [ -d "$BOP/train_pbr" ] && [ -n "$(ls -A "$BOP/train_pbr" 2>/dev/null)" ] || fail "--from-train: $BOP/train_pbr missing/empty (convert not done?)" 2
+    [ -d "$BOP/val" ]       && [ -n "$(ls -A "$BOP/val" 2>/dev/null)" ]       || fail "--from-train: $BOP/val missing/empty (convert not done?)" 2
+    [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/fps_points.pkl" ]   || fail "--from-train: fps_points.pkl missing (deploy not done?)" 3
+    [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/keypoints_3d.pkl" ] || fail "--from-train: keypoints_3d.pkl missing (deploy not done?)" 3
+    say "--from-train artifacts verified: train_pbr=$(ls "$BOP/train_pbr" | wc -l) scenes, val=$(ls "$BOP/val" | wc -l) scenes, fps+keypoints present."
+    nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader 2>/dev/null | sed 's/^/[phase2]   GPU: /'
+fi
+
+if [ "$FROM_TRAIN" -ne 1 ]; then
 # =============================================================================
 # STAGE 1 — WAIT-RENDER  (GPU is busy; do NOT touch it until the render frees it)
 # =============================================================================
@@ -197,6 +224,7 @@ RC=$?
 [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/fps_points.pkl" ]   || fail "fps_points.pkl missing after deploy" 31
 [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/keypoints_3d.pkl" ] || fail "keypoints_3d.pkl missing after deploy" 31
 say "SYM_CHECK_DONE"
+fi   # end of "if FROM_TRAIN != 1" (stages 1-3: WAIT-RENDER + CONVERT + SYM-CHECK)
 
 # =============================================================================
 # STAGE 4 — SMOKE  (320/80 GPU probe; auto OOM/shape fallback before the long run)
