@@ -6,7 +6,10 @@
 # symlinks the BOP dataset into datasets/BOP_DATASETS, patches the two
 # registration points (ref/__init__.py + dataset_factory.py), and runs the fast
 # CPU preprocessing (fps_points + keypoints_3d). XYZ crops are rendered ONLINE
-# during training (XYZ_ONLINE=True) so no offline EGL xyz-gen is needed.
+# during training (XYZ_ONLINE=True). [T-068] We measured offline XYZ precompute
+# as a speed fix and it was speed-NEUTRAL (3.0 s/iter both ways) — the run is
+# compute-bound on convnext_base@320, not render-bound. The offline tool
+# (pose_isaac_pbr_gen_xyz.py) is kept for the record but NOT run here.
 #
 #   bash deploy_gdrnpp_pose_isaac.sh
 # =============================================================================
@@ -75,6 +78,17 @@ cp "$SRC/pose_isaac_compute_keypoints_3d.py" "$GDRN/core/gdrn_modeling/tools/pos
 cd "$GDRN"
 PYTHONPATH="$GDRN" $PY core/gdrn_modeling/tools/pose_isaac_compute_fps.py
 PYTHONPATH="$GDRN" $PY core/gdrn_modeling/tools/pose_isaac_compute_keypoints_3d.py
+
+echo "[deploy] 7b) stage offline XYZ tool (NOT run — XYZ_ONLINE=True; see T-068 measurement)"
+# pose_isaac_pbr_gen_xyz.py renders the dense XYZ target once per GT instance into
+# <split>/xyz_crop/*.pkl (the path pose_isaac_pbr.py populates as xyz_path +
+# GDRN_DatasetFromList loads). It works and is fast (~72 s for 17041+1964 inst),
+# but offline XYZ was speed-neutral vs online (compute-bound on convnext_base@320),
+# so we keep online rendering. To activate offline later: set XYZ_ONLINE=False in
+# config_base_so.py and run:
+#   CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$GDRN $PY $SRC/pose_isaac_pbr_gen_xyz.py --repo $GDRN --split train_pbr --gpu 0
+#   CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$GDRN $PY $SRC/pose_isaac_pbr_gen_xyz.py --repo $GDRN --split val --gpu 0
+cp "$SRC/pose_isaac_pbr_gen_xyz.py" "$GDRN/core/gdrn_modeling/tools/pose_isaac_pbr_gen_xyz.py" 2>/dev/null || true
 
 echo "[deploy] 8) sanity: register + count one split"
 PYTHONPATH="$GDRN" $PY - <<PY
