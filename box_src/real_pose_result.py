@@ -316,7 +316,9 @@ def main():
             "coordinate_convention": COORD_CONVENTION,
             "schema_version": SCHEMA_VERSION,
             "pose_backend": "GDRNPP",
-            "checkpoint_note": "model_final.pth per-object SO (anker_kurz/anker_lang/zahnrad)",
+            "checkpoint_note": "model_best.pth (best-by-val, T-068 overfitting guard) "
+                               "per-object SO (anker_kurz/anker_lang/zahnrad); "
+                               "model_final.pth fallback if no best-selection ran",
             "levers": {"planar_refine": bool(a.planar_refine),
                        "refine_rc": bool(a.refine_rc and RC is not None),
                        "rc_scorer": a.rc_scorer if a.refine_rc else None,

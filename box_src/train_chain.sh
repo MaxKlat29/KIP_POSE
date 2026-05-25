@@ -252,6 +252,51 @@ GDRN_OUT="$GDRN/output/gdrn/poseIsaacPbrSO"
 FAILED_OBJS=()
 OK_OBJS=()
 
+# [T-068 — OVERFITTING GUARD] After an object finishes training, pick the
+# best-by-val checkpoint (sym-aware AR on the held-out val via our eval_bop.py,
+# NOT model_final blindly) and mark it model_best.pth. This runs HERE, right after
+# the object's own training, while the GPU still belongs to this object and BEFORE
+# the next object starts — the chain is strictly sequential on the one 3090, so
+# there is no contention. It is NON-FATAL: a selector failure logs a warning and
+# leaves model_final as the de-facto deploy (e2e_finish falls back to model_final
+# when model_best.pth is absent). Disable with SELECT_BEST=0.
+SELECT_BEST="${SELECT_BEST:-1}"
+RANK_MAX_IMAGES="${RANK_MAX_IMAGES:-120}"   # subset size for the cheap per-ckpt rank
+BOP_VENV="${BOP_VENV:-/mnt/data/bop/bop-venv/bin/python}"
+DATASET_DIR="${DATASET_DIR:-$BOP}"
+
+select_best() {
+    local obj="$1"
+    [ "$SELECT_BEST" -eq 1 ] || { say "SELECT_BEST=0 — skipping best-by-val for $obj"; return 0; }
+    say "SELECT-BEST obj=$obj: ranking kept checkpoints on val (rank-subset=$RANK_MAX_IMAGES), AR=eval_bop.py"
+    cd "$GDRN"
+    # The selector shells out to main_gdrn --eval-only (gdrnpp-venv) per checkpoint
+    # and scores each CSV with eval_bop.py (bop-venv). --auto-res sniffs the crop res
+    # from each checkpoint so mixed-res output dirs still load. --apply writes
+    # model_best.pth (relative symlink).
+    PYTHONPATH="$GDRN" CUDA_VISIBLE_DEVICES=0 $GDRN_VENV \
+        "$REPO/box_src/select_best_ckpt.py" \
+        --obj "$obj" \
+        --gdrn-root "$GDRN" \
+        --dataset-dir "$DATASET_DIR" \
+        --gdrn-venv "$GDRN_VENV" \
+        --bop-venv "$BOP_VENV" \
+        --rank-max-images "$RANK_MAX_IMAGES" \
+        --auto-res --apply \
+        --out-json "$GDRN_OUT/$obj/select_best.json"
+    local src=$?
+    if [ $src -ne 0 ]; then
+        say "SELECT-BEST obj=$obj WARN rc=$src — best-by-val selection failed; model_final stays the deploy fallback"
+        return 0   # non-fatal
+    fi
+    if [ -e "$GDRN_OUT/$obj/model_best.pth" ]; then
+        say "SELECT-BEST obj=$obj OK -> $(readlink -f "$GDRN_OUT/$obj/model_best.pth" 2>/dev/null || echo "$GDRN_OUT/$obj/model_best.pth")"
+    else
+        say "SELECT-BEST obj=$obj WARN: no model_best.pth written (model_final stays deploy)"
+    fi
+    return 0
+}
+
 run_gdrn() {
     local obj="$1" stage="$2"
     say "STAGE $stage: GDRNPP SO train obj=$obj — gdrnpp-venv (multi-day)"
@@ -279,6 +324,9 @@ run_gdrn() {
     fi
 
     say "STAGE $stage obj=$obj OK rc=0 — checkpoint: $ckpt"
+    # [T-068] best-by-val selection right after this object's training (GPU still
+    # ours, next object not started). Non-fatal.
+    select_best "$obj"
     OK_OBJS+=("$obj")
     return 0
 }
@@ -292,8 +340,17 @@ run_gdrn zahnrad    "6/6" || say "continuing chain after zahnrad failure"
 
 # ---------------------------------------------------------------------------
 say "GDRNPP summary: OK=[${OK_OBJS[*]:-none}] FAILED=[${FAILED_OBJS[*]:-none}]"
+# [T-068] surface the best-by-val deploy choice per object (model_best.pth ->
+# the AR-best checkpoint, which may be EARLIER than model_final = overfitting guard).
+for obj in anker_kurz anker_lang zahnrad; do
+    if [ -e "$GDRN_OUT/$obj/model_best.pth" ]; then
+        say "  $obj deploy = model_best.pth -> $(basename "$(readlink "$GDRN_OUT/$obj/model_best.pth" 2>/dev/null || echo model_best.pth)")"
+    else
+        say "  $obj deploy = model_final.pth (no model_best.pth — selector skipped/failed)"
+    fi
+done
 if [ ${#FAILED_OBJS[@]} -ne 0 ]; then
     say "TRAIN_CHAIN_FAILED — ${#FAILED_OBJS[@]}/3 GDRNPP objects did not produce a checkpoint"
     exit 60
 fi
-say "TRAIN_CHAIN_DONE (detector + 3 GDRNPP SO models, all checkpointed)"
+say "TRAIN_CHAIN_DONE (detector + 3 GDRNPP SO models, all checkpointed, best-by-val selected)"

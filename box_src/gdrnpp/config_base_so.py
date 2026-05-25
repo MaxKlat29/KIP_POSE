@@ -86,6 +86,24 @@ SOLVER = dict(
     WARMUP_FACTOR=0.001,
     WARMUP_ITERS=1000,
     AMP=dict(ENABLED=True),       # mixed precision -> lower VRAM (adr.md §5-R1)
+    # [T-068 — OVERFITTING GUARD: checkpoint SPREAD for best-by-val selection]
+    # GDRNPP has NO in-training validation (TEST.EVAL_PERIOD=0 below — its internal
+    # eval crashes with `KeyError: pose_isaac` and would kill the run, see W4),
+    # NO early-stopping, and the chain blindly deploys `model_final.pth` = the LAST
+    # epoch (160), which on a 160-epoch RGB-only run on a small synthetic set is a
+    # prime overfitting candidate. The common_base.py defaults (PERIOD=5,
+    # MAX_TO_KEEP=5) keep ONLY the final ~25 epochs (5 ckpts × every-5th, all in
+    # ep136-160) — useless for picking a non-overfit checkpoint because there is no
+    # EARLY checkpoint to compare against. We instead keep a WIDE, EVEN spread over
+    # the whole schedule so select_best_ckpt.py can score each on the held-out val
+    # and pick the true AR-best (which may well be an earlier epoch).
+    #   PERIOD=10, BY_EPOCH=True  -> a checkpoint at epochs 10,20,...,160 = 16 ckpts
+    #   MAX_TO_KEEP=20            -> all 16 + model_final survive (no early deletion)
+    # Disk cost: 16 × 1.6GB × 3 objects ≈ 77GB; /mnt/data has 3.2T free (9% used) →
+    # trivial. If disk ever got tight, PERIOD=16 -> 10 ckpts is the fallback.
+    CHECKPOINT_PERIOD=10,
+    CHECKPOINT_BY_EPOCH=True,
+    MAX_TO_KEEP=20,
 )
 
 DATASETS = dict(

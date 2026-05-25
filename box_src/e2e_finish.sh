@@ -92,11 +92,23 @@ FRONTEND_TEST="$PROJECT_DIR/frontend/test"
 # remote (box) paths — only used in full mode
 REMOTE_REPO="${REMOTE_REPO:-/mnt/data/kip_pose}"
 DATASET_DIR="${DATASET_DIR:-/mnt/data/kip_pose/project/bop/pose_isaac}"
+# [T-068] track whether the caller pinned PREDS_CSV (then we don't rebuild it from
+# the best/final per-object CSVs in STEP 1).
+PREDS_CSV_PINNED="${PREDS_CSV:+1}"
 PREDS_CSV="${PREDS_CSV:-/mnt/data/bop/results/preds_all.csv}"
 GDRN_OUT="${GDRN_OUT:-/mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO}"
 REMOTE_RESULTS="${REMOTE_RESULTS:-/mnt/data/bop/results/e2e_finish}"
 # the per-object trained-GDRNPP val-prediction CSVs (verified box layout, S-050).
 # refine_eval.py takes name=csv; these feed the planar A/B config. Overridable.
+# [T-068 — OVERFITTING GUARD] Prefer the BEST-by-val checkpoint's predictions
+# ($GDRN_OUT/<obj>/preds_best.csv, staged by select_best_ckpt.py) over the
+# model_final ones. The model_final CSV (inference_/.../<obj>-iter0...val.csv) is
+# the LAST epoch, a possible overfit; preds_best.csv is the AR-best checkpoint on
+# the held-out val. Fall back to the model_final CSV when no best-selection ran.
+# NB: GDRN_OUT lives on the BOX; e2e_finish runs on the LAPTOP in full mode, so the
+# preds_best-vs-model_final choice is made BOX-SIDE in STEP 1's combine command
+# (the `_PRED_*` defaults below are the model_final paths; the box picks best if
+# present). The PRED_* values stay model_final paths for the A/B planar config.
 PRED_KURZ="${PRED_KURZ:-$GDRN_OUT/anker_kurz/inference_/pose_isaac_anker_kurz_val/anker-kurz-iter0_pose_isaac-val.csv}"
 PRED_LANG="${PRED_LANG:-$GDRN_OUT/anker_lang/inference_/pose_isaac_anker_lang_val/anker-lang-iter0_pose_isaac-val.csv}"
 PRED_ZAHN="${PRED_ZAHN:-$GDRN_OUT/zahnrad/inference_/pose_isaac_zahnrad_val/zahnrad-iter0_pose_isaac-val.csv}"
@@ -193,6 +205,31 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   cp "$DRY_REPORT" "$REPORT_JSON"
   say "eval report staged at $REPORT_JSON"
 else
+  # [T-068] Build the combined preds CSV from the per-object PRED_* paths, which
+  # now point at preds_best.csv (best-by-val checkpoint) when a best-selection ran,
+  # falling back to the model_final CSV otherwise. Only do this if the caller did
+  # NOT pin PREDS_CSV explicitly (env override wins). This is the step that makes
+  # the WHOLE finish honour the overfitting-guarded checkpoint, not model_final.
+  if [[ -z "${PREDS_CSV_PINNED:-}" ]]; then
+    say "full: combining per-object best-by-val/final CSVs -> $PREDS_CSV on the box"
+    say "  (box picks \$GDRN_OUT/<obj>/preds_best.csv if present, else the model_final CSV)"
+    # The choice happens BOX-SIDE: for each object use preds_best.csv (the best-by-val
+    # checkpoint staged by select_best_ckpt.py) when it exists, otherwise the
+    # model_final CSV. This keeps e2e_finish correct whether it runs on the laptop
+    # (GDRN_OUT is a remote path the laptop can't stat) or on the box.
+    COMBINE_CMD="set -e; mkdir -p '$(dirname "$PREDS_CSV")'; \
+      pick() { if [ -f \"$GDRN_OUT/\$1/preds_best.csv\" ]; then echo \"$GDRN_OUT/\$1/preds_best.csv\"; else echo \"\$2\"; fi; }; \
+      CK=\$(pick anker_kurz '$PRED_KURZ'); \
+      CL=\$(pick anker_lang '$PRED_LANG'); \
+      CZ=\$(pick zahnrad    '$PRED_ZAHN'); \
+      echo \"[combine] kurz=\$CK\"; echo \"[combine] lang=\$CL\"; echo \"[combine] zahn=\$CZ\"; \
+      /mnt/data/bop/bop-venv/bin/python '$REMOTE_REPO/box_src/combine_preds.py' \
+        '$PREDS_CSV' \"\$CK\" \"\$CL\" \"\$CZ\""
+    "$GPU_RUN" -- "$COMBINE_CMD" \
+      || say "WARN combine_preds on box failed — falling back to pre-existing $PREDS_CSV"
+  else
+    say "full: PREDS_CSV pinned by caller -> $PREDS_CSV (skipping best/final combine)"
+  fi
   say "full: running eval_bop on the box (preds=$PREDS_CSV, split=val, >20% dataset)"
   [[ -x "$EVAL_SH" ]] || fail "eval_bop.sh not executable: $EVAL_SH" 12
   OUT_LOCAL="$EVAL_LOCAL" SPLIT=val DATASET_DIR="$DATASET_DIR" \
