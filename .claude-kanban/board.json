@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-25T15:34:28Z",
+  "updated": "2026-05-25T16:00:06Z",
   "columns": [
     {
       "id": "backlog",
@@ -3482,7 +3482,7 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-25T15:34:28Z",
+      "updated": "2026-05-25T16:00:06Z",
       "started_at": "2026-05-23T05:46:01Z",
       "completed_at": null,
       "comments": [],
@@ -3684,6 +3684,48 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "DRY-RUN BEWEIST DEN GUARD: Selektor auf 6 Phase-1 zahnrad-ckpts (256/64, --no-apply) -> WINNER=model_0013869.pth (full-val AR 0.3572), best_is_final=FALSE. model_final rank-AR nur 0.3525. Ranking zeigt klares Overfitting-Muster: AR steigt 0.343->0.344->0.344->0.3543(peak ep13869)->faellt 0.3525->plateau 0.3525(final). Ein FRUEHERER ckpt schlaegt den letzten = exakt der Fall den der Guard faengt; blindes model_final haette 0.005 AR verschenkt. Crash-frei (VAL.SAVE_BOP_CSV_ONLY umgeht KeyError-pose_isaac), auto-res 256/64 korrekt gesnifft, alle 6 ckpts gescort. Detektor (Stage 5a, ep55/100) lief DURCHGEHEND ungestoert, DETECTOR_TRAIN_DONE=0, kein echtes GDRNPP-Training waehrenddessen. (Absolute AR niedrig weil Phase-1-ckpts gegen NEUE Phase-2-val = OOD -> Dry-Run beweist RANKING-Logik, nicht Performance.) T-068 Kern-Aufgabe fertig: Config-Retention deployed VOR GDRNPP-Start + Selektor verifiziert. Commit 4e13098."
+        },
+        {
+          "ts": "2026-05-25T15:37:17Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Overfitting-Guard gemerged: GDRNPP CHECKPOINT_PERIOD=10/KEEP=20 + best-by-val-Selektor. Dry-run: model_final NICHT best (ep13869 gewann)."
+        },
+        {
+          "ts": "2026-05-25T15:43:41Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Max: Detektor konvergiert (mAP50 0.98), abfahrt → best.pt publishen, Chain sauber stoppen, GDRNPP-only relaunch (spart ~7h)"
+        },
+        {
+          "ts": "2026-05-25T15:47:11Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "ABFAHRT-Entscheid (Max): Detektor auskonvergiert (best.pt=ep55, mAP50=0.99211, mAP50-95=0.94737, fitness=0.95184; top-5 ep49-55 flach binnen 0.002). Stoppe Detektor+Chain sauber, publishe best.pt -> detector.pt, relaunch GDRNPP-only. Chain steht in STAGE 5a (PID 663113, Detektor 665855)."
+        },
+        {
+          "ts": "2026-05-25T15:47:56Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "detector.pt PUBLISHED: best.pt (ep55, best_fitness=0.94737) -> /mnt/data/kip_pose/data/detector_armvis/detector.pt. md5 match (275e3c63), YOLO-load OK (task=obb, nc=6, classes anker_kurz..zahnrad korrekt). mAP50=0.99211 mAP50-95=0.94737."
+        },
+        {
+          "ts": "2026-05-25T15:48:44Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Chain+Detektor SAUBER gestoppt: bash 663113 ZUERST SIGKILL (umgeht fail()/PHASE2_FAILED-trap in STAGE 5a), dann kill -9 -663113 (PGID: Detektor 665855 + alle ultralytics-Worker). Verify (fresh SSH): phase2_chain/train_detector/main_gdrn ALLE NONE, GPU frei (1MiB/0%, 0 compute procs). PHASE2_FAILED count im Log = 0. Kein FAILED geschrieben."
+        },
+        {
+          "ts": "2026-05-25T15:54:10Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "--from-gdrnpp RELAUNCH live: PHASE2_PID=727256 (detach bewiesen: PPID=1, SID==PID, Ss). Log frisch /mnt/data/bop/logs/phase2_chain.log (alt -> .pre-gdrnpp 8.5MB). Marker-Sequenz korrekt: MODE --from-gdrnpp, SMOKE_DONE(skipped), DETECTOR_TRAIN_DONE(skipped/published), jetzt STAGE 5b OBB->AABB bridge (800 val-imgs, non-fatal). Stale 256/64-ckpts (3 dirs) -> _archive/*_pre_gdrnpp_320 (non-destructive). FAILED markers=0. Wait auf STAGE 5c main_gdrn anker_kurz."
+        },
+        {
+          "ts": "2026-05-25T16:00:06Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "GDRNPP anker_kurz TRAINIERT SAUBER: iter 9-11/41440, total_loss 114.4 (sinkend), time 3.3-3.6s/it, max_mem 5758M (GPU 6832MiB/51C). Config verifiziert: INPUT_RES=320 OUTPUT_RES=80 IMS_PER_BATCH=16 TOTAL_EPOCHS=160, CHECKPOINT_PERIOD=10/MAX_TO_KEEP=20 (S-052 spread), PM_LOSS_SYM=True, RGB-only (in_chans=3, DEPTH off), RESUME=False. 'No checkpoint found, init from scratch' = stale 256/64-ckpts erfolgreich archiviert. ConvPnPNet 320/80 ok (patch greift). FAILED markers=0. ETA ~4-4.5d (3 obj sequenziell)."
         }
       ]
     },
