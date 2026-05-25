@@ -145,6 +145,22 @@ MODEL = dict(
     BBOX_TYPE="AMODAL_CLIP",
     POSE_NET=dict(
         NAME="GDRN_double_mask",
+        # [T-068] XYZ_ONLINE stays True. We investigated offline XYZ precompute as
+        # a training-speed fix (online EGL renders the dense XYZ target once per
+        # instance per iteration in the main loop, engine_utils.batch_data_train_online).
+        # MEASURED (GPU-exclusive, anker_kurz): offline XYZ = 3.022 s/iter vs online
+        # ~2.8-3.0 s/iter — IDENTICAL. The 16 per-iter EGL renders cost ~20 ms
+        # (787 inst/s probe), <1% of the 2800 ms iter. The real per-iter cost is the
+        # convnext_base forward/backward at INPUT_RES=320 (107M params) — the run is
+        # COMPUTE-BOUND, not render- or IO-bound. Batch 16->24 confirmed it:
+        # 3.02 s/iter@b16 (783 s/epoch) vs 4.38 s/iter@b24 (759 s/epoch), ~linear
+        # scaling => no fixed overhead to amortize, batch increase doesn't help
+        # either. There is NO cheap per-iter win without lowering INPUT_RES (the
+        # forbidden Zahnrad small-feature fix). So we keep the exact proven config
+        # and just relaunch. The offline path (pose_isaac_pbr_gen_xyz.py + the
+        # precomputed <split>/xyz_crop pkls) is correct and committed for the record,
+        # but NOT activated — switching the data path for zero speed gain adds risk
+        # to an unattended multi-day run. See team/kai-ml/learnings.md (2026-05-25 T-068).
         XYZ_ONLINE=True,
         # [T-050 / PHASE2 — HIGHEST-IMPACT FIX for Zahnrad, GPU-GATED]
         # gdrn_base default is INPUT_RES=256 / OUTPUT_RES=64. The Zahnrad
