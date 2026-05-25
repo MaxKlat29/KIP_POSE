@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-25T07:33:37Z",
+  "updated": "2026-05-25T15:34:28Z",
   "columns": [
     {
       "id": "backlog",
@@ -2110,7 +2110,7 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:16Z",
-      "updated": "2026-05-24T17:29:45Z",
+      "updated": "2026-05-25T07:48:23Z",
       "started_at": "2026-05-24T09:14:12Z",
       "completed_at": "2026-05-24T17:29:45Z",
       "comments": [],
@@ -2192,6 +2192,18 @@
           "agent": "claude",
           "level": "success",
           "msg": "Finish gehärtet+gemerged: 1-Befehl A/B {planar|M2|TTA} + auto-best + decision-flags, dry-run grün"
+        },
+        {
+          "ts": "2026-05-25T07:47:11Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Re-Prio (Max): Zahnrad nicht im realen Use-Case → Erfolgsmetrik ANKER-ONLY (mean AR anker_kurz+anker_lang, >0.80-Gate). Finish anker-zentriert + Zahnrad informativ. SO(3)-Kopf für Prio entbehrlich."
+        },
+        {
+          "ts": "2026-05-25T07:48:23Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "KORREKTUR (Max): Zahnrad bleibt drin, KEIN Anker-Fokus, Pipeline UNVERAENDERT. Vorherige Anker-only-Notiz war nur Info, kein Umbau. Finish bleibt 3-Objekt-A/B + auto-best + SO(3)-Flag."
         }
       ]
     },
@@ -3470,7 +3482,7 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-25T07:33:37Z",
+      "updated": "2026-05-25T15:34:28Z",
       "started_at": "2026-05-23T05:46:01Z",
       "completed_at": null,
       "comments": [],
@@ -3624,6 +3636,54 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "Detektor trainiert aktiv (GPU 7224MiB/86%), 0x PHASE2_FAILED im frischen Log, PHASE2_PID 663113 ALIVE. Kette gesund. T-068 BLEIBT in_progress (Training mehrstuendig ~8-9h ETA). Brain aktualisiert (learnings + projects/pose). 3 Commits user-only: abd0f60 (--opts+disc) a6e8acd (exit-0+setsid) f9546b8 (--from-train)."
+        },
+        {
+          "ts": "2026-05-25T07:34:34Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Fix gemerged: 320/80 laeuft (6.8/24GB, kein OOM); Relaunch PID 663113 --from-train, Detektor+GDRNPP live, ETA ~8-9h"
+        },
+        {
+          "ts": "2026-05-25T14:57:56Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_progress"
+        },
+        {
+          "ts": "2026-05-25T14:57:56Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Overfitting-Schutz (Max): Checkpoint-Spread behalten + Best-by-Val-Auswahl am Finish statt model_final. Vor GDRNPP-Start einbauen."
+        },
+        {
+          "ts": "2026-05-25T15:01:16Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Overfitting-Guard-Arbeit gestartet (Worktree S-052). Box-State verifiziert: main_gdrn LAEUFT NICHT (GDRNPP noch nicht gestartet), Detektor Stage 5a ep50/100 (~50min ETA), phase2_chain PID 663113 --from-train alive. Disk /mnt/data: 3.2T frei (9% genutzt) -> Disk KEIN Constraint. GDRNPP-Defaults: CHECKPOINT_PERIOD=5/MAX_TO_KEEP=5 (common_base) -> nur letzte ~25ep ueberleben = nutzloser Spread. Plan: PERIOD=10/MAX_TO_KEEP=20 (16 ckpts ueber 160ep), Best-by-Val-Selektor via main_gdrn --eval-only VAL.SAVE_BOP_CSV_ONLY=True (crash-frei, umgeht KeyError pose_isaac) + eval_bop.py AR. Config VOR GDRNPP-Start anwenden."
+        },
+        {
+          "ts": "2026-05-25T15:05:58Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Checkpoint-SPREAD-Retention angewandt VOR GDRNPP-Start (main_gdrn bestaetigt NICHT laufend, race-frei). Gewaehlt: SOLVER.CHECKPOINT_PERIOD=10 + MAX_TO_KEEP=20 (BY_EPOCH=True) -> bei 160ep ueberleben ckpts@ep10,20,...,160 = 16 Stueck statt nur letzte 5. Disk: 16x1.6GB x3 Teile ~77GB von 3.2T frei (9% genutzt) = trivial. Deployed in box_src/gdrnpp/config_base_so.py + active base_so.py (Backup .orig-pre-t068-ckpt-spread). mmcv Config-Load gruen (PERIOD=10/MAX_TO_KEEP=20/EPOCHS=160/320-80/batch16). Smoke war schon DONE+gebaked (16/320/80) -> meine CHECKPOINT-Keys beruehren bake nicht. Selektor select_best_ckpt.py gebaut (20 Unit-Tests gruen) + in train_chain.sh nach run_gdrn eingehaengt (non-fatal, GPU sequenziell) + e2e_finish nutzt preds_best.csv statt model_final. Full pytest 116 passed/6 skipped."
+        },
+        {
+          "ts": "2026-05-25T15:18:15Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Dry-Run laeuft: Selektor crash-freier Pfad VERIFIZIERT auf Box — main_gdrn --eval-only --opts VAL.SAVE_BOP_CSV_ONLY=True schreibt BOP-CSV (503 preds) OHNE KeyError-pose_isaac-Crash, auto-res sniffte Phase-1 zahnrad korrekt als 256/64 (pnp_net.fc1.weight in_feat=8192=128*8^2). Detektor (Stage 5a ep53) lief durchgehend ungestoert (GPU 8GB von 24GB shared, kein Konflikt). 1 Bug gefunden+gefixt: find_pred_csv suchte CSV im inference_<model> dir, GDRNPP schreibt sie aber 1 Subdir tiefer (inference_<model>/<dataset>/). Fix: rekursiver Glob (top + 1 Ebene). +1 Unit-Test (sniff-Arithmetik 64->8192, 80->12800). Dry-Run #2 mit Fix laeuft (alle 6 ckpts, rank-subset 40). 21 Selektor-Tests gruen."
+        },
+        {
+          "ts": "2026-05-25T15:24:03Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Commit 4e13098 (user-only, kein Footer): feat(train) checkpoint-spread retention + best-by-val selection. 6 files, 766 insertions. Full pytest 117 passed/6 skipped. Config-Retention deployed+verifiziert auf Box (PERIOD=10/MAX_TO_KEEP=20 in active base_so.py + box_src, VOR GDRNPP-Start). Selektor + Hook (train_chain.sh nach run_gdrn) + e2e_finish (preds_best.csv box-seitig statt model_final) fertig. Dry-Run laeuft (Phase-1 zahnrad, --no-apply, Detektor ungestoert): 2/6 ckpts gescort bisher (model_0011679 rank-AR 0.343, model_0012409 0.344), crash-frei + auto-res 256/64 verifiziert. Restliche 4 ckpts + Gewinner folgen."
+        },
+        {
+          "ts": "2026-05-25T15:34:28Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "DRY-RUN BEWEIST DEN GUARD: Selektor auf 6 Phase-1 zahnrad-ckpts (256/64, --no-apply) -> WINNER=model_0013869.pth (full-val AR 0.3572), best_is_final=FALSE. model_final rank-AR nur 0.3525. Ranking zeigt klares Overfitting-Muster: AR steigt 0.343->0.344->0.344->0.3543(peak ep13869)->faellt 0.3525->plateau 0.3525(final). Ein FRUEHERER ckpt schlaegt den letzten = exakt der Fall den der Guard faengt; blindes model_final haette 0.005 AR verschenkt. Crash-frei (VAL.SAVE_BOP_CSV_ONLY umgeht KeyError-pose_isaac), auto-res 256/64 korrekt gesnifft, alle 6 ckpts gescort. Detektor (Stage 5a, ep55/100) lief DURCHGEHEND ungestoert, DETECTOR_TRAIN_DONE=0, kein echtes GDRNPP-Training waehrenddessen. (Absolute AR niedrig weil Phase-1-ckpts gegen NEUE Phase-2-val = OOD -> Dry-Run beweist RANKING-Logik, nicht Performance.) T-068 Kern-Aufgabe fertig: Config-Retention deployed VOR GDRNPP-Start + Selektor verifiziert. Commit 4e13098."
         }
       ]
     },
