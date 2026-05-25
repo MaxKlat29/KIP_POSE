@@ -56,19 +56,39 @@ fail() { say "STAGE FAILED: $*"; say "PHASE2_FAILED"; exit "${2:-1}"; }
 # sym-check + deploy (fps/keypoints) are DONE. Re-running them with --fresh would
 # throw away 3.4h of conversion for nothing. This flag verifies the convert+deploy
 # artifacts exist, then jumps straight to the smoke + training stages.
+#
+# [T-068 / S-053] --from-gdrnpp : skip stages 1-4 (WAIT-RENDER, CONVERT, SYM-CHECK,
+# SMOKE) AND stage 5a (detector retrain) + 5b (OBB->AABB bridge), and go straight
+# to GDRNPP per-object training (stage 5c). Used by the "abfahrt" relaunch: the
+# detector converged early (best.pt = ep55, mAP50 0.992, val flat) and was
+# published as detector.pt by hand, so retraining it 100 epochs again would waste
+# ~7h on the one 3090. The smoke already baked the winning 320/80@16 combo into
+# base_so.py. This flag verifies the EXISTING detector.pt + fps/keypoints, logs a
+# DETECTOR_TRAIN_DONE (skipped/published) marker so the phase-bar monitor still
+# sees the milestone, then jumps to GDRNPP. PHASE2_TRAIN_DONE / PHASE2_FAILED are
+# written at the end exactly as in the full run.
 FROM_TRAIN=0
+FROM_GDRNPP=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        --from-train) FROM_TRAIN=1; shift ;;
+        --from-train)  FROM_TRAIN=1; shift ;;
+        --from-gdrnpp) FROM_GDRNPP=1; shift ;;
         *) say "WARN ignoring unknown arg: $1"; shift ;;
     esac
 done
+# --from-gdrnpp implies everything --from-train skips, plus the detector; treat it
+# as a superset so the stage-1-3 guard below also short-circuits.
+[ "$FROM_GDRNPP" -eq 1 ] && FROM_TRAIN=1
 
 say "=== PHASE-2 AUTONOMOUS CHAIN START (T-050) ==="
-say "repo=$REPO  raw=$RAW  bop=$BOP  expect_scenes=$EXPECT_SCENES  from_train=$FROM_TRAIN"
+say "repo=$REPO  raw=$RAW  bop=$BOP  expect_scenes=$EXPECT_SCENES  from_train=$FROM_TRAIN  from_gdrnpp=$FROM_GDRNPP"
 
 if [ "$FROM_TRAIN" -eq 1 ]; then
-    say "MODE: --from-train — skipping WAIT-RENDER + CONVERT + SYM-CHECK (already done)."
+    if [ "$FROM_GDRNPP" -eq 1 ]; then
+        say "MODE: --from-gdrnpp — skipping WAIT-RENDER + CONVERT + SYM-CHECK + SMOKE + DETECTOR (detector.pt already published, smoke combo already baked)."
+    else
+        say "MODE: --from-train — skipping WAIT-RENDER + CONVERT + SYM-CHECK (already done)."
+    fi
     # Verify the upstream artifacts the smoke + training stages depend on, so we
     # fail loudly here instead of hours into a run if convert/deploy didn't land.
     [ -d "$BOP/train_pbr" ] && [ -n "$(ls -A "$BOP/train_pbr" 2>/dev/null)" ] || fail "--from-train: $BOP/train_pbr missing/empty (convert not done?)" 2
@@ -76,6 +96,13 @@ if [ "$FROM_TRAIN" -eq 1 ]; then
     [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/fps_points.pkl" ]   || fail "--from-train: fps_points.pkl missing (deploy not done?)" 3
     [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/keypoints_3d.pkl" ] || fail "--from-train: keypoints_3d.pkl missing (deploy not done?)" 3
     say "--from-train artifacts verified: train_pbr=$(ls "$BOP/train_pbr" | wc -l) scenes, val=$(ls "$BOP/val" | wc -l) scenes, fps+keypoints present."
+    if [ "$FROM_GDRNPP" -eq 1 ]; then
+        # --from-gdrnpp skips the detector stage, so the published detector.pt is a
+        # hard prerequisite — fail loudly NOW if it's not there (don't discover it
+        # only when inference/the bridge needs it). Also confirm it loads.
+        [ -f "$DETOUT/detector.pt" ] || fail "--from-gdrnpp: $DETOUT/detector.pt missing (publish the converged detector best.pt first)" 4
+        say "--from-gdrnpp: published detector.pt present ($(ls -la "$DETOUT/detector.pt" | awk '{print $5" bytes, mtime "$6" "$7" "$8}'))."
+    fi
     nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader 2>/dev/null | sed 's/^/[phase2]   GPU: /'
 fi
 
@@ -229,6 +256,13 @@ fi   # end of "if FROM_TRAIN != 1" (stages 1-3: WAIT-RENDER + CONVERT + SYM-CHEC
 # =============================================================================
 # STAGE 4 — SMOKE  (320/80 GPU probe; auto OOM/shape fallback before the long run)
 # =============================================================================
+if [ "$FROM_GDRNPP" -eq 1 ]; then
+    # The smoke already ran in the previous launch and baked the winning combo
+    # (320/80@16) into base_so.py + config_base_so.py. Re-running it would waste a
+    # few GPU-minutes for no new info. Skip and emit the marker for the monitor.
+    say "STAGE 4/5: SMOKE — SKIPPED (--from-gdrnpp; winning 320/80@16 already baked into base_so.py)"
+    say "SMOKE_DONE (skipped — combo already baked)"
+else
 say "STAGE 4/5: SMOKE — INPUT_RES=320 probe with auto fallback (batch 16 -> 12 -> crop 288/72 -> 256/64)"
 # Fallback ladder: (batch, in_res, out_res). First that passes wins and is baked
 # into base_so.py before the multi-day run. 320/80 @16 is the target.
@@ -297,6 +331,7 @@ print(f"[bake] {path}: IMS_PER_BATCH={b} INPUT_RES={ir} OUTPUT_RES={orr}")
 PYEOF
 done
 say "SMOKE_DONE (winning combo batch=$WIN_BATCH res=$WIN_IN/$WIN_OUT)"
+fi   # end of "if FROM_GDRNPP != 1" (stage 4: SMOKE)
 
 # =============================================================================
 # STAGE 5 — RETRAIN  (detector on NEW full-table data, then GDRNPP all 3 objects)
@@ -305,6 +340,15 @@ say "SMOKE_DONE (winning combo batch=$WIN_BATCH res=$WIN_IN/$WIN_OUT)"
 # The full-table render has obb_2d_*.json per scene; the detector trains on those
 # directly (NOT BOP). We run it ourselves (rather than via train_chain stage 1) so
 # the data source + the sym/deploy ordering above are correct.
+if [ "$FROM_GDRNPP" -eq 1 ]; then
+    # Detector converged early and was published by hand (best.pt -> detector.pt).
+    # Don't retrain it for another ~7h on the one 3090. Verify it's there (already
+    # checked in the --from-gdrnpp artifact block above) and emit the milestone
+    # marker as "published/skipped" so the phase-bar monitor still advances.
+    say "STAGE 5a/5: detector retrain — SKIPPED (--from-gdrnpp; using PUBLISHED detector.pt at $DETOUT/detector.pt)"
+    [ -f "$DETOUT/detector.pt" ] || fail "--from-gdrnpp: detector.pt vanished before GDRNPP (was present at start)" 50
+    say "DETECTOR_TRAIN_DONE (skipped/published — converged detector best.pt published as detector.pt)"
+else
 say "STAGE 5a/5: detector retrain (arm-visible) on NEW data — $RAW"
 /mnt/data/train-venv/bin/python "$REPO/box_src/train_detector_armvis.py" \
     --src "$RAW" --out "$DETOUT" \
@@ -314,6 +358,7 @@ if [ $RC -ne 0 ] || [ ! -f "$DETOUT/detector.pt" ]; then
     fail "detector retrain rc=$RC (no detector.pt at $DETOUT)" 50
 fi
 say "DETECTOR_TRAIN_DONE"
+fi   # end of "if FROM_GDRNPP != 1" (stage 5a: detector retrain)
 
 # STAGE 5b — OBB->AABB val detection bridge (non-fatal: GDRNPP val uses GT boxes).
 say "STAGE 5b/5: OBB->AABB val detections (BOP detection bridge, non-fatal)"
