@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-25T16:00:06Z",
+  "updated": "2026-05-25T16:42:15Z",
   "columns": [
     {
       "id": "backlog",
@@ -3482,7 +3482,7 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-25T16:00:06Z",
+      "updated": "2026-05-25T16:42:15Z",
       "started_at": "2026-05-23T05:46:01Z",
       "completed_at": null,
       "comments": [],
@@ -3726,6 +3726,66 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "GDRNPP anker_kurz TRAINIERT SAUBER: iter 9-11/41440, total_loss 114.4 (sinkend), time 3.3-3.6s/it, max_mem 5758M (GPU 6832MiB/51C). Config verifiziert: INPUT_RES=320 OUTPUT_RES=80 IMS_PER_BATCH=16 TOTAL_EPOCHS=160, CHECKPOINT_PERIOD=10/MAX_TO_KEEP=20 (S-052 spread), PM_LOSS_SYM=True, RGB-only (in_chans=3, DEPTH off), RESUME=False. 'No checkpoint found, init from scratch' = stale 256/64-ckpts erfolgreich archiviert. ConvPnPNet 320/80 ok (patch greift). FAILED markers=0. ETA ~4-4.5d (3 obj sequenziell)."
+        },
+        {
+          "ts": "2026-05-25T16:04:04Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Detektor gestoppt (best.pt ep55, mAP50 0.992, publiziert). GDRNPP relaunch PID 727256 läuft (anker_kurz). Rate ~2.5s/iter."
+        },
+        {
+          "ts": "2026-05-25T16:13:39Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "GDRNPP gesund aber SLOW: 2.8s/iter (online-EGL-XYZ@320) -> ~4 Tage. Max: fix Speed selbst. -> XYZ offline precompute (XYZ_ONLINE=False), Smoke, sauberer Restart. Rezept (160ep/320/Guard) bleibt."
+        },
+        {
+          "ts": "2026-05-25T16:17:42Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Diagnose BESTÄTIGT: online-EGL-XYZ IST der per-iter-Bottleneck. engine_utils.batch_data_train_online rendert bs=16 SEQUENZIELL single-instance EGL-renders pro iter (je GPU<->CPU-sync) im Haupt-Loop. Bei OUTPUT_RES=80 (vs 64) + 160ep wird jede Instanz ~160x re-rendert. Per-iter 2.8s. Loss sinkt sauber (loss_z 2.0->0.45). Loader populiert xyz_path bereits -> offline-Pfad ist verdrahtet. Schreibe pose_isaac_pbr_gen_xyz.py + messe Precompute-Kosten (NET-Gate)."
+        },
+        {
+          "ts": "2026-05-25T16:18:18Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "NET-Gate BESTANDEN: offline EGL-render-Probe = 787 inst/s pure (1.27ms/inst), 202 inst/s wall, xyz-crops korrekt (300/300 visible, nz-range ~object-extent). 17041 Instanzen Precompute => ~84s pure / ~3-5min mit pkl-writes. Vs online ~4 Tage (16 seq renders x 41440 iter x 3 obj). Precompute-Kosten NEGLIGIBLE. Starte Vollprecompute train_pbr+val."
+        },
+        {
+          "ts": "2026-05-25T16:20:09Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Korrektheits-Catch vor Smoke: gen_xyz schrieb nach pose_isaac/xyz_crop/ (top-level), aber Loader erwartet pose_isaac/<split>/xyz_crop/ (separat je train_pbr/val). Top-level-dir kollidierte train+val (val skip 1106). Fix: --split-aware xyz_root, top-level dir wegräumen (mv, kein delete), re-run beide splits."
+        },
+        {
+          "ts": "2026-05-25T16:23:13Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Precompute komplett (train 17041 + val 1964 pkls, ~72s, per-split xyz_crop verifiziert). XYZ_ONLINE=False in base_so.py deployed. Offline batch_data-Pfad + non-online-Loader produzieren alle Targets (roi_xyz/roi_xyz_bin/roi_mask_obj/roi_region). Starte Smoke (sep OUTPUT_DIR, anker_kurz, ~30 iter) -> iter-time + loss + shape/NaN-check."
+        },
+        {
+          "ts": "2026-05-25T16:26:48Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Smoke BESTANDEN (offline XYZ): config resolved XYZ_ONLINE=False, kein Shape/NaN-Error, Loss sinkt sauber (total 2313->1851, region dominant, loss_z stabil), No-checkpoint->from-scratch. Speed war GPU-contended (parallel zum laufenden 4d-Run) -> saubere iter-time-Messung erst nach Stop. Smoke + Orphan-GPU-Proc sauber gekillt (targeted PID, kein pkill-collateral). Korrektheit bewiesen."
+        },
+        {
+          "ts": "2026-05-25T16:30:54Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "EHRLICHER BEFUND: offline-XYZ-Fix half NICHT bei Speed. Clean GPU-exklusiv gemessen: 3.022 s/iter (n=18, iter30-47) = praktisch identisch zum online 2.8s/iter. => online-EGL-XYZ war NICHT der Bottleneck (16 renders @1.3ms = ~20ms von 2800ms <1%). Der echte Kostenpunkt ist convnext_base fwd/bwd @ INPUT_RES=320 (107M params). Der 256->320 Sprung 0.6->2.8s war Backbone-Compute, nicht Renderer. Wechsle auf autorisierte ALTERNATIVE: batch-sweep (6.8GB/24GB Headroom)."
+        },
+        {
+          "ts": "2026-05-25T16:35:48Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Batch-Sweep EHRLICH: b16=3.022s/it x259 = 783 s/epoch; b24=4.384s/it x173 = 759 s/epoch = nur 3% (Rauschen). Iter-time skaliert ~linear mit batch (1.47x time fuer 1.5x batch) => COMPUTE-BOUND auf convnext_base@320, KEIN per-iter-Overhead zum Amortisieren. Batch-increase hilft NICHT. KEIN cheaper per-iter-Win ohne Rezept-Aenderung (verboten: INPUT_RES 320/80 = Zahnrad-Fix). Verdikt: Rezept unveraendert restarten."
+        },
+        {
+          "ts": "2026-05-25T16:42:15Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Restart LIVE + recipe-intact: phase2_chain PID 737929 (PPID=1, own session, Ss = detached), GDRNPP anker_kurz 738169. Stabilisiert 3.21 s/iter (= proven baseline, XYZ_ONLINE=True/batch16/320/80/160ep unveraendert). max_mem 6846M, loss sinkt sauber, kein PHASE2_FAILED. Frisches Log /mnt/data/bop/logs/phase2_chain.log mit allen Markern (SMOKE_DONE/DETECTOR_TRAIN_DONE skipped/STAGE5c/PHASE2_TRAIN_DONE@391). ETA ~37h/obj -> ~4.6d gesamt. Alte Logs -> .pre-t068-restart-* (non-destruktiv)."
         }
       ]
     },
