@@ -70,6 +70,9 @@ if [ "$GDRNPP_ONLY" -eq 1 ]; then
     /mnt/data/bop/gdrnpp-venv/bin/python "$REPO/box_src/gdrnpp/patch_gdrnpp_py311.py"
     /mnt/data/bop/gdrnpp-venv/bin/python "$REPO/box_src/gdrnpp/patch_pl19_compat.py"
     /mnt/data/bop/gdrnpp-venv/bin/python "$REPO/box_src/gdrnpp/patch_egl_calc_normals.py"
+    # [T-068/PHASE-2] ConvPnPNet final_spatial_size<-OUTPUT_RES (no-op at 64,
+    # fixes the 320/80 12800-vs-8192 mat-mul shape mismatch).
+    /mnt/data/bop/gdrnpp-venv/bin/python "$REPO/box_src/gdrnpp/patch_pnp_spatial_size.py"
     cp "$REPO/box_src/gdrnpp/config_base_so.py" "$GDRN/configs/gdrn/poseIsaacPbrSO/base_so.py"
     cp "$REPO/box_src/gdrnpp/so_configs/"*.py "$GDRN/configs/gdrn/poseIsaacPbrSO/"   # [T-050] refresh per-obj cfgs too
     rm -rf "$GDRN/.cache"   # drop any stale mesh cache
@@ -94,20 +97,90 @@ if [ "$GDRNPP_ONLY" -eq 1 ]; then
         SMK_OUT="${SMOKE_OUTPUT_RES:-80}"
         say "SMOKE: few-iter GPU probe (anker_kurz) batch=$SMK_BATCH res=$SMK_IN/$SMK_OUT"
         cd "$GDRN"
-        PYTHONPATH="$GDRN" CUDA_VISIBLE_DEVICES=0 timeout 900 $GDRN_VENV \
+        # [T-068 FIX] GDRNPP's main_gdrn.py overrides config via the `--opts`
+        # flag, but it uses mmcv's DictAction (NOT detectron2's plain opts list):
+        #   parser.add_argument("--opts", nargs="+", action=DictAction)
+        #   cfg.merge_from_dict(args.opts)
+        # So overrides must be `KEY=VALUE` (with '='), space-separated, AFTER
+        # `--opts`. The original bug appended them as bare trailing args
+        # (`KEY VALUE`) with no `--opts` at all -> argparse "unrecognized
+        # arguments" -> rc=2, which was then misread as OOM/shape and sent
+        # phase2_chain.sh down its whole fallback ladder for nothing. Two layers:
+        #   (1) add --opts                  -> fixes "unrecognized arguments"
+        #   (2) use KEY=VALUE not KEY VALUE -> fixes mmcv DictAction split('=')
+        # Keys use dot-notation (SOLVER.IMS_PER_BATCH); merge_from_dict resolves
+        # them into the nested config dict. We drop the old detectron2-style
+        # TRAIN.MAX_ITER (no such key in the mmcv config — TRAIN is a dataset
+        # tuple, not a dict); SOLVER.TOTAL_EPOCHS=1 already bounds the probe.
+        # The REAL per-object training (run_gdrn below) uses ONLY --config-file
+        # with no overrides, so it never hit this — only the smoke probe (which
+        # overrides batch/res on the CLI) needs --opts.
+        # We capture stderr so the caller can tell a genuine CUDA OOM from an
+        # argparse/config error (see phase2_chain.sh smoke ladder).
+        # NB: this block runs at script top-level (inside `if`), NOT in a
+        # function, so plain vars (no `local` keyword) like the existing
+        # local_rc below.
+        smoke_err="$LOGDIR/smoke_${SMK_BATCH}_${SMK_IN}_${SMK_OUT}.stderr"
+        # [T-068] GDRNPP bounds training by TOTAL_EPOCHS only (no MAX_ITER key in
+        # the mmcv config). One epoch on the full train set is too long for a
+        # smoke probe, so we cap wall-time with `timeout` and treat "ran many
+        # iterations with a finite loss and no OOM/shape error" as the PASS
+        # signal — that is exactly what a forward/backward/optimizer-step
+        # OOM-and-shape probe needs to prove. SMOKE_SECS=240 -> ~60 iters at
+        # ~3.6s/iter (plenty to surface any OOM, which would hit on the FIRST
+        # backward, or any shape mismatch, which hits on the FIRST forward).
+        SMK_SECS="${SMOKE_SECS:-240}"
+        # stderr -> file (synchronous, no process-substitution race so the grep
+        # below sees the complete output), then mirror the tail to our own stderr.
+        PYTHONPATH="$GDRN" CUDA_VISIBLE_DEVICES=0 timeout "$SMK_SECS" $GDRN_VENV \
             "$GDRN/core/gdrn_modeling/main_gdrn.py" \
             --config-file "$GDRN/configs/gdrn/poseIsaacPbrSO/anker_kurz.py" \
             --num-gpus 1 \
-            SOLVER.TOTAL_EPOCHS 1 TRAIN.MAX_ITER 20 \
-            SOLVER.IMS_PER_BATCH "$SMK_BATCH" \
-            MODEL.POSE_NET.INPUT_RES "$SMK_IN" MODEL.POSE_NET.OUTPUT_RES "$SMK_OUT"
+            --opts \
+            SOLVER.TOTAL_EPOCHS=1 \
+            SOLVER.IMS_PER_BATCH="$SMK_BATCH" \
+            MODEL.POSE_NET.INPUT_RES="$SMK_IN" MODEL.POSE_NET.OUTPUT_RES="$SMK_OUT" \
+            2>"$smoke_err"
         local_rc=$?
-        if [ $local_rc -ne 0 ]; then
-            say "SMOKE FAILED rc=$local_rc — INPUT_RES=$SMK_IN shape/OOM issue at batch=$SMK_BATCH."
-            say "Fix: lower SMOKE_BATCH or SMOKE_INPUT_RES and re-smoke (phase2_chain does this automatically)."
-            exit 40
+        # surface the smoke stderr into the chain log too (tail is enough)
+        tail -25 "$smoke_err" 2>/dev/null | sed 's/^/[smoke-stderr] /' >&2
+
+        # ---- classify the result (in priority order) -------------------------
+        # Hard errors are checked FIRST regardless of rc — an OOM or shape error
+        # can co-exist with some early iterations, but if it's in the log the
+        # combo is NOT viable.
+        if grep -qiE "out of memory|CUDA error: out of memory|CUBLAS_STATUS_ALLOC_FAILED|RuntimeError: CUDA out of memory" "$smoke_err" 2>/dev/null; then
+            say "SMOKE OOM rc=$local_rc — genuine CUDA out-of-memory at batch=$SMK_BATCH res=$SMK_IN/$SMK_OUT (fallback is valid)."
+            exit 41
         fi
-        say "SMOKE OK — batch=$SMK_BATCH res=$SMK_IN/$SMK_OUT forward/backward fits."
+        if grep -qiE "mat1 and mat2 shapes cannot be multiplied|size mismatch|Expected .* but got|RuntimeError: shape" "$smoke_err" 2>/dev/null; then
+            say "SMOKE SHAPE-ERROR rc=$local_rc — tensor shape mismatch at res=$SMK_IN/$SMK_OUT, NOT OOM. A smaller batch will not help (this is an arch wiring issue, e.g. ConvPnPNet final_spatial_size). HARD STOP."
+            exit 42
+        fi
+        if grep -qiE "unrecognized arguments|error: argument|usage: main_gdrn|invalid choice|the following arguments are required|not enough values to unpack|DictAction|KeyError|merge_from_dict" "$smoke_err" 2>/dev/null; then
+            say "SMOKE ARG-ERROR rc=$local_rc — argparse/config error, NOT OOM. A smaller batch/res will not help. HARD STOP."
+            say "  (see $smoke_err — likely a --opts / config-key bug, fix the invocation, do NOT keep lowering res)"
+            exit 42
+        fi
+
+        # PASS path: the probe completed cleanly (rc=0) OR it was cut off by the
+        # wall-time cap (rc=124) AFTER proving real training iterations ran with a
+        # finite loss. Count the per-iter training log lines (`total_loss:` is
+        # emitted once per logged iter). >=5 logged iters with no hard error =
+        # forward+backward+optimizer-step all fit and run.
+        n_iters=$(grep -cE "iter: [0-9]+/[0-9]+.*total_loss:" "$smoke_err" 2>/dev/null || echo 0)
+        if [ "$local_rc" -eq 0 ]; then
+            say "SMOKE OK (rc=0, completed) — batch=$SMK_BATCH res=$SMK_IN/$SMK_OUT, $n_iters logged iters, forward/backward fits."
+        elif { [ "$local_rc" -eq 124 ] || [ "$local_rc" -eq 137 ]; } && [ "${n_iters:-0}" -ge 5 ]; then
+            mm=$(grep -oE "max_mem: [0-9]+M" "$smoke_err" 2>/dev/null | tail -1)
+            say "SMOKE OK (rc=$local_rc, wall-time cap after $n_iters iters) — batch=$SMK_BATCH res=$SMK_IN/$SMK_OUT trains cleanly ($mm peak, no OOM/shape error)."
+        else
+            # Unknown non-zero failure with no iteration progress (import error,
+            # segfault, config KeyError, data-load crash...). Not OOM, no proof of
+            # a working forward/backward — do not blindly fall back.
+            say "SMOKE FAILED rc=$local_rc — non-OOM failure, only $n_iters training iters logged (import/segfault/config/data). HARD STOP, inspect $smoke_err."
+            exit 43
+        fi
     else
         say "NOTE: skipping GPU smoke-test (no --smoke). Run once after the INPUT_RES bump (PHASE2_PLAN.md)."
     fi

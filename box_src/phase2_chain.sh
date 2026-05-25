@@ -212,20 +212,44 @@ SMOKE_LADDER=(
 )
 SMOKE_OK=0
 WIN_BATCH=""; WIN_IN=""; WIN_OUT=""
+# [T-068] The fallback ladder is ONLY valid for genuine CUDA OOM. train_chain.sh
+# now returns a discriminating exit code from the smoke probe (and treats a
+# wall-time cap with >=5 clean training iters as PASS, since GDRNPP has no
+# MAX_ITER key — see train_chain.sh):
+#   0  = PASS (completed or wall-time cap after clean iters) -> bake, stop ladder
+#   41 = genuine CUDA OOM           -> try the next (smaller) rung
+#   42 = argparse/config OR tensor-shape error -> HARD STOP (smaller res/batch
+#        won't fix an arch wiring or arg bug)
+#   43 = other non-OOM crash with no iter progress -> HARD STOP (import/segfault/
+#        config/data)
+# The original version treated EVERY non-zero as "OOM" and walked the whole
+# ladder, which is exactly how a trivial --opts argparse bug (rc=2) masqueraded
+# as "INPUT_RES change unworkable / OOM" and crashed the chain.
 for combo in "${SMOKE_LADDER[@]}"; do
     set -- $combo
     b=$1; ir=$2; orr=$3
     say "  smoke try: batch=$b res=$ir/$orr"
     SMOKE_BATCH=$b SMOKE_INPUT_RES=$ir SMOKE_OUTPUT_RES=$orr \
         bash "$REPO/box_src/train_chain.sh" --gdrnpp-only --smoke
-    if [ $? -eq 0 ]; then
-        SMOKE_OK=1; WIN_BATCH=$b; WIN_IN=$ir; WIN_OUT=$orr
-        say "  smoke PASS at batch=$b res=$ir/$orr"
-        break
-    fi
-    say "  smoke FAIL at batch=$b res=$ir/$orr — trying next fallback"
+    smk_rc=$?
+    case $smk_rc in
+        0)
+            SMOKE_OK=1; WIN_BATCH=$b; WIN_IN=$ir; WIN_OUT=$orr
+            say "  smoke PASS at batch=$b res=$ir/$orr"
+            break ;;
+        41)
+            say "  smoke OOM at batch=$b res=$ir/$orr — genuine CUDA OOM, trying next (smaller) fallback" ;;
+        42)
+            fail "smoke ARG/CONFIG/SHAPE error at batch=$b res=$ir/$orr (rc=42) — argparse/config bug OR tensor-shape mismatch, NOT OOM. A smaller batch/res would not fix it. See $LOGDIR/smoke_${b}_${ir}_${orr}.stderr" 42 ;;
+        43)
+            fail "smoke NON-OOM crash at batch=$b res=$ir/$orr (rc=43) — import/segfault/config/data error, NOT OOM. See $LOGDIR/smoke_${b}_${ir}_${orr}.stderr" 43 ;;
+        *)
+            # train_chain.sh's own pre-flight aborts (missing detector/fps/etc.)
+            # return non-OOM codes (10/11/12/30). Those are not OOM either.
+            fail "smoke probe returned unexpected rc=$smk_rc at batch=$b res=$ir/$orr — NOT a known OOM path. HARD STOP." "$smk_rc" ;;
+    esac
 done
-[ "$SMOKE_OK" -eq 1 ] || fail "all smoke fallbacks failed (320/80@16 .. 256/64@16) — INPUT_RES change unworkable" 40
+[ "$SMOKE_OK" -eq 1 ] || fail "all smoke fallbacks OOMed (320/80@16 .. 256/64@16) — INPUT_RES change genuinely does not fit on the 3090 even at 256/64@16" 40
 
 # Bake the winning combo into base_so.py on the box AND back into the source copy
 # so the full per-object run uses exactly the validated combo. Edit both the
