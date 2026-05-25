@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-24T17:29:11Z",
+  "updated": "2026-05-25T07:33:37Z",
   "columns": [
     {
       "id": "backlog",
@@ -2100,7 +2100,7 @@
       "id": "T-048",
       "title": "6.3: Beliebiges-CAD-rein-Demo end-to-end im Notebook",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2110,9 +2110,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:16Z",
-      "updated": "2026-05-24T17:29:11Z",
+      "updated": "2026-05-24T17:29:45Z",
       "started_at": "2026-05-24T09:14:12Z",
-      "completed_at": null,
+      "completed_at": "2026-05-24T17:29:45Z",
       "comments": [],
       "logs": [
         {
@@ -2180,6 +2180,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-05-24T17:29:45Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-05-24T17:29:45Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Finish gehärtet+gemerged: 1-Befehl A/B {planar|M2|TTA} + auto-best + decision-flags, dry-run grün"
         }
       ]
     },
@@ -3448,7 +3460,7 @@
       "id": "T-068",
       "title": "S-402: GDRNPP per-Objekt-Training (Anker + Zahnrad) - Kickoff Background-Job",
       "description": "GDRNPP pro Fokus-Teil auf Isaac-PBR-Synth (S-201/202), Detektor=S-401. MEHRTAEGIGER nohup-Job - nur sauberer Kickoff+Poll diese Session, nicht fertig-trainiert. Erste Loss-Kurve konvergiert.",
-      "column": "done",
+      "column": "in_progress",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -3458,9 +3470,9 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-23T16:29:26Z",
+      "updated": "2026-05-25T07:33:37Z",
       "started_at": "2026-05-23T05:46:01Z",
-      "completed_at": "2026-05-23T16:29:26Z",
+      "completed_at": null,
       "comments": [],
       "logs": [
         {
@@ -3552,6 +3564,66 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "TRAIN_CHAIN_DONE: 3 GDRNPP model_final.pth (1.6G), OK=[anker_kurz anker_lang zahnrad] FAILED=none"
+        },
+        {
+          "ts": "2026-05-25T06:29:01Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: done → in_progress"
+        },
+        {
+          "ts": "2026-05-25T06:29:01Z",
+          "agent": "kai-ml",
+          "level": "error",
+          "msg": "PHASE2_FAILED: Smoke-Bug — main_gdrn CLI-Overrides ohne --opts (argparse rc=2, NICHT OOM). Convert/Sym fertig. Fix --opts + relaunch ab Smoke (GPU frei)."
+        },
+        {
+          "ts": "2026-05-25T06:29:44Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "T-068 resume: Phase-2-Kette PHASE2_FAILED an --opts argparse-Bug (nicht OOM). Worktree S-051 spawned. Lese Crash-Log + train_chain.sh, fixe --opts + OOM-vs-argerror-Diskriminierung, re-smoke, relaunch ab Training."
+        },
+        {
+          "ts": "2026-05-25T06:31:26Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Root-Cause bestätigt: rc=2 ist argparse 'unrecognized arguments' (Smoke-Overrides ohne --opts), KEIN OOM — alle 4 Fallbacks crashten in 4-5s. Fix: (1) train_chain.sh Smoke-Aufruf -> --opts vor SOLVER.*/TRAIN.*/MODEL.* ; echter run_gdrn nutzt nur --config-file (kein Fix noetig). (2) Smoke-rc-Diskriminierung exit41=echter CUDA-OOM / exit42=arg-config / exit43=other -> phase2_chain laddert NUR bei 41, sonst HARD STOP. Box-Kopien gefixt+gebackupt. Starte Re-Smoke 320/80@16."
+        },
+        {
+          "ts": "2026-05-25T06:52:22Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Re-Smoke nach --opts-Fix offenbarte 2 weitere Schichten (alle gefixt): (2) mmcv DictAction will KEY=VALUE nicht KEY VALUE -> umgestellt. (3) ECHTER Shape-Mismatch: ConvPnPNet hardcoded final_spatial_size=(8,8)=OUTPUT_RES/8@64, bei 80 -> 10x10 -> Linear(8192) bekommt 12800. Fix: patch_pnp_spatial_size.py leitet final_spatial_size aus OUTPUT_RES ab (no-op@64). ERGEBNIS: 320/80 @batch16 traint SAUBER — 259 iters/epoch, max_mem nur 6846M (von 24GB, MASSIV Headroom), total_loss sinkt 121->120, KEIN OOM KEIN Shape-Error. Gewinner-Config: 320/80 @ batch 16 (Ziel, keine Fallback-Stufe). Smoke-Logik: timeout-mit-iters=PASS (GDRNPP hat kein MAX_ITER)."
+        },
+        {
+          "ts": "2026-05-25T07:18:35Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Smoke #4 deckte 2 weitere echte Bugs im --smoke-Pfad auf (gefixt): (a) --smoke exitete NICHT nach PASS -> fiel durch in run_gdrn = startete ungewollt echtes Multi-Day-Training. Fix: exit 0 nach Smoke-PASS. (b) plain timeout killt nur Hauptproc, NUM_WORKERS dataloader-Kinder ueberleben -> Script haengt in do_wait + verwaiste Worker auf GPU. Fix: setsid eigene Prozessgruppe + timeout --kill-after=15 + kill -9 -- -PGID. Verwaiste Trainings-Procs (anker_kurz/anker_lang) gekillt, GPU wieder frei (1MiB). Re-Smoke #5 mit allen Fixes laeuft."
+        },
+        {
+          "ts": "2026-05-25T07:23:43Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Smoke #5 VOLLSTAENDIG GRUEN: 'SMOKE OK (rc=124, wall-time cap after 48 iters) batch=16 res=320/80 trains cleanly (max_mem 6844M peak, no OOM/shape error)', Script-rc=0, NO SURVIVORS, GPU frei (1MiB). Alle 6 Bug-Schichten gefixt+verifiziert. Gewinner-Config: 320/80 @ batch 16 (Ziel, keine Fallback-Stufe). Echter OOM: NEIN (6.8GB von 24GB). Rotiere stale PHASE2_FAILED-Log + relaunch phase2_chain.sh --from-train (skip convert/sym, ab Smoke+Training)."
+        },
+        {
+          "ts": "2026-05-25T07:24:19Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "RELAUNCH gestartet ab Training: PHASE2_PID=663113, log /mnt/data/bop/logs/phase2_chain.log (FRISCH, stale PHASE2_FAILED rotiert -> .failed-smoke). Detach bewiesen: PPID=1, SID==PID, Ss. --from-train verifiziert: skip WAIT/CONVERT/SYM (train_pbr=72, val=8, fps+keypoints present), kein Re-Convert (3.4h gespart). Ablauf: Smoke 320/80@16 (laeuft) -> bake -> Detektor-Retrain ~1h -> GDRNPP 3x SO 160ep. Marker: PHASE2_TRAIN_DONE / PHASE2_FAILED. ETA grob: Smoke ~5min + Detektor ~1h + GDRNPP 3x (~2.5h/Objekt @320/80) = ~8-9h gesamt. T-068 bleibt in_progress (mehrstuendig)."
+        },
+        {
+          "ts": "2026-05-25T07:32:04Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Detektor-Retrain LAEUFT sauber (PID 665855, GPU 5578MiB): train.cache + val.cache (754 val, 0 corrupt) erstellt, optimizer MuSGD auto, 'Starting training for 100 epochs' mit OBB-header (box/cls/dfl/angle_loss). Echter Trainings-Aufruf Detektor+GDRNPP startet SAUBER. Kette autonom: Detektor ~1h -> GDRNPP 3x SO @320/80 ~2.5h/Objekt. base_so.py gebaked 16/320/80 auf BEIDE Configs (deployed + box_src). Poll: grep -aE 'DETECTOR_TRAIN_DONE|PHASE2_TRAIN_DONE|PHASE2_FAILED' /mnt/data/bop/logs/phase2_chain.log"
+        },
+        {
+          "ts": "2026-05-25T07:33:37Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Detektor trainiert aktiv (GPU 7224MiB/86%), 0x PHASE2_FAILED im frischen Log, PHASE2_PID 663113 ALIVE. Kette gesund. T-068 BLEIBT in_progress (Training mehrstuendig ~8-9h ETA). Brain aktualisiert (learnings + projects/pose). 3 Commits user-only: abd0f60 (--opts+disc) a6e8acd (exit-0+setsid) f9546b8 (--from-train)."
         }
       ]
     },
