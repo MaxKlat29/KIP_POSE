@@ -44,6 +44,8 @@ echo "[prep] 4b) PL 1.9 compat (_LiteModule->_FabricModule, _precision_plugin->_
 $PY "$SRC/patch_pl19_compat.py"
 echo "[prep] 4c) EGL renderer mesh fix (calc_normals indexed-mesh + pyassimp material bypass) [T-068]"
 $PY "$SRC/patch_egl_calc_normals.py"
+echo "[prep] 4d) ConvPnPNet final_spatial_size<-OUTPUT_RES (320/80 shape fix, no-op at 64) [T-068/PHASE-2]"
+$PY "$SRC/patch_pnp_spatial_size.py"
 
 echo "[prep] 5) build CppEGLRenderer if missing"
 if [ -z "$(find "$GDRN/lib/egl_renderer" -maxdepth 1 -name 'CppEGLRenderer*.so' 2>/dev/null)" ]; then

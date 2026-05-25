@@ -50,9 +50,36 @@ ts()   { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
 say()  { echo "[$(ts)] [phase2] $*"; }
 fail() { say "STAGE FAILED: $*"; say "PHASE2_FAILED"; exit "${2:-1}"; }
 
-say "=== PHASE-2 AUTONOMOUS CHAIN START (T-050) ==="
-say "repo=$REPO  raw=$RAW  bop=$BOP  expect_scenes=$EXPECT_SCENES"
+# [T-068] --from-train : skip stages 1-3 (WAIT-RENDER, CONVERT, SYM-CHECK+deploy)
+# and resume at stage 4 (SMOKE) + stage 5 (RETRAIN). Used by the T-068 relaunch:
+# the render finished, the BOP convert (8000->train/val, ~3.4h) is DONE, and the
+# sym-check + deploy (fps/keypoints) are DONE. Re-running them with --fresh would
+# throw away 3.4h of conversion for nothing. This flag verifies the convert+deploy
+# artifacts exist, then jumps straight to the smoke + training stages.
+FROM_TRAIN=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --from-train) FROM_TRAIN=1; shift ;;
+        *) say "WARN ignoring unknown arg: $1"; shift ;;
+    esac
+done
 
+say "=== PHASE-2 AUTONOMOUS CHAIN START (T-050) ==="
+say "repo=$REPO  raw=$RAW  bop=$BOP  expect_scenes=$EXPECT_SCENES  from_train=$FROM_TRAIN"
+
+if [ "$FROM_TRAIN" -eq 1 ]; then
+    say "MODE: --from-train — skipping WAIT-RENDER + CONVERT + SYM-CHECK (already done)."
+    # Verify the upstream artifacts the smoke + training stages depend on, so we
+    # fail loudly here instead of hours into a run if convert/deploy didn't land.
+    [ -d "$BOP/train_pbr" ] && [ -n "$(ls -A "$BOP/train_pbr" 2>/dev/null)" ] || fail "--from-train: $BOP/train_pbr missing/empty (convert not done?)" 2
+    [ -d "$BOP/val" ]       && [ -n "$(ls -A "$BOP/val" 2>/dev/null)" ]       || fail "--from-train: $BOP/val missing/empty (convert not done?)" 2
+    [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/fps_points.pkl" ]   || fail "--from-train: fps_points.pkl missing (deploy not done?)" 3
+    [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/keypoints_3d.pkl" ] || fail "--from-train: keypoints_3d.pkl missing (deploy not done?)" 3
+    say "--from-train artifacts verified: train_pbr=$(ls "$BOP/train_pbr" | wc -l) scenes, val=$(ls "$BOP/val" | wc -l) scenes, fps+keypoints present."
+    nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader 2>/dev/null | sed 's/^/[phase2]   GPU: /'
+fi
+
+if [ "$FROM_TRAIN" -ne 1 ]; then
 # =============================================================================
 # STAGE 1 — WAIT-RENDER  (GPU is busy; do NOT touch it until the render frees it)
 # =============================================================================
@@ -197,6 +224,7 @@ RC=$?
 [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/fps_points.pkl" ]   || fail "fps_points.pkl missing after deploy" 31
 [ -f "$GDRN/datasets/BOP_DATASETS/pose_isaac/models/keypoints_3d.pkl" ] || fail "keypoints_3d.pkl missing after deploy" 31
 say "SYM_CHECK_DONE"
+fi   # end of "if FROM_TRAIN != 1" (stages 1-3: WAIT-RENDER + CONVERT + SYM-CHECK)
 
 # =============================================================================
 # STAGE 4 — SMOKE  (320/80 GPU probe; auto OOM/shape fallback before the long run)
@@ -212,20 +240,44 @@ SMOKE_LADDER=(
 )
 SMOKE_OK=0
 WIN_BATCH=""; WIN_IN=""; WIN_OUT=""
+# [T-068] The fallback ladder is ONLY valid for genuine CUDA OOM. train_chain.sh
+# now returns a discriminating exit code from the smoke probe (and treats a
+# wall-time cap with >=5 clean training iters as PASS, since GDRNPP has no
+# MAX_ITER key — see train_chain.sh):
+#   0  = PASS (completed or wall-time cap after clean iters) -> bake, stop ladder
+#   41 = genuine CUDA OOM           -> try the next (smaller) rung
+#   42 = argparse/config OR tensor-shape error -> HARD STOP (smaller res/batch
+#        won't fix an arch wiring or arg bug)
+#   43 = other non-OOM crash with no iter progress -> HARD STOP (import/segfault/
+#        config/data)
+# The original version treated EVERY non-zero as "OOM" and walked the whole
+# ladder, which is exactly how a trivial --opts argparse bug (rc=2) masqueraded
+# as "INPUT_RES change unworkable / OOM" and crashed the chain.
 for combo in "${SMOKE_LADDER[@]}"; do
     set -- $combo
     b=$1; ir=$2; orr=$3
     say "  smoke try: batch=$b res=$ir/$orr"
     SMOKE_BATCH=$b SMOKE_INPUT_RES=$ir SMOKE_OUTPUT_RES=$orr \
         bash "$REPO/box_src/train_chain.sh" --gdrnpp-only --smoke
-    if [ $? -eq 0 ]; then
-        SMOKE_OK=1; WIN_BATCH=$b; WIN_IN=$ir; WIN_OUT=$orr
-        say "  smoke PASS at batch=$b res=$ir/$orr"
-        break
-    fi
-    say "  smoke FAIL at batch=$b res=$ir/$orr — trying next fallback"
+    smk_rc=$?
+    case $smk_rc in
+        0)
+            SMOKE_OK=1; WIN_BATCH=$b; WIN_IN=$ir; WIN_OUT=$orr
+            say "  smoke PASS at batch=$b res=$ir/$orr"
+            break ;;
+        41)
+            say "  smoke OOM at batch=$b res=$ir/$orr — genuine CUDA OOM, trying next (smaller) fallback" ;;
+        42)
+            fail "smoke ARG/CONFIG/SHAPE error at batch=$b res=$ir/$orr (rc=42) — argparse/config bug OR tensor-shape mismatch, NOT OOM. A smaller batch/res would not fix it. See $LOGDIR/smoke_${b}_${ir}_${orr}.stderr" 42 ;;
+        43)
+            fail "smoke NON-OOM crash at batch=$b res=$ir/$orr (rc=43) — import/segfault/config/data error, NOT OOM. See $LOGDIR/smoke_${b}_${ir}_${orr}.stderr" 43 ;;
+        *)
+            # train_chain.sh's own pre-flight aborts (missing detector/fps/etc.)
+            # return non-OOM codes (10/11/12/30). Those are not OOM either.
+            fail "smoke probe returned unexpected rc=$smk_rc at batch=$b res=$ir/$orr — NOT a known OOM path. HARD STOP." "$smk_rc" ;;
+    esac
 done
-[ "$SMOKE_OK" -eq 1 ] || fail "all smoke fallbacks failed (320/80@16 .. 256/64@16) — INPUT_RES change unworkable" 40
+[ "$SMOKE_OK" -eq 1 ] || fail "all smoke fallbacks OOMed (320/80@16 .. 256/64@16) — INPUT_RES change genuinely does not fit on the 3090 even at 256/64@16" 40
 
 # Bake the winning combo into base_so.py on the box AND back into the source copy
 # so the full per-object run uses exactly the validated combo. Edit both the
