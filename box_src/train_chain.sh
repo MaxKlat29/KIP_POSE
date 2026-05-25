@@ -130,9 +130,17 @@ if [ "$GDRNPP_ONLY" -eq 1 ]; then
         # ~3.6s/iter (plenty to surface any OOM, which would hit on the FIRST
         # backward, or any shape mismatch, which hits on the FIRST forward).
         SMK_SECS="${SMOKE_SECS:-240}"
+        # [T-068 FIX] main_gdrn spawns NUM_WORKERS dataloader children. Plain
+        # `timeout` only signals the direct child, so the workers (and any
+        # setproctitle'd subprocess) survive and keep stderr open -> the script
+        # hangs in do_wait. Run the probe in its OWN process group (setsid) and
+        # use `timeout --kill-after` so a SIGTERM that the workers ignore is
+        # followed by a hard SIGKILL; then belt-and-suspenders kill the whole
+        # group so NOTHING is left holding the GPU or the pipe.
         # stderr -> file (synchronous, no process-substitution race so the grep
         # below sees the complete output), then mirror the tail to our own stderr.
-        PYTHONPATH="$GDRN" CUDA_VISIBLE_DEVICES=0 timeout "$SMK_SECS" $GDRN_VENV \
+        PYTHONPATH="$GDRN" CUDA_VISIBLE_DEVICES=0 \
+            setsid timeout --kill-after=15 "$SMK_SECS" $GDRN_VENV \
             "$GDRN/core/gdrn_modeling/main_gdrn.py" \
             --config-file "$GDRN/configs/gdrn/poseIsaacPbrSO/anker_kurz.py" \
             --num-gpus 1 \
@@ -140,8 +148,14 @@ if [ "$GDRNPP_ONLY" -eq 1 ]; then
             SOLVER.TOTAL_EPOCHS=1 \
             SOLVER.IMS_PER_BATCH="$SMK_BATCH" \
             MODEL.POSE_NET.INPUT_RES="$SMK_IN" MODEL.POSE_NET.OUTPUT_RES="$SMK_OUT" \
-            2>"$smoke_err"
+            2>"$smoke_err" &
+        smoke_pgid=$!
+        wait "$smoke_pgid"
         local_rc=$?
+        # reap any survivors in the probe's process group (orphaned dataloader
+        # workers / setproctitle'd children that ignored the timeout signals).
+        kill -9 -- -"$smoke_pgid" 2>/dev/null || true
+        pkill -9 -f "main_gdrn.py --config-file" 2>/dev/null || true
         # surface the smoke stderr into the chain log too (tail is enough)
         tail -25 "$smoke_err" 2>/dev/null | sed 's/^/[smoke-stderr] /' >&2
 
@@ -181,8 +195,17 @@ if [ "$GDRNPP_ONLY" -eq 1 ]; then
             say "SMOKE FAILED rc=$local_rc — non-OOM failure, only $n_iters training iters logged (import/segfault/config/data). HARD STOP, inspect $smoke_err."
             exit 43
         fi
+        # [T-068 FIX] CRITICAL: in --smoke mode the script must STOP here. The
+        # original fell through into the run_gdrn full-training stages below,
+        # which (a) started a real multi-day train nobody asked for and (b) hung
+        # the script in do_wait on the smoke's orphaned dataloader workers. The
+        # smoke is a probe only — phase2_chain.sh bakes the winning combo and
+        # launches the real training separately.
+        exit 0
     else
         say "NOTE: skipping GPU smoke-test (no --smoke). Run once after the INPUT_RES bump (PHASE2_PLAN.md)."
+        # No smoke requested under --gdrnpp-only: fall through to run_gdrn (the
+        # real per-object training). This is the canonical restart path.
     fi
 else
     # ---------------------------------------------------------------------------
