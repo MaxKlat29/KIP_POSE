@@ -5,7 +5,7 @@
 > **Module:** `project/refine_rc.py` (Generator + CPU-Scorer + MegaPose-Contract) ·
 > **Integration:** `project/e2e_infer.py` + `bop_adapter.detection_to_result(rc_refiner=…)` ·
 > **Box-Harness:** `box_src/rc_refine_eval.py` (CPU-Validierung) ·
-> `box_src/megapose_refine.py` (GPU-Finish-Pfad) · `box_src/real_pose_result.py`
+> `box_src/real_pose_result.py`
 > (`--refine-rc`) · `box_src/e2e_finish.sh` (`--refine-rc --rc-scorer …`)
 
 ---
@@ -52,7 +52,7 @@ Pro Hypothese: rendere die CAD-Silhouette in den Kamera-Frame (re-nutzt
 starke Kanten (ContourPose-Idee). `select_best_hypothesis` gated gegen die Coarse
 (`min_margin`): nur wechseln, wenn die beste Hypothese die Coarse klar schlägt.
 
-### 2b) MegaPose-RGB-Scorer (`megapose_score` / `box_src/megapose_refine.py`, GPU)
+### 2b) MegaPose-RGB-Scorer (`megapose_score`, GPU — NotImplemented post-Phase-2)
 MegaPose (`/mnt/data/bop/repos/megapose6d`, megapose-1.0-RGB) nimmt jede Hypothese
 als `TCO_init`, refined sie `forward_refiner(n_iterations=N)` (render-vs-RGB),
 liefert refinte Posen + einen **gelernten Score** pro Hypothese; beste gewinnt,
@@ -105,7 +105,7 @@ GPU aktuell belegt (rendert/trainiert) → der MegaPose-Pfad ist **verdrahtet, a
 nicht jetzt ausgeführt**. Beim Finish (GPU frei):
 
 1. **Self-Check (schnell):**
-   `…/megapose6d/.venv/bin/python box_src/megapose_refine.py --self-check`
+   `(removed — MegaPose-M2 path measured to ceiling, scoped out)`
    → prüft MegaPose-Import + Hypothesen-Generator-Wiring ohne schweren Refine.
 2. **Voller Pfad:**
    `box_src/e2e_finish.sh --refine-rc --rc-scorer megapose` (oder direkt
@@ -150,14 +150,14 @@ for c in raw rc_anker rc_all; do
     --preds /tmp/rc_out/preds_$c.csv --n-points 2000
 done
 # Finish (GPU frei) — MegaPose-RGB-Pfad:
-box_src/megapose_refine.py --self-check
+# MegaPose-M2 path removed post-Phase-2
 box_src/e2e_finish.sh --refine-rc --rc-scorer megapose
 ```
 
 ## Related
 - `project/refine_rc.py` · `project/e2e_infer.py` · `project/bop_adapter.py`
   (`detection_to_result(rc_refiner=…)`) · `project/tests/test_refine_rc.py`
-- `box_src/rc_refine_eval.py` · `box_src/megapose_refine.py` ·
+- `box_src/rc_refine_eval.py` (operative CPU-Scorer) ·
   `box_src/real_pose_result.py` · `box_src/e2e_finish.sh`
 - `docs/PHASE3_PEAK_PLAN.md` (M2-Spec) · `docs/REFINE_T041.md` (M1/M3/M4-Befund) ·
   `docs/PROJECT_REPORT.md` · ADR-018 (BOP pivot) · ADR-017 (pose_result contract)

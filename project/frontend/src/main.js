@@ -36,8 +36,23 @@ function fillMeta(meta, count) {
   document.getElementById("meta-units").textContent = meta.units ?? "–";
 }
 
+// Highlight the stage-selector button whose href matches the currently-loaded
+// pose_result. When ?file= is absent (default = final pose_result.json), the
+// "final" button is marked. Buttons themselves are plain <a> tags — click =
+// reload with the new ?file=.
+function markActiveStage(loadedUrl) {
+  const params = new URLSearchParams(window.location.search);
+  const current = params.get("file") || "../temp/pose_result.json";
+  document.querySelectorAll(".stage-btn").forEach((btn) => {
+    const btnHref = btn.getAttribute("href") || "";
+    const btnFile = new URLSearchParams(btnHref.replace(/^\?/, "")).get("file");
+    if (btnFile === current) btn.classList.add("stage-btn--active");
+  });
+}
+
 async function boot() {
   const url = resolvePoseUrl();
+  markActiveStage(url);
   showStatus(`Lade ${url} …`);
   try {
     let meta, results;

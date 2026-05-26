@@ -160,3 +160,58 @@ html, body {
   max-width: min(90vw, 560px);
 }
 .status--error { border-color: rgba(248, 113, 113, 0.5); color: #fca5a5; }
+
+/* ───────────────────────────────────────────────────────────────────
+   Stage Selector — top-center pill-bar to step through the pipeline.
+   Each .stage-btn loads a different pose_result.json via ?file=.
+   ─────────────────────────────────────────────────────────────────── */
+.stages {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(16, 18, 22, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  backdrop-filter: blur(6px);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 12px;
+  z-index: 50;
+}
+
+.stages__label {
+  color: rgba(255, 255, 255, 0.6);
+  padding: 0 8px 0 4px;
+  letter-spacing: 0.5px;
+}
+
+.stage-btn {
+  display: inline-block;
+  padding: 5px 11px;
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+  border-radius: 14px;
+  transition: background 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
+}
+
+.stage-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.stage-btn--active {
+  background: rgba(120, 200, 140, 0.22);
+  color: rgb(140, 230, 170);
+  font-weight: 600;
+}
+
+.stage-btn--final {
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  margin-left: 6px;
+  padding-left: 14px;
+}

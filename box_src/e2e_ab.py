@@ -11,10 +11,11 @@ trainable objects, picks the best config, and emits:
        §0 in-house baseline      (Anker_Kurz 0.59 · Anker_Lang 0.61 · Zahnrad 0.36)
        §Phase-1 planar baseline  (Anker_Kurz 0.645 · Anker_Lang 0.650 · Zahnrad 0.36)
   2. The auto-best config (highest mean-AR over trainable objects).
-  3. Decision flags that drive the *next* engineering step:
-       - Zahnrad AR (best config) < 0.70  ->  recommend SO(3)-head Phase-3
-                                              (box_src/train_so3cls_phase3.sh)
-       - any Anker  AR (best config) < 0.80 ->  check M2-MegaPose settings
+  3. Decision flags that document remaining-AR gaps (purely advisory; both the
+     SO(3)-head plan and the MegaPose-M2 path were measured to ceiling and
+     scoped out post-Phase-2 — see project/docs/RESULTS_PHASE2.md).
+       - Zahnrad AR (best config) < 0.70  ->  ZAHNRAD_GAP (informational)
+       - any Anker  AR (best config) < 0.80 ->  ANKER_CEILING (informational)
   4. A machine-readable ab_result.json the harness reads to know which
      config to materialise into the real pose_result.json.
 
@@ -127,12 +128,13 @@ def build_decision(best_name, best_rows):
                      (al is not None and al < ANKER_MEGAPOSE_THR)
     if train_so3:
         flags.append({
-            "flag": "TRAIN_SO3_PHASE3",
+            "flag": "ZAHNRAD_GAP",
             "reason": f"Zahnrad AR={_f(zr)} < {ZAHNRAD_SO3_THR} on the best config "
-                      f"({CONFIG_LABEL.get(best_name, best_name)}) — the C_7 rotation "
-                      f"is still the bottleneck; the training-free + refiner levers "
-                      f"are exhausted.",
-            "action": "box_src/train_so3cls_phase3.sh",
+                      f"({CONFIG_LABEL.get(best_name, best_name)}). Phase-2 retrain "
+                      f"with C_7-symmetry-aware PM-loss + best-by-val selection "
+                      f"is the operational target; the SO(3)-classification-head "
+                      f"plan was measured to ceiling and scoped out.",
+            "action": "informational — see project/docs/RESULTS_PHASE2.md",
         })
     if check_megapose:
         low = []
@@ -141,15 +143,17 @@ def build_decision(best_name, best_rows):
         if al is not None and al < ANKER_MEGAPOSE_THR:
             low.append(f"Anker_Lang={_f(al)}")
         flags.append({
-            "flag": "CHECK_MEGAPOSE_SETTINGS",
-            "reason": f"{', '.join(low)} < {ANKER_MEGAPOSE_THR} on the best config — "
-                      f"the M2 MegaPose-refiner should be closing the Anker flip; "
-                      f"re-check coarse-init / n-iter / model variant.",
-            "action": "box_src/megapose_refine.py (settings) + project/refine_rc.py",
+            "flag": "ANKER_CEILING",
+            "reason": f"{', '.join(low)} < {ANKER_MEGAPOSE_THR} on the best config. "
+                      f"MegaPose-M2 (cpu_edge + megapose-scorer), n_iter sweep, "
+                      f"mask-IoU ensemble, end-region scoring, custom flip-classifier "
+                      f"all stuck at or below planar-Z-Snap — C_2 head-tail-flip "
+                      f"ambiguity is not resolvable from a single top-down RGB.",
+            "action": "informational — physical ceiling, needs depth or 2nd view",
         })
     return {
-        "train_so3_phase3": train_so3,
-        "check_megapose_settings": check_megapose,
+        "zahnrad_gap": train_so3,
+        "anker_ceiling": check_megapose,
         "flags": flags,
     }
 
@@ -212,15 +216,15 @@ def write_markdown(out_md, configs, best_name, decision, mode, stamp):
     A(f"| **mean** | {mean0:.3f} | {mean1:.3f} | **{mean_ar(best):.3f}** | "
       f"{fmt_delta(mean_ar(best), mean0)} | {fmt_delta(mean_ar(best), mean1)} |")
 
-    # decision flags
-    A("\n## 3. Decision flags (next engineering step)\n")
+    # decision flags (informational; both directions measured to ceiling, see RESULTS_PHASE2.md)
+    A("\n## 3. Outcome flags (informational)\n")
     if not decision["flags"]:
-        A("- ✅ No flag raised — every trainable object clears its threshold "
+        A("- ✅ No gap raised — every trainable object clears its threshold "
           f"(Zahnrad ≥ {ZAHNRAD_SO3_THR}, Anker ≥ {ANKER_MEGAPOSE_THR}). "
           "The pipeline is finish-ready as-is.")
     for fl in decision["flags"]:
         A(f"- ⚠️ **{fl['flag']}** — {fl['reason']}")
-        A(f"  - next: `{fl['action']}`")
+        A(f"  - {fl['action']}")
 
     A("\n## Related")
     A("- [[RESULTS_PHASE2]] — the headline finish results")

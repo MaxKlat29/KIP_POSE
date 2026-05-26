@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-25T16:42:15Z",
+  "updated": "2026-05-25T17:05:33Z",
   "columns": [
     {
       "id": "backlog",
@@ -3482,7 +3482,7 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-25T16:42:15Z",
+      "updated": "2026-05-25T17:05:33Z",
       "started_at": "2026-05-23T05:46:01Z",
       "completed_at": null,
       "comments": [],
@@ -3786,6 +3786,18 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "Restart LIVE + recipe-intact: phase2_chain PID 737929 (PPID=1, own session, Ss = detached), GDRNPP anker_kurz 738169. Stabilisiert 3.21 s/iter (= proven baseline, XYZ_ONLINE=True/batch16/320/80/160ep unveraendert). max_mem 6846M, loss sinkt sauber, kein PHASE2_FAILED. Frisches Log /mnt/data/bop/logs/phase2_chain.log mit allen Markern (SMOKE_DONE/DETECTOR_TRAIN_DONE skipped/STAGE5c/PHASE2_TRAIN_DONE@391). ETA ~37h/obj -> ~4.6d gesamt. Alte Logs -> .pre-t068-restart-* (non-destruktiv)."
+        },
+        {
+          "ts": "2026-05-25T16:44:43Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Speed-Fix nicht möglich (compute-bound @320px, beide Speedups 0%). Recipe intakt, sauberer Restart PID 737929. ~4.6 Tage echt."
+        },
+        {
+          "ts": "2026-05-25T17:05:33Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Zombie-Kill: iter 3.04→2.1s, GPU 0→80%. Jetzt saubere Opt-Runde (CPU frei): offline-XYZ/Worker/dataloader GPU-exklusiv messen, schnellste Combo, 1 finaler Restart wenn >15%."
         }
       ]
     },

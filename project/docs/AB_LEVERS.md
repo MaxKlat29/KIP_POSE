@@ -24,12 +24,17 @@ Auto-selected: **+M2+TTA** (highest mean AR = 0.587).
 | Zahnrad | 0.360 | 0.360 | 0.426 | +0.066 | +0.066 |
 | **mean** | 0.520 | 0.552 | **0.587** | +0.067 | +0.036 |
 
-## 3. Decision flags (next engineering step)
+## 3. Outcome (post-Phase-2)
 
-- ⚠️ **TRAIN_SO3_PHASE3** — Zahnrad AR=0.426 < 0.7 on the best config (+M2+TTA) — the C_7 rotation is still the bottleneck; the training-free + refiner levers are exhausted.
-  - next: `box_src/train_so3cls_phase3.sh`
-- ⚠️ **CHECK_MEGAPOSE_SETTINGS** — Anker_Kurz=0.659, Anker_Lang=0.676 < 0.8 on the best config — the M2 MegaPose-refiner should be closing the Anker flip; re-check coarse-init / n-iter / model variant.
-  - next: `box_src/megapose_refine.py (settings) + project/refine_rc.py`
+- **Anker_Kurz / Anker_Lang ceiling = 0.61** — exhaustively measured: MegaPose-M2
+  (cpu_edge / megapose-scorer), n_iter sweep, mask-IoU ensemble, end-region scoring,
+  custom flip-classifier — all stuck at or below planar-Z-Snap. The C_2-flip
+  ambiguity on the head-tail axis is not resolvable from a single top-down RGB.
+  Accepted as physical ceiling; further gain requires depth (Zivid) or a second view.
+- **Zahnrad retraining** — C_7-symmetry-aware retrain (160 ep, checkpoint-spread
+  retention, best-by-val selection) supersedes the old `TRAIN_SO3_PHASE3` plan.
+  The SO(3)-classification-head was scoped out; standard GDRNPP + symmetry-aware
+  PM-loss is the operational target.
 
 ## Related
 - [[RESULTS_PHASE2]] — the headline finish results

@@ -165,7 +165,7 @@ def write_csv(rows, path):
 
 
 def refine_rows(rows, cfg, cams, meshes, downs, gt_index, bop_root,
-                table_z=DEFAULT_TABLE_Z):
+                table_z=DEFAULT_TABLE_Z, scorer="cpu_edge"):
     objs = cfg["objs"]
     used = set()
     out = []
@@ -196,7 +196,7 @@ def refine_rows(rows, cfg, cams, meshes, downs, gt_index, bop_root,
                     table_origin_m=TABLE_ORIGIN, R_w2c=R_w2c, t_w2c_mm=t_w2c,
                     K=K, hw=mask.shape, target_mask=mask, image_edge_mask=ie,
                     sym_axis=SYM_AXIS, n_fold=OBJ_NFOLD.get(oid),
-                    stable_downs=downs[oid], scorer="cpu_edge")
+                    stable_downs=downs[oid], scorer=scorer)
                 stats["rc"] += 1
                 if info.get("switched"):
                     stats["switched"] += 1
@@ -218,6 +218,9 @@ def main():
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--config", nargs="+", default=list(CONFIGS.keys()))
     ap.add_argument("--table-z", type=float, default=DEFAULT_TABLE_Z)
+    ap.add_argument("--scorer", default="cpu_edge",
+                    choices=["cpu_edge", "megapose"],
+                    help="hypothesis scorer for M2 (cpu_edge=fast/silhouette, megapose=GPU/RGB)")
     args = ap.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -229,7 +232,8 @@ def main():
     for cname in args.config:
         cfg = CONFIGS[cname]
         ref, st = refine_rows(rows, cfg, cams, meshes, downs, gt_index,
-                              args.bop_root, table_z=args.table_z)
+                              args.bop_root, table_z=args.table_z,
+                              scorer=args.scorer)
         out = os.path.join(args.out_dir, f"preds_{cname}.csv")
         write_csv(ref, out)
         sys.stderr.write(

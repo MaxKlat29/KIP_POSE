@@ -121,24 +121,24 @@ def test_auto_best_picks_highest_mean():
 def test_decision_zahnrad_below_070_triggers_so3():
     rows = {1: {"AR": 0.85}, 2: {"AR": 0.85}, 6: {"AR": 0.42}}
     dec = AB.build_decision("m2_tta", rows)
-    assert dec["train_so3_phase3"] is True
-    assert any(f["flag"] == "TRAIN_SO3_PHASE3" for f in dec["flags"])
-    so3 = next(f for f in dec["flags"] if f["flag"] == "TRAIN_SO3_PHASE3")
-    assert "train_so3cls_phase3.sh" in so3["action"]
+    assert dec["zahnrad_gap"] is True
+    assert any(f["flag"] == "ZAHNRAD_GAP" for f in dec["flags"])
+    zg = next(f for f in dec["flags"] if f["flag"] == "ZAHNRAD_GAP")
+    assert "RESULTS_PHASE2.md" in zg["action"]
 
 
 def test_decision_zahnrad_at_or_above_070_no_so3():
     rows = {1: {"AR": 0.85}, 2: {"AR": 0.85}, 6: {"AR": 0.71}}
     dec = AB.build_decision("m2_tta", rows)
-    assert dec["train_so3_phase3"] is False
-    assert not any(f["flag"] == "TRAIN_SO3_PHASE3" for f in dec["flags"])
+    assert dec["zahnrad_gap"] is False
+    assert not any(f["flag"] == "ZAHNRAD_GAP" for f in dec["flags"])
 
 
 def test_decision_anker_below_080_triggers_megapose():
     rows = {1: {"AR": 0.72}, 2: {"AR": 0.90}, 6: {"AR": 0.80}}
     dec = AB.build_decision("m2", rows)
-    assert dec["check_megapose_settings"] is True
-    mp = next(f for f in dec["flags"] if f["flag"] == "CHECK_MEGAPOSE_SETTINGS")
+    assert dec["anker_ceiling"] is True
+    mp = next(f for f in dec["flags"] if f["flag"] == "ANKER_CEILING")
     assert "Anker_Kurz" in mp["reason"] and "Anker_Lang" not in mp["reason"]
 
 
@@ -146,8 +146,8 @@ def test_decision_all_clear_no_flags():
     rows = {1: {"AR": 0.85}, 2: {"AR": 0.85}, 6: {"AR": 0.75}}
     dec = AB.build_decision("m2_tta", rows)
     assert dec["flags"] == []
-    assert dec["train_so3_phase3"] is False
-    assert dec["check_megapose_settings"] is False
+    assert dec["zahnrad_gap"] is False
+    assert dec["anker_ceiling"] is False
 
 
 def test_thresholds_are_the_spec_values():
@@ -174,10 +174,10 @@ def test_main_synth_writes_json_and_md(tmp_path, monkeypatch):
     assert res["best_config"] == "m2_tta"
     # both flags fire on the (still-low) synthesised numbers
     flags = {f["flag"] for f in res["decision"]["flags"]}
-    assert "TRAIN_SO3_PHASE3" in flags
-    assert "CHECK_MEGAPOSE_SETTINGS" in flags
+    assert "ZAHNRAD_GAP" in flags
+    assert "ANKER_CEILING" in flags
     md = open(out_md).read()
-    assert "+M2+TTA" in md and "✅" in md and "Decision flags" in md
+    assert "+M2+TTA" in md and "✅" in md
 
 
 def test_main_full_picks_best_of_real_reports(tmp_path, monkeypatch):
@@ -196,7 +196,7 @@ def test_main_full_picks_best_of_real_reports(tmp_path, monkeypatch):
     AB.main()
     res = json.load(open(out_json))
     assert res["best_config"] == "m2"           # highest mean of the four real reports
-    # Anker now > 0.80 -> no MegaPose flag; Zahnrad 0.55 < 0.70 -> SO(3) flag
+    # Anker now > 0.80 -> no ceiling flag; Zahnrad 0.55 < 0.70 -> gap flag
     flags = {f["flag"] for f in res["decision"]["flags"]}
-    assert "TRAIN_SO3_PHASE3" in flags
-    assert "CHECK_MEGAPOSE_SETTINGS" not in flags
+    assert "ZAHNRAD_GAP" in flags
+    assert "ANKER_CEILING" not in flags

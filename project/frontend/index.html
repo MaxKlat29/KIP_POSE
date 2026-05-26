@@ -35,6 +35,32 @@
         </dl>
       </header>
 
+      <!--
+        Stage-Selector: lets the user step through the refinement pipeline by
+        loading the corresponding pose_result_<stage>.json. Each stage file is
+        produced by make_stages.py after e2e_finish runs (one CSV variant ->
+        one pose_result.json). Click a button -> URL param ?file= updates ->
+        page reloads with that stage's poses. The currently-active button is
+        marked via the .stage-btn--active class.
+
+        Stages (left -> right = pipeline order):
+          raw     : GDRNPP output, no refinement (head/tail flips visible)
+          zsnap   : + planar Z-Snap (translation locked to table plane)
+          m1z     : + M1 stable-pose rotation snap (rotation tilts re-snapped)
+          m2      : + M2 render-and-compare flip resolver (cpu_edge scorer)
+          tta     : + TTA rotation voting
+          final   : auto-best variant (winner of the e2e_finish A/B)
+      -->
+      <nav id="stage-selector" class="stages" aria-label="Pipeline-Stufe">
+        <span class="stages__label">Stufe:</span>
+        <a class="stage-btn" data-stage="raw"   href="?file=../temp/pose_result_raw.json">Raw</a>
+        <a class="stage-btn" data-stage="zsnap" href="?file=../temp/pose_result_zsnap.json">+Z-Snap</a>
+        <a class="stage-btn" data-stage="m1z"   href="?file=../temp/pose_result_m1_zsnap.json">+M1</a>
+        <a class="stage-btn" data-stage="m2"    href="?file=../temp/pose_result_m2.json">+M2</a>
+        <a class="stage-btn" data-stage="tta"   href="?file=../temp/pose_result_tta.json">+TTA</a>
+        <a class="stage-btn stage-btn--final" data-stage="final" href="?file=../temp/pose_result.json">Final (Auto-Best)</a>
+      </nav>
+
       <!-- Legend: bottom-left -->
       <aside id="legend" class="legend" aria-label="Legende">
         <span class="legend__item"><i class="legend__swatch legend__swatch--flat"></i>liegend</span>

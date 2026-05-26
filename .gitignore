@@ -17,6 +17,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.posevenv/
 .venv-faces/
 .venv-verify/
 venv/
@@ -50,6 +51,11 @@ kit/
 
 # ── git worktrees (managed by `git worktree`, never commit) ────
 .worktrees/
+
+# ── claude-kanban runtime (board.json IS tracked; the rest is ephemeral) ──
+.claude-kanban/bus.jsonl
+.claude-kanban/checkpoints/
+.claude-kanban/presence.json
 
 # ── project/ generated artifacts (large; regenerable via setup.ipynb) ──────────
 # Facesets (RGB+Tiefe+Maske) und Snippets sind generierte Trainingsdaten.

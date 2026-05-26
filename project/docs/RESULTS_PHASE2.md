@@ -33,9 +33,12 @@ Auto-selected config: **+M2+TTA** (mean AR = 0.5873). Full comparison in [[AB_LE
 | tta | 0.5406 |
 | m2_tta | 0.5873 ✅ |
 
-**Decision flags (next engineering step):**
-- ⚠️ **TRAIN_SO3_PHASE3** — Zahnrad AR=0.426 < 0.7 on the best config (+M2+TTA) — the C_7 rotation is still the bottleneck; the training-free + refiner levers are exhausted. → `box_src/train_so3cls_phase3.sh`
-- ⚠️ **CHECK_MEGAPOSE_SETTINGS** — Anker_Kurz=0.659, Anker_Lang=0.676 < 0.8 on the best config — the M2 MegaPose-refiner should be closing the Anker flip; re-check coarse-init / n-iter / model variant. → `box_src/megapose_refine.py (settings) + project/refine_rc.py`
+**Outcome (post-Phase-2):**
+- Anker ceiling = 0.61 — MegaPose-M2 / n_iter sweep / mask-IoU ensemble / end-region
+  scoring / custom flip-classifier all stuck ≤ planar-Z-Snap. C_2 head-tail-flip
+  ambiguity not resolvable from a single top-down RGB → physical ceiling.
+- Zahnrad retraining (160 ep, checkpoint-spread retention, best-by-val) replaces
+  the abandoned SO(3)-classification-head plan; symmetry-aware PM-loss is enough.
 
 
 ## 2. Phase-2 detail (the median that describes the typical case)

@@ -59,6 +59,16 @@ schema-valides `pose_result.json`, zeigt Detektions-Overlay + Pose-Tabelle und
 schon grün**. Sobald ein Checkpoint da ist: `GDRNPP_CHECKPOINT` im Notebook
 setzen, der echte Call schaltet automatisch zu.
 
+### Multi-Stage Viewer (Pipeline-Zwischenergebnisse)
+
+Der 3D-Viewer hat oben eine **Stage-Leiste**: `Raw | +Z-Snap | +M1 | +M2 | +TTA |
+Final (Auto-Best)`. Pro Stufe liegt ein eigenes `temp/pose_result_<stage>.json`
+(erzeugt von `box_src/make_stages.py` nach `e2e_finish`). Click → Viewer lädt
+diese Stufe → man sieht direkt, was jeder Refinement-Lever am Endergebnis
+verändert (Translation-Sprung durch Z-Snap, Rotation durch M2, etc.). Fehlt
+eine Stufen-Datei (Pipeline nicht durchgelaufen), schaltet die Stage einfach
+auf einen leeren Scene-Fallback — der Viewer bricht nicht.
+
 ## Viewer-Start — der EINE Befehl
 
 ```bash

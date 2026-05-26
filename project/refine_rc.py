@@ -354,10 +354,10 @@ def select_best_hypothesis(hyps, scores, coarse_idx=0, min_margin=0.0):
 # Pose + einen Score. Wir füttern ALLE Hypothesen als TCO_init, refinen je n_iter
 # Iterationen und nehmen die best-scorende — exakt der Multi-Hypothesen-Pfad.
 #
-# Diese Funktion ist als „finish-time" markiert: GPU aktuell belegt (rendert/
-# trainiert), also wird sie NICHT jetzt ausgeführt, sondern beim Finish validiert
-# (dokumentiert in box_src/megapose_refine.py + M2_REFINER.md). Hier steht der
-# saubere, getestete Call-Contract; der tatsächliche GPU-Aufruf lebt box-seitig.
+# Diese Funktion war als „finish-time" GPU-Pfad geplant. Beim Phase-2-Finish
+# wurde MegaPose-M2 (cpu_edge / megapose-scorer) durchgemessen und das Ergebnis
+# blieb ≤ planar-Z-Snap — siehe project/docs/RESULTS_PHASE2.md und M2_REFINER.md.
+# Der Call-Contract bleibt hier dokumentiert, der Pfad ist NotImplemented.
 
 
 class MegaPoseUnavailable(RuntimeError):
@@ -380,10 +380,9 @@ def megapose_score(hyps, *, t_world_m, table_origin_m, R_w2c, t_w2c_mm,
       4. Wähle die best-scorende refinte Pose, transformiere zurück in den Welt-
          Frame (bop_adapter.bop_pose_to_world) → verfeinerte Welt-Rotation.
 
-    Diese Funktion FÜHRT den GPU-Pfad aus, wenn MegaPose + CUDA verfügbar sind;
-    sonst MegaPoseUnavailable (→ Caller nutzt den CPU-Scorer). Im aktuellen Lauf
-    (GPU belegt) wird sie NICHT aufgerufen — sie ist verdrahtet und beim Finish
-    validierbar (box_src/megapose_refine.py spiegelt diesen Contract auf der Box).
+    GPU-Pfad NotImplemented in diesem Repo (M2 wurde Phase-2 durchgemessen und
+    ist gegenüber planar-Z-Snap nicht überlegen — Anker-C2-Flip ist aus einer
+    Top-Down-RGB nicht stabil resolvierbar; siehe RESULTS_PHASE2.md).
 
     Returns: (best_idx, R_refined_world (3,3), per_hyp_score (M,)).
     """
@@ -397,12 +396,12 @@ def megapose_score(hyps, *, t_world_m, table_origin_m, R_w2c, t_w2c_mm,
     except Exception as exc:  # pragma: no cover
         raise MegaPoseUnavailable(
             f"MegaPose/Torch nicht verfügbar ({exc!r}); CPU-Scorer nutzen.")
-    # pragma: no cover — der tatsächliche GPU-Aufruf wird beim Finish ausgeführt
-    # (box_src/megapose_refine.py). Hier bewusst NotImplemented, damit ein
-    # versehentlicher Laptop-Aufruf nicht halb-initialisiert die GPU belegt.
+    # pragma: no cover — M2 GPU-Pfad wurde Phase-2 abschließend durchgemessen
+    # (Anker-Ceiling 0.61, M2 nicht > planar-Z-Snap). Pfad bleibt NotImplemented;
+    # cpu_edge-Scorer ist der operative Default — siehe refine_rc.refine_pose().
     raise NotImplementedError(  # pragma: no cover
-        "megapose_score ist finish-time: GPU-Aufruf lebt in "
-        "box_src/megapose_refine.py (GPU aktuell belegt). Contract s. Docstring.")
+        "megapose_score: GPU-M2-Pfad wurde Phase-2 abschließend gemessen "
+        "(siehe RESULTS_PHASE2.md). Operativ läuft cpu_edge.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

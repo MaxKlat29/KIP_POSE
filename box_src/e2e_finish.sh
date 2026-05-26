@@ -92,6 +92,20 @@ FRONTEND_TEST="$PROJECT_DIR/frontend/test"
 # remote (box) paths — only used in full mode
 REMOTE_REPO="${REMOTE_REPO:-/mnt/data/kip_pose}"
 DATASET_DIR="${DATASET_DIR:-/mnt/data/kip_pose/project/bop/pose_isaac}"
+
+# [Box-local autonomy] If ROOT==REMOTE_REPO we are running ON the box itself
+# (typically launched by box_src/finish_watcher.sh after PHASE2_TRAIN_DONE, with
+# no Mac-side ssh available). All the "scp helper -> box" calls below would then
+# be scp-to-self with identical source/destination paths — which would either
+# no-op or trip "|| fail". Stub scp() to a no-op so the file-shipping blocks
+# below succeed cleanly; the helpers (refine_eval.py, rc_refine_eval.py,
+# refine_rc.py, tta_pose.py, bop_adapter.py, real_pose_result.py) are expected
+# to already be in place in $REMOTE_REPO. Off-box (Mac) runs are unaffected
+# because ROOT (=/Users/Admin/POSE/..) won't match REMOTE_REPO.
+if [ "$ROOT" = "$REMOTE_REPO" ]; then
+    echo "[e2e] DETECTED on-box mode (ROOT=REMOTE_REPO=$ROOT) — scp stubbed (helpers pre-deployed)"
+    scp() { return 0; }
+fi
 # [T-068] track whether the caller pinned PREDS_CSV (then we don't rebuild it from
 # the best/final per-object CSVs in STEP 1).
 PREDS_CSV_PINNED="${PREDS_CSV:+1}"
@@ -191,7 +205,7 @@ say "levers: planar=$PLANAR_AVAILABLE(refine_eval+bop_adapter)  m2=$M2_AVAILABLE
 [[ "$PLANAR_REFINE" -eq 1 && "$PLANAR_AVAILABLE" -eq 0 ]] && { say "WARN planar lever unavailable"; PLANAR_REFINE=0; }
 [[ "$REFINE_RC" -eq 1 && "$M2_AVAILABLE" -eq 0 ]] && { say "WARN M2 lever unavailable"; REFINE_RC=0; }
 if [[ "$RC_SCORER" == "megapose" ]]; then
-  say "NOTE RC scorer=megapose is the GPU path (box_src/megapose_refine.py) — finish-time only (GPU must be free)"
+  say "NOTE RC scorer=megapose is the GPU path — measured to ceiling Phase-2 (see RESULTS_PHASE2.md); cpu_edge is the operational default"
 fi
 
 # =============================================================================
