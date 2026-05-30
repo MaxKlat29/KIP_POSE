@@ -1,21 +1,29 @@
 /* POSE 3D Pose Viewer — minimal, unobtrusive overlay UI over a full-bleed canvas. */
 
 :root {
-  --bg: #0e1116;
-  --panel: rgba(20, 25, 33, 0.86);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --text: #e6eaf0;
-  --text-dim: #98a2b3;
+  /* Werkstatt-Light-Theme (Fix 2026-05-26): heller Scene-BG, dunkle Text-Glas-
+     Panels mit backdrop-blur — bleibt lesbar über jeder Beleuchtung. */
+  --bg: #eef1f5;
+  --panel: rgba(22, 28, 38, 0.78);
+  --panel-border: rgba(255, 255, 255, 0.14);
+  --text: #f0f3f8;
+  --text-dim: #a8b2c2;
   --accent: #f5b942;        /* upright / highlight — warm amber */
   --flat: #5b8def;          /* flat parts — cool blue */
   --origin: #34d399;        /* null-point — green */
-  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   --radius: 12px;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
+
+/* BUG-FIX 2026-05-28: das HTML hidden-Attribut MUSS gewinnen. Ohne diese Regel
+   überstimmt `.image-view { display:flex }` (höhere Spezifität als das UA-default
+   [hidden]{display:none}) das hidden-Attribut → das Bild-Overlay lag IMMER über
+   der 3D-Canvas (weißer Screen + kaputtes Bild-Icon auf den 3D-Tabs). */
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -161,9 +169,28 @@ html, body {
 }
 .status--error { border-color: rgba(248, 113, 113, 0.5); color: #fca5a5; }
 
+/* Image overlay (Foto / Boxen pill-bar buttons → full-bleed image). */
+.image-view {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  z-index: 30;
+}
+.image-view img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: high-quality;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  border-radius: 4px;
+}
+
 /* ───────────────────────────────────────────────────────────────────
-   Stage Selector — top-center pill-bar to step through the pipeline.
-   Each .stage-btn loads a different pose_result.json via ?file=.
+   Stage Selector — top-center pill-bar (old, restored).
+   Vorne 2 Image-Reiter (.stage-btn--img) + Separator + 6 Stage-Reiter.
    ─────────────────────────────────────────────────────────────────── */
 .stages {
   position: absolute;
@@ -215,3 +242,82 @@ html, body {
   margin-left: 6px;
   padding-left: 14px;
 }
+
+/* Image-Tabs vorne — andere Farbe damit man sieht: das ist KEIN 3D-Stage. */
+.stage-btn--img {
+  color: rgba(173, 216, 247, 0.95);
+}
+.stage-btn--img.stage-btn--active {
+  background: rgba(91, 141, 239, 0.28);
+  color: rgb(173, 216, 247);
+}
+.stages__sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 0 4px;
+}
+
+/* ── 2D-Detektion PiP (bottom-right "facecam") ──────────────────────── */
+.pip {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: min(30vw, 380px);
+  margin: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(16, 18, 22, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+.pip img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pip__cap {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 5px 9px;
+  letter-spacing: 0.3px;
+  background: rgba(16, 18, 22, 0.95);
+}
+
+/* PiP buttons (Boxen-Toggle + Foto-View) */
+.pip__cap {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.pip__btns { display: inline-flex; gap: 6px; }
+.pip__btn {
+  font-family: var(--sans);
+  font-size: 10px;
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.pip__btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+.pip__btn--on {
+  background: rgba(52, 211, 153, 0.25);
+  color: rgb(140, 230, 170);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+/* PiP-Fullscreen-Modus: ungefaehr 4-fache Flaeche der Standard-Vorschau. */
+.pip--big {
+  width: min(60vw, 760px);
+  right: 32px;
+  bottom: 32px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+.pip--big .pip__cap { font-size: 13px; padding: 9px 14px; }
+.pip--big .pip__btn { font-size: 13px; padding: 5px 12px; }
+/* Reine Icon-Buttons (Fullscreen-Toggle) bekommen ein quadratisches Format. */
+#pip-zoom { font-size: 14px; line-height: 1; padding: 3px 7px; }

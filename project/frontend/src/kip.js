@@ -115,18 +115,35 @@ function showScreen(which) {
 tabReal.addEventListener("click", () => showScreen("real"));
 tabSim.addEventListener("click", () => showScreen("sim"));
 
-// ── PiP-Controls: Boxen-Toggle + Foto-View ──
+// ── PiP-Controls: Boxen-Toggle + Foto-View + Vergroesserung ──
 let lastCamPose = null;   // {cam_pos, look_at, up, fov_y} der zuletzt geladenen Szene
 function wirePip() {
+  const pip = document.getElementById("pip");
   const img = document.getElementById("pip__img");
   const btnBoxes = document.getElementById("pip-boxes");
   const btnCam = document.getElementById("cam-photo");
+  const btnZoom = document.getElementById("pip-zoom");
   let showBoxes = true;
   btnBoxes.addEventListener("click", () => {
     if (!img.dataset.boxen) return;
     showBoxes = !showBoxes;
     img.src = showBoxes ? img.dataset.boxen : img.dataset.plain;
     btnBoxes.classList.toggle("pip__btn--on", showBoxes);
+  });
+  // Fullscreen-Toggle: PiP wird auf ~4-fache Flaeche aufgezogen (CSS .pip--big).
+  // Klick auf den Button bzw. ESC beendet den Modus wieder.
+  btnZoom.addEventListener("click", () => {
+    const big = pip.classList.toggle("pip--big");
+    btnZoom.classList.toggle("pip__btn--on", big);
+    btnZoom.title = big ? "Vorschau verkleinern" : "Vorschau vergroessern";
+    btnZoom.textContent = big ? "⤫" : "⛶";
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && pip.classList.contains("pip--big")) {
+      pip.classList.remove("pip--big");
+      btnZoom.classList.remove("pip__btn--on");
+      btnZoom.textContent = "⛶";
+    }
   });
   btnCam.addEventListener("click", () => {
     if (!lastCamPose) return;

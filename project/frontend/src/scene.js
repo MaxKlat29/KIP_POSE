@@ -163,20 +163,53 @@ export function createViewer(canvas) {
     return { total: results.length, real };
   }
 
-  // Hebt jeden partsGroup-Eintrag so an, dass sein lowest-z in der Welt
-  // exakt auf der Tischebene (viewer-z = 0) ruht. Keine Senkung — versinken
-  // im Tisch ist physikalisch ungueltig; falls Pose-Schaetzer das Teil 1cm
-  // ueber Tisch platziert, lassen wir es schweben (sieht auch sauber aus).
+  // Hebt jeden partsGroup-Eintrag so an, dass sein lowest-z auf der echten
+  // Tisch-Geometrie unter ihm ruht. Der Tisch ist NICHT eine flache Ebene
+  // bei z=0 — es gibt erhoehte Tray-Plateaus + Maschinen-Bloecke. Wir
+  // raycasten daher pro Teil downward auf cellGroup an mehreren Sample-
+  // Punkten (Center + 4 XY-Eckpunkten der Teile-AABB) und nehmen das MAX
+  // der getroffenen Tisch-Z. Wenn die Teile-AABB.min.z unter diesem
+  // Maximum liegt, heben wir den Holder so weit an, dass beide
+  // uebereinstimmen ("min(z-tisch(x,y))"-Garantie aus Max-Spec).
+  // Nie senken — schwebende Teile (Held in Greifer) bleiben oben.
+  const _raycaster = new THREE.Raycaster();
+  const _down = new THREE.Vector3(0, 0, -1);
   function groundClamp() {
+    if (!cellLoaded) return;            // ohne Tisch-Geometrie kein Sinn
     const _box = new THREE.Box3();
+    const _origin = new THREE.Vector3();
     partsGroup.children.forEach((holder) => {
       _box.makeEmpty();
       _box.expandByObject(holder);
       if (_box.isEmpty()) return;
-      const dz = -_box.min.z;          // dz>0: holder muss angehoben werden
+
+      // 5 Sample-Punkte: bbox-Center + 4 XY-Eckpunkte. Strahl-Start: hoch
+      // oben (z=5m), damit alle Tisch-Hoehen drunter erreichbar sind.
+      const samples = [
+        [(_box.min.x + _box.max.x) * 0.5, (_box.min.y + _box.max.y) * 0.5],
+        [_box.min.x, _box.min.y], [_box.max.x, _box.min.y],
+        [_box.min.x, _box.max.y], [_box.max.x, _box.max.y],
+      ];
+      // WICHTIG: nur Hits beruecksichtigen die UNTER dem Teil-Top liegen
+      // (z < box.max.z + Toleranz). Sonst zaehlen hohe Maschinen-Bloecke
+      // ueber dem Teil als "Tisch-Hoehe" und das Teil wird katastrophal
+      // hochgezogen. Wir wollen den lokal hoechsten Mesh-Punkt UNTER dem Teil.
+      const headRoom = _box.max.z + 0.005;
+      let tableZ = -Infinity;
+      for (const [sx, sy] of samples) {
+        _origin.set(sx, sy, 5);
+        _raycaster.set(_origin, _down);
+        const hits = _raycaster.intersectObject(cellGroup, true);
+        for (const h of hits) {
+          if (h.point.z < headRoom && h.point.z > tableZ) tableZ = h.point.z;
+        }
+      }
+      if (tableZ === -Infinity) tableZ = 0;    // kein Tisch unterm Teil → globaler Boden
+
+      const dz = tableZ - _box.min.z;
       if (dz > 0) {
-        // matrixAutoUpdate ist false → direkte Manipulation der matrix
-        holder.matrix.elements[14] += dz;          // z translation in column 3
+        // matrixAutoUpdate=false → direkte Manipulation der z-Komponente
+        holder.matrix.elements[14] += dz;
         holder.matrixWorldNeedsUpdate = true;
       }
     });

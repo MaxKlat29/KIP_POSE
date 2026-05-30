@@ -857,10 +857,13 @@ def sim_live_boxes(job: str):
     return StreamingResponse(buf, media_type="image/png")
 
 
-@app.get("/api/sim/random_async")
+@app.get("/api/sim/random_async", deprecated=True)
 def sim_random_async():
-    """Pool-Fallback: zufaellige Szene aus val-pool (sofort, nicht live generiert).
-    Hauptpfad ist /api/sim/generate_async (echtes Isaac)."""
+    """DEPRECATED — Pool-Fallback. Entfernt 2026-05-30: Sim laeuft ausschliesslich
+    ueber /api/sim/generate_async (echte Live-Isaac-Generation pro Klick). Diese
+    Route bleibt nur als 410-Stub falls FE-Caches noch alte URLs treffen."""
+    raise HTTPException(410, "Pool-Endpoint entfernt — nutze /api/sim/generate_async (live).")
+    # Toter Code unten nur fuer Referenz; nicht erreichbar.
     import random
     scenes = []
     if VAL_ROOT.exists():

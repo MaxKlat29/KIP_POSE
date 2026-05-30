@@ -163,6 +163,11 @@ def main():
     ap.add_argument("--out-overlay", default=None)
     ap.add_argument("--planar-refine", action="store_true",
                     help="planar Z-snap on the world pose (T-055)")
+    ap.add_argument("--max-snap-m", type=float, default=None,
+                    help="override DEFAULT_MAX_SNAP_M (default 50 mm guard). "
+                         "Use 0 to disable the guard entirely (snap always), or "
+                         "a larger value like 0.3 to tolerate large RGB-only-Z "
+                         "biases (viewer demos, not AR runs).")
     ap.add_argument("--refine-rc", action="store_true",
                     help="M2 multi-hypothesis render-and-compare refiner (T-058)")
     ap.add_argument("--rc-scorer", default="cpu_edge",
@@ -277,6 +282,10 @@ def main():
 
     # --- REAL chain: GDRNPP pose -> production bop_adapter -> pose_result ---
     results = []
+    # max-snap override: None = use bop_adapter default; 0 = no guard (always snap).
+    snap_kw = {}
+    if a.max_snap_m is not None:
+        snap_kw["max_snap_m"] = None if a.max_snap_m == 0 else float(a.max_snap_m)
     for i, p in enumerate(preds):
         rc_refiner = _build_rc_refiner(p["obj_id"], masks_for.get(i))
         r = BOP.detection_to_result(
@@ -293,6 +302,7 @@ def main():
             mesh_verts_m=(_mesh_verts_mm(a.dataset_dir, p["obj_id"]) / 1000.0
                           if a.planar_refine else None),
             rc_refiner=rc_refiner,
+            **snap_kw,
         )
         results.append((p["obj_id"], r))
 
