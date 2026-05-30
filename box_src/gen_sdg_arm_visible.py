@@ -399,6 +399,48 @@ def main():
         tl.pause()
         for _ in range(5): app.update()
 
+        # ── Filter physikalisch unrealistische Settled-Posen ──────────────────
+        # Rotationssymmetrische Teile (Anker_Kurz/Lang, Zahnrad, Ringmagnet)
+        # koennen nach Physics-Settle auf einer Endflaeche/Kante balancieren
+        # (Zahnrad auf Zaehnen, Anker hochkant). Solche Posen sind real-world
+        # so selten, dass sie das GT verzerren und im Demo-Viewer unrealistisch
+        # wirken. Wir messen die body-Y-Achse (Laengs-/Rotationsachse) im
+        # Welt-Frame: ist deren z-Komponente > 0.5 (Teil mehr aufrecht als
+        # liegend), entfernen wir den Prim aus der Szene bevor der Render-Step
+        # die Annotatoren-Daten zieht. Resultat: weniger Teile im Bild, dafuer
+        # nur stabile Posen.
+        ROTSYM_LABELS = ("Anker_Kurz", "Anker_Lang", "Zahnrad", "Ringmagnet")
+        def _is_upright_unstable(prim_path, label):
+            if label not in ROTSYM_LABELS:
+                return False
+            prim = stage.GetPrimAtPath(prim_path)
+            if not prim.IsValid():
+                return False
+            M = np.array(UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default()), float).reshape(4, 4)
+            # USD: row-vector convention; transpose -> column-vector (BOP).
+            T = M.T
+            body_y_world = T[:3, 1]   # body-Y axis in world coordinates
+            # |z-component| > 0.5: body-Y points more "up" than horizontal
+            # → Teil steht/lehnt aufrecht (= instabil bei rotationssym. Teilen).
+            return abs(float(body_y_world[2])) > 0.5
+
+        unstable = [pp for pp, lbl in path2label.items() if _is_upright_unstable(pp, lbl)]
+        for pp in unstable:
+            try:
+                stage.RemovePrim(pp)
+            except Exception:
+                pass
+            path2label.pop(pp, None)
+        if unstable:
+            log(f"removed {len(unstable)} instabile Pose(n) (rotsym. Teil aufrecht): {unstable}")
+            # Settle nochmal kurz, damit die verbleibenden Teile nicht mit den
+            # geloeschten Stuetzen mitfallen oder Sprung-Artefakte zeigen.
+            tl.play()
+            for _ in range(40): app.update()
+            tl.pause()
+            for _ in range(3): app.update()
+
         rep.orchestrator.step(rt_subframes=16)
         data = {k: x.get_data() for k, x in annots.items()}
 
