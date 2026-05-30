@@ -106,7 +106,10 @@ function showScreen(which) {
     if (!chosenFile) pip.hidden = true;
   } else {
     loadMetrics();
-    if (!simInited) { simInited = true; inferRandomSim(); }   // erster Wechsel: eine Szene wuerfeln
+    // erstes Mal Sim-Tab: nicht automatisch live generieren (60s Wartezeit) —
+    // Max druckt selbst auf den Button. Bei Folge-Tab-Wechseln zeigen wir die
+    // letzte Inferenz weiterhin im Viewer.
+    simInited = true;
   }
 }
 tabReal.addEventListener("click", () => showScreen("real"));
@@ -247,26 +250,25 @@ async function loadMetrics() {
 // rendert die GT-vs-Pred-Posen + Detektor-Boxen. Phasen-Bar zeigt den Fortschritt.
 const simInferBtn = document.getElementById("sim-infer");
 let simBusy = false;
-async function inferRandomSim() {
+async function inferLiveSim() {
   if (simBusy) return;
   simBusy = true;
   simInferBtn.disabled = true;
-  const origLabel = simInferBtn.textContent; simInferBtn.textContent = "Inferiert …";
+  const origLabel = simInferBtn.textContent; simInferBtn.textContent = "Isaac rendert …";
   simStat.className = "kip-status"; simStat.textContent = "";
-  simBar.set(10, "Neue Szene laden");
+  simBar.set(5, "Isaac Sim startet");
   try {
-    const r = await fetch(`${API}/sim/random_async`);
+    const r = await fetch(`${API}/sim/generate_async`);
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
-    const { job, scene, im } = await r.json();
-    const final = await pollJob(`${API}/sim/job/${job}`, simBar);
+    const { job } = await r.json();
+    // Live-Pipeline dauert ~60-80s, daher laengeres Polling-Intervall.
+    const final = await pollJob(`${API}/sim/job/${job}`, simBar, 700);
     const m = await (await fetch(`${API}/${final.result_url}`)).json();
     await renderSim(m);
-    setPip(`./api/sim/rgb?scene=${final.scene ?? scene}&im=${final.im ?? im}`,
-           `./api/sim/boxes?scene=${final.scene ?? scene}&im=${final.im ?? im}`);
-    simBar.done(final.source === "worker" ? "Live inferiert" : "Geladen");
+    setPip(`./api/sim/live_rgb/${job}`, `./api/sim/live_boxes/${job}`);
+    simBar.done("Live generiert");
     simStat.className = "kip-status kip-status--ok";
-    const src = final.source === "worker" ? "live berechnet" : "vorberechnet";
-    simStat.textContent = `Szene ${final.scene ?? scene} / Bild ${final.im ?? im}: ${final.n_gt}× Ground-Truth, ${final.n_pred}× inferiert (${src})`;
+    simStat.textContent = `Live Isaac-Szene (seed ${final.seed}, ${final.n_obj} Teile gespawnt): ${final.n_gt}× Ground-Truth, ${final.n_pred}× inferiert`;
   } catch (e) {
     simBar.hide();
     simStat.className = "kip-status kip-status--err";
@@ -278,7 +280,7 @@ async function inferRandomSim() {
   }
 }
 
-simInferBtn.addEventListener("click", inferRandomSim);
+simInferBtn.addEventListener("click", inferLiveSim);
 
 showScreen("real");
 window.__KIP_READY__ = true;

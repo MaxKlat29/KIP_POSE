@@ -667,11 +667,200 @@ def sim_infer_async(scene: int = 0, im: int = -1):
     return {"job": job}
 
 
+# ── Live-Isaac-Generation Configuration ─────────────────────────────────────
+_ISAAC_VENV   = "/mnt/data/isaacsim-venv/bin/python"
+_BOP_VENV     = "/mnt/data/bop/gdrnpp-venv/bin/python"
+_GEN_SCRIPT   = "/mnt/data/kip_pose/box_src/gen_sdg_arm_visible.py"
+_CONV_SCRIPT  = "/mnt/data/kip_pose/box_src/isaac_to_bop.py"
+_SCENE_USD    = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files/GST_Scene.usd"
+_USD_DIR      = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files"
+_LIVE_ROOT    = pathlib.Path("/mnt/data/kip_pose/project/temp/kip_live")
+_LIVE_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+def _sim_generate_job(job):
+    """Live-Isaac-Pipeline: Isaac rendert frisches Frame → BOP-Konvertierung →
+    Detektor → warmer GDRNPP-Worker → fertige Sim-Doc.
+
+    Phasen (gesamt ~60-80s):
+      10%  Isaac startet (booting SimulationApp, ~25s)
+      40%  Isaac rendert (spawn + physics + render, ~25s)
+      70%  BOP-Konvertierung (~2s)
+      80%  Detektor (YOLOv8-OBB, ~3s)
+      90%  GDRNPP-Worker (~4s)
+     100%  Fertig (Welt-Transform + Boden-Snap)
+    """
+    import numpy as np
+    try:
+        rawdir = _LIVE_ROOT / job
+        rawdir.mkdir(parents=True, exist_ok=True)
+        _job_set(job, phase="Isaac Sim startet (booting)", pct=10)
+
+        import random as _r
+        seed = _r.randint(1, 2**31 - 1)
+        # 3-5 Teile pro Szene; force-counts garantiert dass semantic labels
+        # stabil registriert werden (single-scene-Bug bei num-scenes=1 ohne).
+        # focus-frac=1.0 ⇒ nur trainierte Klassen (Anker_Kurz/Lang/Zahnrad).
+        # Sonst kann die Zufalls-Auswahl reine Distractor liefern (Demo-Killer).
+        n_obj = _r.randint(3, 5)
+        gen = subprocess.Popen(
+            [_ISAAC_VENV, _GEN_SCRIPT,
+             "--scene", _SCENE_USD,
+             "--usd-dir", _USD_DIR,
+             "--output", str(rawdir),
+             "--num-scenes", "1",
+             "--force-counts", str(n_obj),
+             "--focus-frac", "1.0",
+             "--seed", str(seed)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        # parse stdout for progress markers
+        last_phase_pct = 10
+        for line in gen.stdout:
+            if "scene loaded" in line:
+                _job_set(job, phase="Isaac Sim rendert Frame", pct=40)
+                last_phase_pct = 40
+            elif "DONE 1 scenes" in line:
+                _job_set(job, phase="Isaac fertig — BOP-Konvertierung", pct=70)
+                last_phase_pct = 70
+        gen.wait(timeout=180)
+        if gen.returncode != 0:
+            raise RuntimeError(f"Isaac-Render fehlgeschlagen (exit {gen.returncode})")
+        if not (rawdir / "rgb_0000.png").exists():
+            raise RuntimeError("Isaac produzierte kein rgb_0000.png")
+
+        # BOP-Konvertierung in temp scene-id 0 (Worker erwartet 000000 als Scene-Dir).
+        bopdir = rawdir / "bop"; bopdir.mkdir(exist_ok=True)
+        cv = subprocess.run(
+            [_BOP_VENV, _CONV_SCRIPT,
+             "--raw-dir", str(rawdir),
+             "--bop-root", str(bopdir),
+             "--split", "test",
+             "--scene-id", "0",
+             "--start-im", "0",
+             "--limit", "1"],
+            capture_output=True, text=True, timeout=60)
+        if cv.returncode != 0:
+            raise RuntimeError(f"BOP-Konvertierung fehlgeschlagen: {cv.stderr[-300:]}")
+        scene_dir = bopdir / "test" / "000000"
+        if not (scene_dir / "scene_gt.json").exists():
+            raise RuntimeError("BOP-Konverter produzierte keine scene_gt.json")
+        # Worker erwartet updir mit unmittelbar darin liegendem 000000-scene-dir.
+        # bopdir/test/ erfuellt das Schema (000000 = unsere Live-Szene). Wir
+        # kopieren bopdir/test/ NICHT um — wir verwenden es direkt als updir.
+        updir = bopdir / "test"
+
+        # Sim-Doc bauen — wir mounten das live scene_dir temporaer als VAL_ROOT
+        # NICHT global um. Stattdessen replizieren wir _build_sim_doc inline.
+        _job_set(job, phase="Detektor (YOLOv8-OBB)", pct=80)
+        gt_all = json.load(open(scene_dir / "scene_gt.json"))
+        cam_all = json.load(open(scene_dir / "scene_camera.json"))
+        trained = _trained_oids()
+        # einziger Frame: "0"
+        im = 0
+        cam = cam_all[str(im)]
+        K = np.array(cam["cam_K"], float).reshape(3, 3)
+        R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
+        t_w2c = np.array(cam["cam_t_w2c"], float)
+        table_origin = _table_origin()
+
+        results, iid = [], 0
+        # GT-Teile (blau)
+        for o in gt_all.get(str(im), []):
+            if o["obj_id"] in trained:
+                iid += 1
+                results.append(_bop_pose_to_result(
+                    np.array(o["cam_R_m2c"]).reshape(3, 3), np.array(o["cam_t_m2c"]),
+                    R_w2c, t_w2c, table_origin, o["obj_id"], iid, "gt", 1.0))
+
+        # Detektor auf dem Live-Bild
+        rgb_src = scene_dir / "rgb" / "000000.png"
+        det_json = rawdir / "det.json"
+        n_det = _run_detector(str(rgb_src), str(det_json))
+        _job_set(job, phase=f"Detektor: {n_det} Box(en) gefunden", pct=85)
+
+        # GDRNPP-Worker auf dem Live-Frame
+        if n_det > 0:
+            _job_set(job, phase="GDRNPP-Inferenz (Multi-Objekt-Worker)", pct=90)
+            wp = _worker_infer_upload(str(updir), str(det_json))
+            if wp is None:
+                raise RuntimeError("Worker nicht erreichbar")
+        else:
+            wp = []
+
+        for p in wp:
+            iid += 1
+            results.append(_bop_pose_to_result(
+                np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
+                R_w2c, t_w2c, table_origin, p["obj_id"], iid, "pred", p.get("score", 1.0),
+                snap=True))
+
+        _job_set(job, phase="BOP -> Welt + Boden-Snap", pct=95)
+        n_gt = sum(1 for r in results if r["color"] == "gt")
+        n_pred = sum(1 for r in results if r["color"] == "pred")
+        doc = {
+            "meta": {"source_image": f"live/{job}", "table_origin": table_origin,
+                     "units": "m", "scene": 99, "im": 0, "source": "isaac-live",
+                     "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin),
+                     "n_gt": n_gt, "n_pred": n_pred, "seed": seed, "n_obj": n_obj},
+            "results": results,
+        }
+        _SIM_DOCS[job] = doc
+        _job_set(job, phase="Fertig", pct=100, result_url=f"sim/job_result/{job}",
+                 rgb_url=f"sim/live_rgb/{job}", boxes_url=f"sim/live_boxes/{job}",
+                 scene=99, im=0, n_gt=n_gt, n_pred=n_pred, source="isaac-live",
+                 seed=seed, n_obj=n_obj)
+    except subprocess.TimeoutExpired:
+        _job_set(job, phase="Isaac-Timeout (>3 min)", pct=-1, error="timeout")
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        _job_set(job, phase=f"Fehler: {e}", pct=-1, error=str(e))
+
+
+@app.get("/api/sim/generate_async")
+def sim_generate_async():
+    """Live-Isaac-Generation: NEUES Isaac-Bild rendern (~60s) → Detektor → GDRNPP."""
+    job = uuid.uuid4().hex[:8]
+    _job_set(job, phase="Isaac Sim startet", pct=5)
+    threading.Thread(target=_sim_generate_job, args=(job,), daemon=True).start()
+    return {"job": job}
+
+
+@app.get("/api/sim/live_rgb/{job}")
+def sim_live_rgb(job: str):
+    """RGB des live-generierten Isaac-Frames."""
+    p = _LIVE_ROOT / job / "bop" / "test" / "000000" / "rgb" / "000000.png"
+    if not p.exists():
+        raise HTTPException(404, "Live-Bild nicht gefunden")
+    return FileResponse(str(p), media_type="image/png")
+
+
+@app.get("/api/sim/live_boxes/{job}")
+def sim_live_boxes(job: str):
+    """RGB + farbige Detektor-Boxen ueberlagert (Live-Frame)."""
+    from PIL import Image, ImageDraw
+    import io
+    rgb = _LIVE_ROOT / job / "bop" / "test" / "000000" / "rgb" / "000000.png"
+    detp = _LIVE_ROOT / job / "det.json"
+    if not rgb.exists():
+        raise HTTPException(404, "Live-Bild nicht gefunden")
+    img = Image.open(rgb).convert("RGB"); draw = ImageDraw.Draw(img)
+    if detp.exists():
+        det = json.load(open(detp))
+        for k, lst in det.items():
+            for b in lst:
+                oid = int(b["obj_id"]); x, y, w, h = b["bbox_est"]
+                col = _BBOX_COLOR.get(oid, (52, 211, 153))
+                draw.rectangle([x, y, x + w, y + h], outline=col, width=4)
+                label = f"{_BBOX_LABEL.get(oid, str(oid))}  {float(b.get('score',0))*100:.0f}%"
+                _draw_label(draw, x + 4, max(0, y - 24), label, col)
+    buf = io.BytesIO(); img.save(buf, "PNG"); buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
+
+
 @app.get("/api/sim/random_async")
 def sim_random_async():
-    """'Neue Szene' fuer den Sim-Screen — waehlt eine zufaellige Isaac-generierte
-    Szene+Frame aus dem Val-Pool (10 Szenen x ~100 Frames) und schickt sie durch
-    den warmen GDRNPP-Worker."""
+    """Pool-Fallback: zufaellige Szene aus val-pool (sofort, nicht live generiert).
+    Hauptpfad ist /api/sim/generate_async (echtes Isaac)."""
     import random
     scenes = []
     if VAL_ROOT.exists():

@@ -65,11 +65,12 @@
       <section id="screen-sim" class="kip-screen" hidden>
         <div class="kip-card">
           <h2 class="kip-card__h">Simulationsszene: Ground-Truth gegen Schätzung</h2>
-          <p class="kip-card__sub">Jeder Klick auf <em>Neue Szene</em> waehlt eine zufaellige Isaac-generierte
-            Aufnahme aus dem Validierungs-Pool, schickt sie durch den warmen GDRNPP-Worker und stellt
-            Ground-Truth (blau) und geschaetzte Pose (rot) gegenueber.</p>
+          <p class="kip-card__sub">Jeder Klick erzeugt eine <strong>frische Isaac-Sim-Szene</strong>:
+            zufaellige Teile-Anordnung, Physics-Settle, Render (~60-80&nbsp;s) — dann laufen
+            BOP-Konvertierung, Detektor (YOLOv8) und GDRNPP-Pose-Worker live ueber dieses neue
+            Bild. Ground-Truth (blau) gegen Schaetzung (rot).</p>
           <div class="kip-row">
-            <button id="sim-infer" class="kip-btn kip-btn--primary">Neue Szene</button>
+            <button id="sim-infer" class="kip-btn kip-btn--primary">Neue Szene live generieren</button>
           </div>
           <div id="sim-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
           <p id="sim-status" class="kip-status"></p>
