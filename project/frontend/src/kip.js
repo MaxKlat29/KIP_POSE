@@ -251,9 +251,9 @@ async function inferRandomSim() {
   if (simBusy) return;
   simBusy = true;
   simInferBtn.disabled = true;
-  const origLabel = simInferBtn.textContent; simInferBtn.textContent = "Wuerfelt …";
+  const origLabel = simInferBtn.textContent; simInferBtn.textContent = "Inferiert …";
   simStat.className = "kip-status"; simStat.textContent = "";
-  simBar.set(10, "Neue Szene wuerfeln");
+  simBar.set(10, "Neue Szene laden");
   try {
     const r = await fetch(`${API}/sim/random_async`);
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);

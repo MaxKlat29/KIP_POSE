@@ -369,8 +369,15 @@ _MODELS_DIR = pathlib.Path("/mnt/data/kip_pose/project/bop/pose_isaac/models")
 _MESH_CACHE: dict = {}
 
 def _mesh_verts_m(obj_id):
-    """CAD-Body-Vertices in Metern (für planar_z_snap), gecached. trimesh-basiert
-    (isaacsim-venv hat trimesh; e2e_infer ist im Box-Pfad nicht importierbar)."""
+    """CAD-Body-Vertices in Metern (fuer planar_z_snap), gecached. trimesh-basiert.
+
+    ⚠️ ZENTRIERUNG: der Viewer rendert das Mesh um seinen geometrischen Center
+    (siehe partMeshes.js `_recenter`). Damit der Snap die GLEICHE Referenz hat,
+    muessen die Vertices hier ebenfalls um den AABB-Mittelpunkt zentriert werden.
+    Sonst schnappt der Backend-Algorithmus den PLY-Origin-Tiefpunkt auf den Tisch,
+    der Viewer aber den Mesh-Center — Drift = (PLY-origin − AABB-center) Z-Anteil,
+    typisch 1-2 cm. Effekt: Teile schweben oder versinken im Tisch.
+    """
     if obj_id in _MESH_CACHE:
         return _MESH_CACHE[obj_id]
     verts = None
@@ -380,6 +387,9 @@ def _mesh_verts_m(obj_id):
         if p.exists():
             m = trimesh.load(str(p), process=False)
             verts = np.asarray(m.vertices, dtype=float) / 1000.0   # mm -> m
+            # AABB-Center (gleiche Definition wie THREE.Box3.getCenter im Viewer).
+            bb_center = 0.5 * (verts.max(axis=0) + verts.min(axis=0))
+            verts = verts - bb_center
     except Exception:
         verts = None
     _MESH_CACHE[obj_id] = verts
@@ -659,10 +669,9 @@ def sim_infer_async(scene: int = 0, im: int = -1):
 
 @app.get("/api/sim/random_async")
 def sim_random_async():
-    """'Neue Szene' fuer den Sim-Screen — wuerfelt eine zufaellige Isaac-generierte
+    """'Neue Szene' fuer den Sim-Screen — waehlt eine zufaellige Isaac-generierte
     Szene+Frame aus dem Val-Pool (10 Szenen x ~100 Frames) und schickt sie durch
-    den warmen GDRNPP-Worker. So sieht Max bei jedem Klick frische Posen statt
-    immer dieselbe Vorab-Szene."""
+    den warmen GDRNPP-Worker."""
     import random
     scenes = []
     if VAL_ROOT.exists():
@@ -680,7 +689,7 @@ def sim_random_async():
     scene, frames = random.choice(scenes)
     im = random.choice(frames)
     job = uuid.uuid4().hex[:8]
-    _job_set(job, phase=f"Neue Szene gewuerfelt (Szene {scene} / Bild {im})", pct=10)
+    _job_set(job, phase=f"Neue Szene gewaehlt (Szene {scene} / Bild {im})", pct=10)
     threading.Thread(target=_sim_infer_job, args=(job, scene, im), daemon=True).start()
     return {"job": job, "scene": scene, "im": im}
 
