@@ -151,8 +151,35 @@ export function createViewer(canvas) {
       partsGroup.add(holder);
       pickables.push(holder);
     }
+    // Ground-Clamp: nachdem alle Teile platziert sind, MESS die tatsaechliche
+    // Auflage-Z im Viewer-Frame und HEBE jedes Teil das clippt minimal an,
+    // damit es physikalisch auf dem Tisch aufliegt (Auflage-Z = 0). Backend-
+    // Snap arbeitet mit BOP-PLY-Verts; Frontend rendert GLB-Meshes mit
+    // potenziell anderer Achsen-Konvention. Dieser finale Clamp ist die
+    // robuste Last-Mile-Korrektur. Anker_Lang-Schaft (langes Y) und Zahnrad-
+    // Zaehne unterscheiden sich in ihren AABBs zwischen den Asset-Frames.
+    groundClamp();
     fitView();                       // ← Kern-Fix: Kamera auf die Teile setzen
     return { total: results.length, real };
+  }
+
+  // Hebt jeden partsGroup-Eintrag so an, dass sein lowest-z in der Welt
+  // exakt auf der Tischebene (viewer-z = 0) ruht. Keine Senkung — versinken
+  // im Tisch ist physikalisch ungueltig; falls Pose-Schaetzer das Teil 1cm
+  // ueber Tisch platziert, lassen wir es schweben (sieht auch sauber aus).
+  function groundClamp() {
+    const _box = new THREE.Box3();
+    partsGroup.children.forEach((holder) => {
+      _box.makeEmpty();
+      _box.expandByObject(holder);
+      if (_box.isEmpty()) return;
+      const dz = -_box.min.z;          // dz>0: holder muss angehoben werden
+      if (dz > 0) {
+        // matrixAutoUpdate ist false → direkte Manipulation der matrix
+        holder.matrix.elements[14] += dz;          // z translation in column 3
+        holder.matrixWorldNeedsUpdate = true;
+      }
+    });
   }
 
   // 3-Sekunden-Fenster nach Viewer-Start: in dem Zeitraum gewinnt IMMER die
