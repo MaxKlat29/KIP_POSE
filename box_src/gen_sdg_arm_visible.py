@@ -419,11 +419,19 @@ def main():
             M = np.array(UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
                 Usd.TimeCode.Default()), float).reshape(4, 4)
             # USD: row-vector convention; transpose -> column-vector (BOP).
+            # WICHTIG: die 3x3-Block enthaelt R * OBJECT_SCALE (1e-3, da USD-
+            # Geometrie in mm und Szene in m). Wir muessen die Spalte
+            # normalisieren, sonst sind alle Komponenten ~0.001 und der
+            # Schwellwert 0.5 wird NIE erreicht (Filter greift dann nie).
             T = M.T
-            body_y_world = T[:3, 1]   # body-Y axis in world coordinates
+            by_raw = T[:3, 1]                      # body-Y axis in world (skaliert)
+            mag = float(np.linalg.norm(by_raw))
+            if mag == 0:
+                return False
+            by_world_z = float(by_raw[2]) / mag    # normalisierte z-Komponente
             # |z-component| > 0.5: body-Y points more "up" than horizontal
             # → Teil steht/lehnt aufrecht (= instabil bei rotationssym. Teilen).
-            return abs(float(body_y_world[2])) > 0.5
+            return abs(by_world_z) > 0.5
 
         unstable = [pp for pp, lbl in path2label.items() if _is_upright_unstable(pp, lbl)]
         for pp in unstable:
