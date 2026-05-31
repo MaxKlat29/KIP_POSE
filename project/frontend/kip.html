@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KIP Posenschätzung</title>
+    <link rel="stylesheet" href="./src/style.css" />
+    <link rel="stylesheet" href="./src/kip.css" />
+    <!-- Three.js lokal eingebunden (vendor/three). Relative Pfade funktionieren
+         unter max-utils.com/KIP/ genauso wie lokal. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/build/three.module.js",
+          "three/addons/": "./vendor/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+
+      <!-- Kopfzeile: Ansichtswechsel, Modellauswahl, Workstation-Status -->
+      <header id="kip-top" class="kip-top">
+        <span class="kip-brand">KIP <span class="kip-brand__sub">Posenschätzung</span></span>
+        <nav class="kip-tabs" role="tablist">
+          <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
+          <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
+        </nav>
+        <label class="kip-model">Modell
+          <select id="model-sel" class="kip-sel" title="Architektur zur Posenschätzung">
+            <option value="gdrnpp">GDRNPP (RGB)</option>
+            <option value="" disabled>frei — Architektur-Vergleich</option>
+            <option value="" disabled>frei — Architektur-Vergleich</option>
+            <option value="" disabled>frei — Architektur-Vergleich</option>
+          </select>
+        </label>
+        <button id="reset-view" class="kip-btn" title="Kameraperspektive auf Standardansicht zurücksetzen">Ansicht zurücksetzen</button>
+        <span id="kip-gpu" class="kip-gpu" title="Status der Workstation">Status wird geladen</span>
+      </header>
+
+      <!-- Ansicht: Reales Foto hochladen, inferieren, im 3D-Modell anzeigen -->
+      <section id="screen-real" class="kip-screen">
+        <div class="kip-card">
+          <h2 class="kip-card__h">Reales Foto inferieren</h2>
+          <label class="kip-drop" id="real-drop">
+            <input id="real-file" type="file" accept="image/*" hidden />
+            <span class="kip-drop__icon">+</span>
+            <span class="kip-drop__txt">Foto auswählen oder hierher ziehen</span>
+          </label>
+          <div class="kip-row">
+            <label class="kip-chk"><input type="checkbox" id="real-tta" /> Test-Zeit-Augmentierung</label>
+          </div>
+          <div class="kip-row">
+            <label class="kip-chk"><input type="checkbox" id="real-rc" /> Render-Vergleich-Verfeinerung</label>
+            <button id="real-run" class="kip-btn kip-btn--primary" disabled>Inferieren</button>
+          </div>
+          <div id="real-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
+          <p id="real-status" class="kip-status"></p>
+        </div>
+      </section>
+
+      <!-- Ansicht: Simulationsszene — Ground-Truth (blau) gegen Schätzung (rot) -->
+      <section id="screen-sim" class="kip-screen" hidden>
+        <div class="kip-card">
+          <h2 class="kip-card__h">Simulationsszene: Ground-Truth gegen Schätzung</h2>
+          <p class="kip-card__sub">Jeder Klick erzeugt eine <strong>frische Isaac-Sim-Szene</strong>:
+            zufaellige Teile-Anordnung, Physics-Settle, Render (~60-80&nbsp;s) — dann laufen
+            BOP-Konvertierung, Detektor (YOLOv8) und GDRNPP-Pose-Worker live ueber dieses neue
+            Bild. Ground-Truth (blau) gegen Schaetzung (rot).</p>
+          <div class="kip-row">
+            <button id="sim-infer" class="kip-btn kip-btn--primary">Neue Szene live generieren</button>
+          </div>
+          <div id="sim-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
+          <p id="sim-status" class="kip-status"></p>
+          <div id="sim-metrics" class="kip-metrics"></div>
+        </div>
+      </section>
+
+      <!-- Eingebettete Vorschau (unten rechts): 2D-Detektion auf dem Originalbild -->
+      <figure id="pip" class="pip" aria-label="2D-Detektion" hidden>
+        <img id="pip__img" alt="2D-Detektion" data-plain="" data-boxen="" />
+        <figcaption class="pip__cap">
+          <span>2D-Detektion</span>
+          <span class="pip__btns">
+            <button id="pip-boxes" class="pip__btn pip__btn--on" title="Begrenzungsrahmen ein- oder ausblenden">Begrenzungsrahmen</button>
+            <button id="cam-photo" class="pip__btn" title="Kamera auf die Aufnahmeperspektive setzen">Kameraperspektive</button>
+            <button id="pip-zoom" class="pip__btn" title="Vorschau vergroessern / verkleinern" aria-label="Vorschau vergroessern">⛶</button>
+          </span>
+        </figcaption>
+      </figure>
+
+      <!-- Legende (unten links): Bedeutung der Farben in der Simulationsansicht -->
+      <aside id="legend" class="legend" aria-label="Legende" hidden>
+        <span class="legend__item"><i class="legend__swatch" style="background:#2878ff"></i>Ground-Truth (echte Lage)</span>
+        <span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>
+      </aside>
+
+      <div id="status" class="status" hidden></div>
+    </div>
+    <script type="module" src="./src/kip.js"></script>
+  </body>
+</html>

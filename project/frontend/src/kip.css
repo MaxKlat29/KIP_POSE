@@ -1,0 +1,118 @@
+/* kip.css — KIP 2-Screen Web-Viewer. Ergänzt style.css (PiP/Legend/Status reused). */
+
+/* ── Top-Bar mit Screen-Switcher ── */
+.kip-top {
+  position: absolute; top: 0; left: 0; right: 0; height: 52px;
+  display: flex; align-items: center; gap: 18px; padding: 0 18px;
+  background: rgba(16, 18, 22, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px); z-index: 60;
+}
+.kip-brand { font-weight: 800; letter-spacing: 0.06em; font-size: 16px; color: #f0f3f8; }
+.kip-brand__sub { font-weight: 400; color: #a8b2c2; font-size: 12px; }
+.kip-tabs { display: flex; gap: 6px; }
+.kip-tab {
+  font: inherit; font-size: 13px; color: rgba(255,255,255,0.74);
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 999px; padding: 6px 16px; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.kip-tab:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.kip-tab--active {
+  background: rgba(52, 211, 153, 0.22); color: rgb(140, 230, 170);
+  border-color: rgba(52, 211, 153, 0.4); font-weight: 600;
+}
+.kip-gpu { font-size: 12px; color: #a8b2c2; font-family: var(--mono); }
+.kip-gpu--ok    { color: #34d399; }
+.kip-gpu--busy  { color: #f5b942; }
+.kip-gpu--off   { color: #fca5a5; }
+/* Reset-View liegt rechts neben Modell-Dropdown, vor GPU-Badge */
+.kip-top #reset-view { margin-left: auto; }
+.kip-top #kip-gpu { margin-left: 12px; }
+.kip-card__sub { margin: 6px 0 12px; font-size: 12px; line-height: 1.45; color: #a8b2c2; }
+
+/* ── Screen-Panels (links unter der Top-Bar) ── */
+.kip-screen { position: absolute; top: 68px; left: 16px; z-index: 50; }
+.kip-card {
+  width: min(340px, 90vw); padding: 16px 18px;
+  background: var(--panel); border: 1px solid var(--panel-border);
+  border-radius: var(--radius); backdrop-filter: blur(12px); box-shadow: var(--shadow);
+}
+.kip-card__h { margin: 0 0 12px; font-size: 14px; font-weight: 700; color: var(--text); }
+
+/* ── Upload-Dropzone ── */
+.kip-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 24px; border: 2px dashed rgba(255,255,255,0.22);
+  border-radius: 10px; cursor: pointer; color: var(--text-dim);
+  transition: border-color .12s, background .12s;
+}
+.kip-drop:hover, .kip-drop--over { border-color: var(--origin); background: rgba(52,211,153,0.08); }
+.kip-drop__icon { font-size: 26px; }
+.kip-drop__txt { font-size: 12px; }
+.kip-drop--has { border-style: solid; border-color: var(--origin); color: var(--text); }
+
+.kip-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.kip-chk { font-size: 12px; color: var(--text-dim); display: inline-flex; align-items: center; gap: 5px; }
+.kip-btn {
+  font: inherit; font-size: 13px; padding: 7px 16px; border-radius: 8px; cursor: pointer;
+  background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid rgba(255,255,255,0.16);
+  margin-left: auto;
+}
+.kip-btn:hover:not(:disabled) { background: rgba(255,255,255,0.16); }
+.kip-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.kip-btn--primary { background: rgba(52,211,153,0.22); color: rgb(140,230,170); border-color: rgba(52,211,153,0.4); }
+.kip-btn--primary:hover:not(:disabled) { background: rgba(52,211,153,0.34); }
+
+.kip-status { margin: 12px 0 0; font-size: 12px; color: var(--text-dim); font-family: var(--mono); min-height: 16px; }
+.kip-status--err { color: #fca5a5; }
+.kip-status--ok  { color: #34d399; }
+.kip-hint { margin: 8px 0 0; font-size: 11px; color: var(--text-dim); font-style: italic; }
+
+/* ── Szenen-Select ── */
+.kip-sel {
+  font: inherit; font-size: 12px; margin-left: 6px;
+  background: rgba(255,255,255,0.08); color: var(--text);
+  border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 3px 6px;
+}
+
+/* ── Ladebalken (on-demand Inferenz) ── */
+.kip-bar {
+  position: relative; margin-top: 12px; height: 20px; border-radius: 6px;
+  background: rgba(255,255,255,0.08); overflow: hidden;
+}
+.kip-bar__fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: linear-gradient(90deg, rgba(52,211,153,0.55), rgba(52,211,153,0.85));
+  transition: width 0.25s ease;
+}
+/* Indeterminate-Puls: schmaler Balken laeuft durch -> zeigt "es rechnet". */
+.kip-bar__fill--pulse {
+  width: 38%;
+  transition: none;
+  animation: kip-indeterminate 1.15s ease-in-out infinite;
+}
+@keyframes kip-indeterminate {
+  0%   { left: -38%; }
+  100% { left: 100%; }
+}
+.kip-bar__txt {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-family: var(--mono); color: var(--text);
+}
+
+/* ── Modellauswahl (Dropdown in der Kopfzeile) ── */
+.kip-model {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-dim); margin-left: 8px;
+}
+
+/* ── Metriken-Panel (Sim) ── */
+.kip-metrics { margin-top: 14px; display: grid; gap: 6px; }
+.kip-metric {
+  display: flex; justify-content: space-between; gap: 10px; font-size: 12px;
+  padding: 6px 10px; background: rgba(255,255,255,0.04); border-radius: 7px;
+}
+.kip-metric__name { color: var(--text); font-weight: 600; }
+.kip-metric__val  { font-family: var(--mono); color: #34d399; }
+.kip-metric__val--pending { color: var(--text-dim); }

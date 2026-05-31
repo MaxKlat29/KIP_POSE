@@ -1,160 +1,131 @@
-// scene.js — three.js scene scaffolding: renderer, Z-up camera, lights,
-// a table plane + grid, OrbitControls, and the per-part placeholder boxes.
+// scene.js — NEUBAU 2026-05-28: sauberer, robuster Three.js-Viewer.
 //
-// World frame is Z-up (matches the contract). three.js defaults to Y-up, so we
-// set the camera/controls up-vector to +Z and keep all part transforms in the
-// world frame untouched.
+// Kern-Fix gegen den "leeren Viewer": AUTO-FIT-Kamera. Nach dem Laden von
+// cell.glb + Teilen wird die Kamera automatisch auf die Bounding-Box der Teile
+// gesetzt (mit Kontext-Padding). Egal in welchem Koordinaten-Frame die Posen
+// liegen — die Kamera findet die Szene IMMER. Kein manuelles Kamera-Tuning mehr.
+//
+// World = Z-up (Contract). cell.glb wird +Z-aligned so dass seine Tischfläche
+// mit pose-frame Z=0 fluchtet (wo die Teile nach planar-Z-snap ruhen).
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { rotationToMatrix4 } from "./loadPose.js";
 import { sizeForPart, isKnownPart } from "./partRegistry.js";
 import { getPartMesh, hasRealMesh } from "./partMeshes.js";
 
-const COLOR_FLAT = 0x53b9ff;     // helleres Cyan-Blau — hebt die kleinen Metallteile
-const COLOR_UPRIGHT = 0xffc23d;  // kräftiges Amber für stehende Teile
-const PARTS_BASE_URL = "./assets/parts";
-const COLOR_TABLE = 0x1b2230;
-const COLOR_GRID = 0x2f3a4d;
-const COLOR_GRID_CENTER = 0x44506a;
+const COLOR_BG       = 0xeef1f5;   // helles Werkstatt-Off-White
+const COLOR_FLAT     = 0x4f9dff;   // dezenter Status-Tint liegend
+const COLOR_UPRIGHT  = 0xffb23d;   // dezenter Status-Tint hochkant
+const COLOR_GT       = 0x2878ff;   // GT (echt) — blau  [KIP Sim-Screen]
+const COLOR_PRED     = 0xff2d2d;   // inferred — rot    [KIP Sim-Screen]
 
-// Work-surface (Tray-Referenzhöhe) in der GST-Welt, wo die Teile ruhen. Muss zu
-// TABLE_ORIGIN_SCENE in e2e_infer.py passen.
-// Echte Wagen-Tischplatte (GST_Scene.usd: Anker_Tray/Poltopf_Tray zmin=-0.007 m).
-// Muss zu TABLE_Z_SCENE in e2e_infer.py + infer.ipynb passen, damit die Teile
-// mit cell.glb (echtes CAD im selben Welt-Frame) fluchten.
-const WORK_Z = -0.007;
-// Mitte der Spawn-Region (Tray) für Kamera-Fokus + Grid-Position.
-const WORK_CENTER = [0.42, 0.29, WORK_Z];
+// result.color: "gt"->blau, "pred"->rot (KIP GT-vs-Pred), sonst flat/upright.
+function colorFor(r) {
+  if (r.color === "gt")   return COLOR_GT;
+  if (r.color === "pred") return COLOR_PRED;
+  return r.upright === true ? COLOR_UPRIGHT : COLOR_FLAT;
+}
+const PARTS_BASE_URL = "./assets/parts";
+// cell_hq.glb ist im ROHEN World-Frame (= Dataset-Welt). Die Teile-Posen sind
+// im pose-frame (= World − table_origin). Damit sie fluchten, addieren wir
+// table_origin auf die Teil-Positionen (siehe setParts) — die Zelle bleibt roh.
+const CELL_Z_ALIGN   = 0.0;
 
 export function createViewer(canvas) {
   // ── Renderer ────────────────────────────────────────────────
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: false,
-  });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
 
   // ── Scene ───────────────────────────────────────────────────
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0e1116);
+  scene.background = new THREE.Color(COLOR_BG);
 
-  // ── Camera (Z-up world) — auf die Tray-Arbeitsfläche der Zelle blickend ──
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 100);
-  camera.up.set(0, 0, 1); // Z-up
-  camera.position.set(WORK_CENTER[0] + 0.05, WORK_CENTER[1] - 0.85, WORK_CENTER[2] + 0.55);
+  // ── Camera (Z-up; Default wird per fitView() überschrieben) ──
+  const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.001, 1000);
+  camera.up.set(0, 0, 1);
+  camera.position.set(0.9, -0.6, 0.9);
 
-  // ── Lights — soft, readable; key + fill + ambient ───────────
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const key = new THREE.DirectionalLight(0xffffff, 1.1);
-  key.position.set(WORK_CENTER[0] + 0.6, WORK_CENTER[1] - 0.4, 1.4);
+  // ── Lights — Werkstatt-Setup ────────────────────────────────
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xb8c0cc, 1.0);
+  hemi.position.set(0, 0, 1);
+  scene.add(hemi);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+  const key = new THREE.DirectionalLight(0xffffff, 1.4);
+  key.position.set(1.2, -0.8, 2.0);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0x9fb4ff, 0.4);
-  fill.position.set(WORK_CENTER[0] - 0.5, WORK_CENTER[1] + 0.6, 0.8);
+  const fill = new THREE.DirectionalLight(0xcfe0ff, 0.5);
+  fill.position.set(-0.8, 1.0, 1.0);
   scene.add(fill);
 
-  // ── Table reference: subtle work-surface plane + grid at WORK_Z ──────────
-  // Das echte Tisch/Anlagen-CAD kommt als cell.glb (loadCell). Diese Ebene ist
-  // nur eine dezente Referenz + Raycast-Ziel für den Nullpunkt.
-  const tableGroup = new THREE.Group();
-  tableGroup.position.set(WORK_CENTER[0], WORK_CENTER[1], WORK_Z);
-  scene.add(tableGroup);
-
-  const TABLE_SIZE = 0.85; // metres
-  const tableGeo = new THREE.PlaneGeometry(TABLE_SIZE, TABLE_SIZE);
-  const tableMat = new THREE.MeshStandardMaterial({
-    color: COLOR_TABLE,
-    roughness: 0.95,
-    metalness: 0.0,
-    transparent: true,
-    opacity: 0.25,
-  });
-  const tableMesh = new THREE.Mesh(tableGeo, tableMat);
-  tableMesh.position.z = -0.0005; // nudge below grid to avoid z-fighting
-  tableGroup.add(tableMesh);
-
-  const grid = new THREE.GridHelper(TABLE_SIZE, 17, COLOR_GRID_CENTER, COLOR_GRID);
-  grid.rotation.x = Math.PI / 2;
-  grid.material.opacity = 0.35;
+  // ── Reference ground grid at pose-frame Z=0 (Tischebene) ─────
+  const grid = new THREE.GridHelper(1.6, 32, 0x9aa3b2, 0xc4ccd6);
+  grid.rotation.x = Math.PI / 2;       // GridHelper liegt in XZ -> in XY drehen (Z-up)
+  grid.position.set(0.4, 0.28, 0);
+  grid.material.opacity = 0.5;
   grid.material.transparent = true;
-  tableGroup.add(grid);
+  scene.add(grid);
 
-  // ── Cell CAD (echtes Anlagen-CAD: Tisch/Wagen + Roboterarm + Trays) ──────
+  // ── Cell CAD ─────────────────────────────────────────────────
   const cellGroup = new THREE.Group();
+  cellGroup.position.z = CELL_Z_ALIGN;  // Tischfläche auf pose-Z=0 heben
   scene.add(cellGroup);
   let cellLoaded = false;
+
   function loadCell(url = "./assets/cell.glb", onDone) {
-    new GLTFLoader().load(
+    // EXT_meshopt_compression Decoder fuer cell_hq_meshopt.glb (17 MB vs 189 MB
+    // bei unkomprimiertem cell_hq.glb, ohne Detail-Verlust).
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.load(
       url,
       (gltf) => {
-        // glb ist im selben Z-up-Welt-Frame wie die Pose-Pipeline (1:1 Meter).
+        gltf.scene.traverse((o) => {
+          if (o.isMesh && o.material) {
+            const fix = (m) => { m.side = THREE.DoubleSide; m.needsUpdate = true; };
+            Array.isArray(o.material) ? o.material.forEach(fix) : fix(o.material);
+            if (o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+          }
+        });
         cellGroup.add(gltf.scene);
         cellLoaded = true;
+        fitView();
         onDone?.(true);
       },
       undefined,
-      (err) => {
-        console.warn("[cell] cell.glb nicht geladen — nur Referenz-Tisch:", err?.message ?? err);
-        // Sichtbares Fallback: Tisch-Ebene kräftiger zeichnen.
-        tableMat.opacity = 0.85;
-        onDone?.(false);
-      }
+      (err) => { console.warn("[cell] nicht geladen:", err?.message ?? err); onDone?.(false); }
     );
   }
 
-  // ── Controls — auf die Arbeitsfläche zentriert ──────────────
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.minDistance = 0.1;
-  controls.maxDistance = 8;
-  controls.target.set(WORK_CENTER[0], WORK_CENTER[1], WORK_Z + 0.02);
-
-  // ── Parts group (populated by setParts) ─────────────────────
+  // ── Parts ────────────────────────────────────────────────────
   const partsGroup = new THREE.Group();
   scene.add(partsGroup);
-
-  /** A registry of the pickable part meshes -> their source result. */
   const pickables = [];
 
-  // Box-Fallback für ein Teil (echtes Mesh fehlt) — als Wrapper-Mesh mit Result.
   function makeBoxFallback(r) {
     const [sx, sy, sz] = sizeForPart(r.part);
-    const upright = r.upright === true;
     const geo = new THREE.BoxGeometry(sx, sy, sz);
     const mat = new THREE.MeshStandardMaterial({
-      color: upright ? COLOR_UPRIGHT : COLOR_FLAT,
-      roughness: 0.5,
-      metalness: 0.15,
-      transparent: !isKnownPart(r.part),
-      opacity: isKnownPart(r.part) ? 1 : 0.6,
+      color: colorFor(r),
+      roughness: 0.5, metalness: 0.2,
     });
-    const mesh = new THREE.Mesh(geo, mat);
-    const edges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geo),
-      new THREE.LineBasicMaterial({
-        color: upright ? 0xfff0c8 : 0xcdddff,
-        transparent: true,
-        opacity: 0.5,
-      })
-    );
-    mesh.add(edges);
-    return mesh;
+    return new THREE.Mesh(geo, mat);
   }
 
-  /**
-   * Render the parts from a validated pose document — ECHTE CAD-Meshes pro Teil
-   * (assets/parts/<part>.glb), an der vorhergesagten 6D-Pose. Box-Fallback wenn ein
-   * Mesh fehlt. Async, weil die glTFs nachgeladen werden; gibt ein Promise zurück.
-   */
+  // Welt-Offset für Teile: pose-frame → world-frame (= cell-frame). main.js
+  // setzt das auf meta.table_origin. Default 0.
+  let partWorldOffset = [0, 0, 0];
+  function setPartOffset(o) { if (Array.isArray(o) && o.length === 3) partWorldOffset = o; }
+
   async function setParts(results) {
-    // Clear previous.
     while (partsGroup.children.length) {
-      const child = partsGroup.children.pop();
-      child.traverse?.((o) => {
+      const c = partsGroup.children.pop();
+      c.traverse?.((o) => {
         o.geometry?.dispose?.();
         if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
         else o.material?.dispose?.();
@@ -162,57 +133,202 @@ export function createViewer(canvas) {
     }
     pickables.length = 0;
 
-    // P4 — Stapelung: Teile in depth_order (0 = fern/unten zuerst) rendern.
-    const ordered = [...results].sort(
-      (a, b) => (a.depth_order ?? 0) - (b.depth_order ?? 0)
-    );
-
-    let realCount = 0;
-    for (let idx = 0; idx < ordered.length; idx++) {
-      const r = ordered[idx];
-      const upright = r.upright === true;
-      const color = upright ? COLOR_UPRIGHT : COLOR_FLAT;
-
-      // Wrapper-Group trägt die 6D-Pose; das Mesh (echt oder Box) sitzt drin im
-      // body-frame (Schwerpunkt-zentriert) — t_world IST der Schwerpunkt.
+    let real = 0;
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const color = colorFor(r);
       const holder = new THREE.Group();
-      let inner = null;
-      if (hasRealMesh(r.part)) {
-        inner = await getPartMesh(r.part, PARTS_BASE_URL, color);
-      }
-      if (inner) {
-        realCount++;
-        holder.userData.real = true;
-      } else {
-        inner = makeBoxFallback(r);
-        holder.userData.real = false;
-      }
-      // body-frame Achsen-Helper (kompakt) — macht R lesbar.
-      const ext = sizeForPart(r.part);
-      const axes = new THREE.AxesHelper(Math.max(ext[0], ext[1], ext[2]) * 0.6);
-      inner.add(axes);
+      let inner = hasRealMesh(r.part) ? await getPartMesh(r.part, PARTS_BASE_URL, color) : null;
+      if (inner) real++; else inner = makeBoxFallback(r);
       holder.add(inner);
 
-      // 6D-Pose: R_world (column world=R@body) + t_world (Schwerpunkt, Meter).
       const m = rotationToMatrix4(r.R_world);
-      m.setPosition(r.t_world[0], r.t_world[1], r.t_world[2]);
+      // pose-frame → world-frame: + table_origin, damit Teile auf der Maschine
+      // (roher world-frame) ruhen statt 8 cm reinzusinken.
+      m.setPosition(
+        r.t_world[0] + partWorldOffset[0],
+        r.t_world[1] + partWorldOffset[1],
+        r.t_world[2] + partWorldOffset[2]);
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(m);
-      holder.renderOrder = r.depth_order ?? idx;
-
       holder.userData.result = r;
-      // Raycast soll auf das Mesh treffen und das Result finden.
-      inner.traverse((o) => {
-        if (o.isMesh) o.userData.result = r;
-      });
-      inner.userData.result = r;
+      inner.traverse((o) => { if (o.isMesh) o.userData.result = r; });
       partsGroup.add(holder);
       pickables.push(holder);
     }
-    return { total: ordered.length, real: realCount };
+    // Ground-Clamp: nachdem alle Teile platziert sind, MESS die tatsaechliche
+    // Auflage-Z im Viewer-Frame und HEBE jedes Teil das clippt minimal an,
+    // damit es physikalisch auf dem Tisch aufliegt (Auflage-Z = 0). Backend-
+    // Snap arbeitet mit BOP-PLY-Verts; Frontend rendert GLB-Meshes mit
+    // potenziell anderer Achsen-Konvention. Dieser finale Clamp ist die
+    // robuste Last-Mile-Korrektur. Anker_Lang-Schaft (langes Y) und Zahnrad-
+    // Zaehne unterscheiden sich in ihren AABBs zwischen den Asset-Frames.
+    groundClamp();
+    fitView();                       // ← Kern-Fix: Kamera auf die Teile setzen
+    return { total: results.length, real };
   }
 
-  // ── Resize handling ─────────────────────────────────────────
+  // Hebt jeden partsGroup-Eintrag so an, dass sein lowest-z auf der echten
+  // Tisch-Geometrie unter ihm ruht. Der Tisch ist NICHT eine flache Ebene
+  // bei z=0 — es gibt erhoehte Tray-Plateaus + Maschinen-Bloecke. Wir
+  // raycasten daher pro Teil downward auf cellGroup an mehreren Sample-
+  // Punkten (Center + 4 XY-Eckpunkten der Teile-AABB) und nehmen das MAX
+  // der getroffenen Tisch-Z. Wenn die Teile-AABB.min.z unter diesem
+  // Maximum liegt, heben wir den Holder so weit an, dass beide
+  // uebereinstimmen ("min(z-tisch(x,y))"-Garantie aus Max-Spec).
+  // Nie senken — schwebende Teile (Held in Greifer) bleiben oben.
+  const _raycaster = new THREE.Raycaster();
+  const _down = new THREE.Vector3(0, 0, -1);
+  function groundClamp() {
+    if (!cellLoaded) return;            // ohne Tisch-Geometrie kein Sinn
+    const _box = new THREE.Box3();
+    const _origin = new THREE.Vector3();
+    partsGroup.children.forEach((holder) => {
+      _box.makeEmpty();
+      _box.expandByObject(holder);
+      if (_box.isEmpty()) return;
+
+      // 3x3 Sample-Grid ueber die XY-Bbox des Teils. Dichteres Sampling als
+      // nur Eckpunkte deckt Teile ab, die ueber eine Plateau-Kante haengen
+      // (Bild 17: Anker_Lang halb auf Tray-Rand, halb in der Luft).
+      const xs = [_box.min.x, (_box.min.x + _box.max.x) * 0.5, _box.max.x];
+      const ys = [_box.min.y, (_box.min.y + _box.max.y) * 0.5, _box.max.y];
+      const samples = [];
+      for (const x of xs) for (const y of ys) samples.push([x, y]);
+
+      // Hits filtern in [box.min.z - 5cm, box.max.z + 1cm]: deckt sowohl
+      // "Teil clippt knapp ins Plateau" als auch "Teil sitzt sauber drauf"
+      // ab, aber schliesst weit unter (Tisch-Boden unter dem Plateau) und
+      // weit drueber (Maschinen-Block hoeher als Teil) aus.
+      const lo = _box.min.z - 0.05;
+      const hi = _box.max.z + 0.01;
+      let tableZ = -Infinity;
+      let hitCount = 0;
+      for (const [sx, sy] of samples) {
+        _origin.set(sx, sy, 5);
+        _raycaster.set(_origin, _down);
+        const hits = _raycaster.intersectObject(cellGroup, true);
+        for (const h of hits) {
+          if (h.point.z >= lo && h.point.z <= hi) {
+            hitCount++;
+            if (h.point.z > tableZ) tableZ = h.point.z;
+          }
+        }
+      }
+      // Kein Tisch unter dem Teil im Such-Korridor → Teil schwebt echt in
+      // der Luft (z.B. Hand-im-Greifer-Szenario, hier nicht real, aber als
+      // Defensive). KEIN Lift erzwingen — Standard-Boden 0 nur wenn Teil
+      // ohnehin DRUNTER ist (Anker im Schwarz-Loch-Tray).
+      if (tableZ === -Infinity) tableZ = _box.min.z < 0 ? 0 : _box.min.z;
+
+      const dz = tableZ - _box.min.z;
+      if (dz > 0) {
+        // matrixAutoUpdate=false → direkte Manipulation der z-Komponente
+        holder.matrix.elements[14] += dz;
+        holder.matrixWorldNeedsUpdate = true;
+      }
+    });
+  }
+
+  // 3-Sekunden-Fenster nach Viewer-Start: in dem Zeitraum gewinnt IMMER die
+  // persistierte View, falls vorhanden. Hintergrund: kip.js ruft fruh
+  // setParts([]) auf (→ fitView), und kurz danach feuert loadCell asynchron
+  // ein zweites fitView. Ein einfaches "_initialRestoreTried = true" wuerde
+  // beim zweiten Call die wiederhergestellte Sicht ueberschreiben. 3 s deckt
+  // die Cell-GLB-Ladezeit komfortabel ab, ohne Tab-Wechsel zu blockieren.
+  const _viewerStartedAt = Date.now();
+
+  // ── Auto-Fit: Kamera auf die Teile-Bounding-Box (mit Kontext-Padding) ──
+  // force=true: ignoriere persistierte View komplett ("Ansicht zuruecksetzen").
+  function fitView(opts = {}) {
+    if (!opts.force && (Date.now() - _viewerStartedAt) < 3000) {
+      if (tryRestoreView()) return;
+    }
+
+    const box = new THREE.Box3();
+    if (partsGroup.children.length) box.expandByObject(partsGroup);
+    else if (cellLoaded)            box.expandByObject(cellGroup);
+    if (box.isEmpty()) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    // NUR die XY-Ausdehnung der Teile fitten (nicht die 2.3m-hohe Zelle) — wir
+    // wollen die TISCHFLAECHE rahmen, nicht den ganzen Wagen. Z-Hoehe ignorieren.
+    const halfXY = 0.5 * Math.hypot(size.x, size.y);
+    // Mindest-Kontext-Radius ~0.32m: bei wenigen eng-beieinander Teilen (GT+Pred
+    // ~4mm) sonst extremer Zoom. So bleibt immer Tisch-Umgebung sichtbar.
+    const radius = Math.max(halfXY, 0.32) * 1.2;
+    const fitDist = radius / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+
+    // Steile Bird's-Eye (~65 Grad ueber Horizont, leicht von vorne) — Teile flach
+    // auf dem Tisch sind klar sichtbar, der hohe Wagen tritt zurueck.
+    const dir = new THREE.Vector3(0.18, -0.42, 0.89).normalize();
+    camera.position.copy(center.clone().add(dir.multiplyScalar(fitDist)));
+    refreshClipping();
+    controls.target.copy(center);
+    controls.update();
+    if (opts.force) saveView();
+  }
+
+  // ── Near/Far dynamisch ans aktuelle Cam-Target-Distance anpassen.
+  // Verhindert dass beim Rauszoomen das Bild abrupt clippt oder beim ganz nahem
+  // Reinzoomen die Tiefenaufloesung zusammenbricht.
+  function refreshClipping() {
+    const d = camera.position.distanceTo(controls.target);
+    camera.near = Math.max(d / 1000, 0.001);
+    camera.far  = Math.max(d * 60, 100);
+    camera.updateProjectionMatrix();
+  }
+
+  // ── Controls ─────────────────────────────────────────────────
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  // Grosszuegige Range — bei zu engem Min/Max bleibt man bei falschem Zoom haengen.
+  // 5 mm rein, 50 m raus deckt alles vom CAD-Detail bis zur Halle ab.
+  controls.minDistance = 0.005;
+  controls.maxDistance = 50;
+  controls.target.set(0.4, 0.28, 0);
+
+  // ── View-Persistenz: speichere Kamera + Target + FOV pro Browser-Tab.
+  // Nach Reload wird die letzte Sicht wiederhergestellt; "Ansicht zuruecksetzen"
+  // im UI ruft fitView({force:true}) und ueberschreibt den Snapshot.
+  const VIEW_KEY = "kip.viewer.view.v1";
+  function saveView() {
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify({
+        pos: camera.position.toArray(),
+        tgt: controls.target.toArray(),
+        up:  camera.up.toArray(),
+        fov: camera.fov,
+      }));
+    } catch (_) { /* private mode / quota — egal */ }
+  }
+  function tryRestoreView() {
+    try {
+      const raw = localStorage.getItem(VIEW_KEY);
+      if (!raw) return false;
+      const v = JSON.parse(raw);
+      if (!Array.isArray(v.pos) || !Array.isArray(v.tgt)) return false;
+      camera.position.fromArray(v.pos);
+      controls.target.fromArray(v.tgt);
+      if (Array.isArray(v.up)) camera.up.fromArray(v.up);
+      if (Number.isFinite(v.fov)) camera.fov = v.fov;
+      refreshClipping();
+      controls.update();
+      return true;
+    } catch (_) { return false; }
+  }
+  // Persistiere bei jeder Nutzer-Interaktion + auch nach Wheel/Pan (in animate).
+  let saveT = null;
+  function scheduleSave() {
+    if (saveT) clearTimeout(saveT);
+    saveT = setTimeout(saveView, 350);     // gedrosselt, nicht 60x/s schreiben
+  }
+  controls.addEventListener("end", scheduleSave);
+  controls.addEventListener("change", () => { refreshClipping(); scheduleSave(); });
+
+  // ── Resize ───────────────────────────────────────────────────
   function resize() {
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
@@ -223,27 +339,26 @@ export function createViewer(canvas) {
   window.addEventListener("resize", resize);
   resize();
 
-  // ── Render loop ─────────────────────────────────────────────
-  function animate() {
+  // ── Render loop ──────────────────────────────────────────────
+  (function animate() {
     requestAnimationFrame(animate);
     controls.update();
     renderer.render(scene, camera);
+  })();
+
+  // Reset-View: User-trigger -> verwerfe gespeicherten Snapshot + fitte neu auf
+  // die aktuelle Szene. Wird vom UI-Button "Ansicht zuruecksetzen" aufgerufen.
+  function resetView() {
+    try { localStorage.removeItem(VIEW_KEY); } catch (_) {}
+    fitView({ force: true });
   }
-  animate();
 
   return {
-    scene,
-    camera,
-    renderer,
-    controls,
-    partsGroup,
-    tableGroup,
-    tableMesh, // the solid plane (raycast target for null-point placement)
-    cellGroup,
-    loadCell,
+    scene, camera, renderer, controls,
+    partsGroup, cellGroup, pickables,
+    loadCell, setParts, setPartOffset, fitView, resetView, resize,
     isCellLoaded: () => cellLoaded,
-    pickables,
-    setParts,
-    resize,
+    // legacy no-op fields some callers expect
+    tableGroup: cellGroup, tableMesh: null,
   };
 }

@@ -38,11 +38,12 @@ set -uo pipefail
 REPO=/mnt/data/kip_pose
 GDRN=/mnt/data/bop/repos/gdrnpp
 BOP=$REPO/project/bop/pose_isaac
-RAW=$REPO/data/sdg_armvis_dr5k                         # the render output (raw bundle)
+RAW="${RAW:-/mnt/data/bop/sdg_zivid_10k}"              # the render output (raw bundle)
+                                                       # default: 2026-05-26 10k Marc-Zivid run
 BOP_VENV=/mnt/data/bop/bop-venv/bin/python
 LOGDIR=/mnt/data/bop/logs
 DETOUT=$REPO/data/detector_armvis
-EXPECT_SCENES=8000
+EXPECT_SCENES="${EXPECT_SCENES:-10000}"
 mkdir -p "$LOGDIR"
 cd "$REPO" || { echo "FATAL: cannot cd $REPO"; echo "PHASE2_FAILED"; exit 1; }
 

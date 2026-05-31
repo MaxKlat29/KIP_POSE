@@ -110,6 +110,35 @@ def main():
     import datagenerationscript as dg
     from run_scene import compute_oriented_boxes
 
+    # ── PATCH: Isaac-Sim 5.1 deprecated `add_update_semantics` — bbox_2d_tight
+    # erkennt damit unsere Spawn-Parts nicht mehr. Wir wrappen den Call und
+    # registrieren parallel die NEUE label-API (`add_labels`) damit der
+    # Replicator-Annotator die Parts wieder pro-Frame als Boxen liefert.
+    # (Bug 2026-05-26: smoke v3 zeigte 4-9 spawned parts aber 1 box im output.)
+    _orig_aus = dg.add_update_semantics
+    try:
+        from isaacsim.core.utils.semantics import (
+            add_labels as _add_labels,
+            upgrade_prim_semantics_to_labels as _upgrade_labels,
+        )
+        def _patched_aus(prim, label):
+            _orig_aus(prim, label)
+            try:
+                _upgrade_labels(prim)
+            except Exception:
+                pass
+            try:
+                _add_labels(prim, labels=[label], instance_name="class")
+            except TypeError:
+                try: _add_labels(prim, labels=[label])
+                except Exception: pass
+            except Exception:
+                pass
+        dg.add_update_semantics = _patched_aus
+        log("semantics-API patched: add_update_semantics + add_labels (Isaac-5.1)")
+    except ImportError:
+        log("WARN: new semantics-API not found — falling back to deprecated only")
+
     U = a.usd_dir
     dg.ASSETS = [{"path": os.path.join(U, fn), "label": lbl} for lbl, fn in PART_FILES]
     all_labels = {lbl.lower() for lbl, _ in PART_FILES}
@@ -127,6 +156,42 @@ def main():
     if not ok: log("FAILED open"); app.close(); sys.exit(1)
     for _ in range(80): app.update()
     stage = ctx.get_stage(); log(f"scene loaded ({len(list(stage.Traverse()))} prims)")
+
+    # ── REMOVE baked-in part PRIMS, KEEP tray structures —
+    # GST_Scene.usd hat:
+    #   /World/Anker_Tray/Tray_Anker_leer    ← die Plastik-Schale (BEHALTEN)
+    #   /World/Anker_Tray/Anker_Lang         ← baked-in Anker (RAUS)
+    #   /World/Anker_Tray/Anker_Kurz         ← baked-in Anker (RAUS)
+    #   /World/Poltopf_Tray/Tray_Poltopf_leer ← Schale (BEHALTEN)
+    # Spawn-Bounds X=[0.057, 0.783] vermeiden eh die Tray-XY-Bereiche
+    # (Anker_Tray X=[0.806, 1.021], Poltopf_Tray X=[-0.204, -0.004]).
+    # NIEMALS Substring-Match auf Children-Namen — würde "Tray_Anker_leer" treffen.
+    BAKED_PART_PATHS = [
+        "/World/Anker_Tray/Anker_Kurz",
+        "/World/Anker_Tray/Anker_Lang",
+    ]
+    # Exakte Part-Klassen-Namen für VARIANTEN ("Anker_Kurz_1" usw.) — Tray-Schale
+    # ("Tray_Anker_leer") matcht NICHT, weil sie mit "Tray_" beginnt.
+    PART_CLASS_PREFIXES = ("Anker_Kurz", "Anker_Lang", "Zahnrad",
+                            "Buerstenhalter", "Getriebe", "Ringmagnet", "Poltopf_")
+    for tray in ["/World/Anker_Tray", "/World/Poltopf_Tray"]:
+        tray_prim = stage.GetPrimAtPath(tray)
+        if not tray_prim.IsValid():
+            continue
+        for child in tray_prim.GetChildren():
+            name = child.GetName()
+            # Tray-Schale hat Präfix "Tray_" — die NICHT.
+            if name.startswith("Tray_"):
+                continue
+            if any(name.startswith(p) for p in PART_CLASS_PREFIXES):
+                BAKED_PART_PATHS.append(child.GetPath().pathString)
+    n_removed = 0
+    for p in sorted(set(BAKED_PART_PATHS)):
+        prim = stage.GetPrimAtPath(p)
+        if prim.IsValid():
+            stage.RemovePrim(p)
+            n_removed += 1
+    log(f"removed {n_removed} baked tray parts (trays themselves intact)")
 
     # ── static colliders on cart + trays so parts rest on REAL surfaces ──────
     STATIC_ROOTS = ["/World/Basiswagen", "/World/Basiswagen_01", "/World/Basiswagen_02",
@@ -147,21 +212,15 @@ def main():
 
     # ── ARM STAYS VISIBLE (R5). Give the arm + cart NO semantic label so they
     #    never become a BOP instance, but they ARE rendered + DO occlude. ─────
+    # KEINE Collision auf dem Arm (Fix 2026-05-28): mit convexHull-Collider blieben
+    # gedroppte Teile AUF dem Arm liegen — in real-life unmöglich (würde fallen).
+    # Ohne Collision fallen alle Teile durch den Arm auf den Tisch; der Arm bleibt
+    # voll sichtbar + occludiert die Teile die unter ihm landen (Occlusion-Signal
+    # bleibt erhalten). So liegt NIE ein Teil auf dem Arm.
     ARM_PATHS = ["/World/NEURA_LARA5_Pose_Zivid_Detection", "/World/lara5",
                  "/World/Greifer_mit_Fingern"]
-    arm_present = []
-    for ap in ARM_PATHS:
-        if stage.GetPrimAtPath(ap).IsValid():
-            arm_present.append(ap)
-            # ensure the arm has a collider too, so a dropped part can rest on/against it
-            for prim in Usd.PrimRange(stage.GetPrimAtPath(ap)):
-                if prim.IsA(UsdGeom.Mesh):
-                    try:
-                        UsdPhysics.CollisionAPI.Apply(prim)
-                        mc = UsdPhysics.MeshCollisionAPI.Apply(prim)
-                        mc.CreateApproximationAttr().Set("convexHull")
-                    except Exception: pass
-    log(f"ARM VISIBLE (occluder, no obj_id): {arm_present or 'NONE FOUND — check scene!'}")
+    arm_present = [ap for ap in ARM_PATHS if stage.GetPrimAtPath(ap).IsValid()]
+    log(f"ARM VISIBLE (occluder, NO collision, no obj_id): {arm_present or 'NONE FOUND — check scene!'}")
     if not arm_present:
         log("WARNING: no arm prim found — arm-visibility cannot be guaranteed!")
 
@@ -180,16 +239,31 @@ def main():
     UsdPhysics.CollisionAPI.Apply(gp.GetPrim()); UsdGeom.Imageable(gp.GetPrim()).MakeInvisible()
     for _ in range(5): app.update()
 
-    # ── DR camera (top-down with jitter) ─────────────────────────────────────
-    cam = UsdGeom.Camera.Define(stage, "/World/_DRCam"); cam_xf = UsdGeom.Xformable(cam.GetPrim())
-    SENSOR_W = float(cam.GetHorizontalApertureAttr().Get() or 20.955)  # mm, USD default
-    cam_focal = cam.CreateFocalLengthAttr(18.0)
-    cam.CreateClippingRangeAttr(Gf.Vec2f(0.01, 100.0))
-    cam_path = "/World/_DRCam"
+    # ── Camera = Marc's fixed Zivid (sim_trainingsdatageneration_pipeline) ──
+    # Aus GST_Scene.usd /World/Zivid (focal=15.5mm, hap=vap=15mm, pos in scene).
+    # KEIN _DRCam, KEIN jitter, KEIN random focal — eine feste deployment-ähnliche
+    # Kamera (Zivid Top-Down). DR macht den Rest (lighting, materials, spawn).
+    cam_path = "/World/Zivid"
+    cam_prim = stage.GetPrimAtPath(cam_path)
+    if not cam_prim.IsValid() or not cam_prim.IsA(UsdGeom.Camera):
+        log(f"FATAL: {cam_path} not found in scene {a.scene} — needs GST_Scene.usd with /World/Zivid")
+        app.close(); sys.exit(1)
+    cam = UsdGeom.Camera(cam_prim)
+    cam_xf = UsdGeom.Xformable(cam_prim)
+    SENSOR_W = float(cam.GetHorizontalApertureAttr().Get() or 15.0)
+    cam_focal = cam.GetFocalLengthAttr()
+    log(f"using fixed Zivid camera: focal={cam_focal.Get()}mm  hap={SENSOR_W}mm")
     os.makedirs(a.output, exist_ok=True)
     rp = rep.create.render_product(cam_path, (a.width, a.height))
+    # Annotator-Set:
+    #   rgb / bbox_2d / semantic / instance / depth — Pflicht für GDRNPP+Detector.
+    #   bbox_3d — Future-Proofing für RGB-only 3D-Detection (CenterPose, FCOS3D).
+    # NORMALS RAUS (2026-05-26): wir haben bei Inference KEINE Depth-Kamera,
+    # daher kann man normals nicht aus Depth ableiten → kein PVN3D/FFB6D möglich.
+    # GDRNPP-RGB-only ist und bleibt der operative Path.
     annots = {"rgb": rep.AnnotatorRegistry.get_annotator("rgb"),
               "bbox_2d": rep.AnnotatorRegistry.get_annotator("bounding_box_2d_tight"),
+              "bbox_3d": rep.AnnotatorRegistry.get_annotator("bounding_box_3d"),
               "semantic_seg": rep.AnnotatorRegistry.get_annotator("semantic_segmentation"),
               "instance_seg": rep.AnnotatorRegistry.get_annotator("instance_segmentation"),
               "depth": rep.AnnotatorRegistry.get_annotator("distance_to_camera")}
@@ -305,21 +379,9 @@ def main():
             dist_int.Set(float(rng.uniform(300, 1400)))
             dist_rot.Set(Gf.Vec3f(float(rng.uniform(-60, -20)), float(rng.uniform(-40, 40)),
                                   float(rng.uniform(0, 360))))
-        # top-down camera jitter + roll (wider span under dr_strong)
-        if a.dr_strong:
-            jx, jy = rng.uniform(-0.08, 0.08, 2); h = 0.95 + rng.uniform(-0.10, 0.14)
-            roll = float(rng.uniform(-12, 12))
-        else:
-            jx, jy = rng.uniform(-0.04, 0.04, 2); h = 0.95 + rng.uniform(-0.05, 0.08)
-            roll = 0.0
-        eye = np.array([base_eye[0] + jx, base_eye[1] + jy, h])
-        look = np.array([base_eye[0] + jx, base_eye[1] + jy, a.table_z])
-        # roll the up-vector around the view axis for in-plane camera rotation DR
-        up = Gf.Vec3d(float(np.sin(np.radians(roll))), float(np.cos(np.radians(roll))), 0.0)
-        view = Gf.Matrix4d().SetLookAt(Gf.Vec3d(*eye), Gf.Vec3d(*look), up)
-        cam_xf.ClearXformOpOrder(); cam_xf.AddTransformOp().Set(view.GetInverse())
-        focal = float(rng.uniform(14, 24) if a.dr_strong else rng.uniform(16, 22))
-        cam_focal.Set(focal)
+        # Marc's fixed Zivid Kamera — KEIN jitter, KEIN random focal mehr.
+        # Die Kamera bleibt frame-für-frame an ihrer USD-position. Alle DR jetzt
+        # in lighting + materials + spawn (Anker fallen physikbasiert per scene).
 
         if force_counts:
             n_obj = force_counts[(sidx - a.start) % len(force_counts)]
@@ -336,6 +398,56 @@ def main():
         for _ in range(dg.PHYSICS_SETTLE_STEPS): app.update()
         tl.pause()
         for _ in range(5): app.update()
+
+        # ── Filter physikalisch unrealistische Settled-Posen ──────────────────
+        # Rotationssymmetrische Teile (Anker_Kurz/Lang, Zahnrad, Ringmagnet)
+        # koennen nach Physics-Settle auf einer Endflaeche/Kante balancieren
+        # (Zahnrad auf Zaehnen, Anker hochkant). Solche Posen sind real-world
+        # so selten, dass sie das GT verzerren und im Demo-Viewer unrealistisch
+        # wirken. Wir messen die body-Y-Achse (Laengs-/Rotationsachse) im
+        # Welt-Frame: ist deren z-Komponente > 0.5 (Teil mehr aufrecht als
+        # liegend), entfernen wir den Prim aus der Szene bevor der Render-Step
+        # die Annotatoren-Daten zieht. Resultat: weniger Teile im Bild, dafuer
+        # nur stabile Posen.
+        ROTSYM_LABELS = ("Anker_Kurz", "Anker_Lang", "Zahnrad", "Ringmagnet")
+        def _is_upright_unstable(prim_path, label):
+            if label not in ROTSYM_LABELS:
+                return False
+            prim = stage.GetPrimAtPath(prim_path)
+            if not prim.IsValid():
+                return False
+            M = np.array(UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
+                Usd.TimeCode.Default()), float).reshape(4, 4)
+            # USD: row-vector convention; transpose -> column-vector (BOP).
+            # WICHTIG: die 3x3-Block enthaelt R * OBJECT_SCALE (1e-3, da USD-
+            # Geometrie in mm und Szene in m). Wir muessen die Spalte
+            # normalisieren, sonst sind alle Komponenten ~0.001 und der
+            # Schwellwert 0.5 wird NIE erreicht (Filter greift dann nie).
+            T = M.T
+            by_raw = T[:3, 1]                      # body-Y axis in world (skaliert)
+            mag = float(np.linalg.norm(by_raw))
+            if mag == 0:
+                return False
+            by_world_z = float(by_raw[2]) / mag    # normalisierte z-Komponente
+            # |z-component| > 0.5: body-Y points more "up" than horizontal
+            # → Teil steht/lehnt aufrecht (= instabil bei rotationssym. Teilen).
+            return abs(by_world_z) > 0.5
+
+        unstable = [pp for pp, lbl in path2label.items() if _is_upright_unstable(pp, lbl)]
+        for pp in unstable:
+            try:
+                stage.RemovePrim(pp)
+            except Exception:
+                pass
+            path2label.pop(pp, None)
+        if unstable:
+            log(f"removed {len(unstable)} instabile Pose(n) (rotsym. Teil aufrecht): {unstable}")
+            # Settle nochmal kurz, damit die verbleibenden Teile nicht mit den
+            # geloeschten Stuetzen mitfallen oder Sprung-Artefakte zeigen.
+            tl.play()
+            for _ in range(40): app.update()
+            tl.pause()
+            for _ in range(3): app.update()
 
         rep.orchestrator.step(rt_subframes=16)
         data = {k: x.get_data() for k, x in annots.items()}
@@ -355,11 +467,34 @@ def main():
                 json.dump(dg.convert_numpy(d.get("info", {})),
                           open(os.path.join(a.output, f"{fn}_labels_{sidx:04d}.json"), "w"), indent=2)
 
+        # ── bbox_3d: AABB pro Instanz im Camera-Frame (für 3D-Detector / Volume-IoU)
+        bb3 = data.get("bbox_3d")
+        if isinstance(bb3, dict):
+            arr = bb3.get("data")
+            info = bb3.get("info", {})
+            entries = []
+            if arr is not None:
+                for row in np.asarray(arr):
+                    # Replicator-Schema: (semId, x_min,y_min,z_min, x_max,y_max,z_max, transform[4x4], occlusion)
+                    try:
+                        sem_id = int(row["semanticId"])
+                    except Exception:
+                        sem_id = int(row[0]) if hasattr(row, "__getitem__") else -1
+                    rec = {"semantic_id": sem_id}
+                    for k in ("x_min", "y_min", "z_min", "x_max", "y_max", "z_max",
+                              "transform", "occlusion_ratio"):
+                        try: rec[k] = dg.convert_numpy(row[k])
+                        except Exception: pass
+                    entries.append(rec)
+            json.dump({"boxes": entries, "info": dg.convert_numpy(info)},
+                      open(os.path.join(a.output, f"bbox_3d_{sidx:04d}.json"), "w"), indent=2)
+
+
         # ── GT: camera intrinsics + cam c2w + per-instance world transform ───
         gt_raw = {
             "image_id": sidx,
             "width": a.width, "height": a.height,
-            "focal_length_mm": focal,
+            "focal_length_mm": float(cam_focal.Get()),
             "horizontal_aperture_mm": SENSOR_W,
             # cam_K computed in the converter from focal/aperture/W/H
             "cam_c2w": cam_to_world(cam_xf),     # camera->world (R4: converter inverts)

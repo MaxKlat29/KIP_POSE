@@ -59,13 +59,14 @@ export function createOriginMarker(viewer, tableOrigin) {
 
   viewer.renderer.domElement.addEventListener("pointerdown", (ev) => {
     if (!ev.shiftKey) return;
+    // Shift-click null-point re-placement braucht ein Tisch-Mesh als Raycast-Ziel.
+    // Der NEUBAU-Viewer hat keine eigene Tisch-Ebene (tableMesh=null) — die Zelle
+    // selbst dient als Referenz. Feature ist optional; ohne tableMesh: no-op.
+    if (!viewer.tableMesh) return;
     const rect = viewer.renderer.domElement.getBoundingClientRect();
     pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, viewer.camera);
-
-    // Only the solid plane — not the grid lines (metre-scale line threshold
-    // would make the grid catch the ray from anywhere).
     const hits = raycaster.intersectObject(viewer.tableMesh, false);
     if (hits.length) {
       const p = hits[0].point;

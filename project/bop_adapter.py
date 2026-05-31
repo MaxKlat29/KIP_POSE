@@ -244,6 +244,16 @@ def planar_z_snap(R_world, t_world, mesh_verts, table_z=0.0, max_snap_m=None):
     t = _as_vec3(t_world).copy()
     contact_z_abs = t[2] + lowest_contact_z(R_world, mesh_verts)
     dz = float(table_z) - contact_z_abs
+    # ANHEBEN (dz>0, Teil clippt in den Tisch): IMMER anwenden — versinken im
+    # Tisch ist physikalisch unmoeglich, also nie ein gueltiger Modell-Output.
+    # Auch wenn dz gross ist (deutlicher Translation-Fehler), heben wir das
+    # Teil lieber an als clippen zu lassen — Max-Forderung: "mit Physics
+    # aufliegen, nicht durch den Tisch clippen".
+    if dz > 0:
+        t[2] += dz
+        return t, dz
+    # ABSENKEN (dz<0, Teil schwebt): nur innerhalb des Guards. Held-Teile in
+    # der Luft (Greifer) sollen NICHT katastrophal nach unten gerissen werden.
     if max_snap_m is not None and abs(dz) > float(max_snap_m):
         return t, 0.0                                # Guard: Teil ruht nicht -> nicht anfassen
     t[2] += dz
