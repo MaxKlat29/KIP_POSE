@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 // kanonischer Name -> { plyId, glbName }. Aliase (Roh-Detektor-Label) auf
 // den kanonischen mappen. plyId entspricht obj_id in BOP (1-basiert).
@@ -26,6 +27,8 @@ const PART_MAP = {
 };
 
 const _gltfLoader = new GLTFLoader();
+// EXT_meshopt_compression Decoder (fuer komprimierte GLBs wie cell_hq_meshopt.glb).
+_gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 const _plyLoader = new PLYLoader();
 const _cache = new Map(); // part -> Promise<THREE.Object3D | null>
 

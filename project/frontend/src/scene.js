@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { rotationToMatrix4 } from "./loadPose.js";
 import { sizeForPart, isKnownPart } from "./partRegistry.js";
 import { getPartMesh, hasRealMesh } from "./partMeshes.js";
@@ -77,7 +78,11 @@ export function createViewer(canvas) {
   let cellLoaded = false;
 
   function loadCell(url = "./assets/cell.glb", onDone) {
-    new GLTFLoader().load(
+    // EXT_meshopt_compression Decoder fuer cell_hq_meshopt.glb (17 MB vs 189 MB
+    // bei unkomprimiertem cell_hq.glb, ohne Detail-Verlust).
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.load(
       url,
       (gltf) => {
         gltf.scene.traverse((o) => {
