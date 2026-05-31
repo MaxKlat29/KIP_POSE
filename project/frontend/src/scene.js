@@ -188,28 +188,38 @@ export function createViewer(canvas) {
       _box.expandByObject(holder);
       if (_box.isEmpty()) return;
 
-      // 5 Sample-Punkte: bbox-Center + 4 XY-Eckpunkte. Strahl-Start: hoch
-      // oben (z=5m), damit alle Tisch-Hoehen drunter erreichbar sind.
-      const samples = [
-        [(_box.min.x + _box.max.x) * 0.5, (_box.min.y + _box.max.y) * 0.5],
-        [_box.min.x, _box.min.y], [_box.max.x, _box.min.y],
-        [_box.min.x, _box.max.y], [_box.max.x, _box.max.y],
-      ];
-      // WICHTIG: nur Hits beruecksichtigen die UNTER dem Teil-Top liegen
-      // (z < box.max.z + Toleranz). Sonst zaehlen hohe Maschinen-Bloecke
-      // ueber dem Teil als "Tisch-Hoehe" und das Teil wird katastrophal
-      // hochgezogen. Wir wollen den lokal hoechsten Mesh-Punkt UNTER dem Teil.
-      const headRoom = _box.max.z + 0.005;
+      // 3x3 Sample-Grid ueber die XY-Bbox des Teils. Dichteres Sampling als
+      // nur Eckpunkte deckt Teile ab, die ueber eine Plateau-Kante haengen
+      // (Bild 17: Anker_Lang halb auf Tray-Rand, halb in der Luft).
+      const xs = [_box.min.x, (_box.min.x + _box.max.x) * 0.5, _box.max.x];
+      const ys = [_box.min.y, (_box.min.y + _box.max.y) * 0.5, _box.max.y];
+      const samples = [];
+      for (const x of xs) for (const y of ys) samples.push([x, y]);
+
+      // Hits filtern in [box.min.z - 5cm, box.max.z + 1cm]: deckt sowohl
+      // "Teil clippt knapp ins Plateau" als auch "Teil sitzt sauber drauf"
+      // ab, aber schliesst weit unter (Tisch-Boden unter dem Plateau) und
+      // weit drueber (Maschinen-Block hoeher als Teil) aus.
+      const lo = _box.min.z - 0.05;
+      const hi = _box.max.z + 0.01;
       let tableZ = -Infinity;
+      let hitCount = 0;
       for (const [sx, sy] of samples) {
         _origin.set(sx, sy, 5);
         _raycaster.set(_origin, _down);
         const hits = _raycaster.intersectObject(cellGroup, true);
         for (const h of hits) {
-          if (h.point.z < headRoom && h.point.z > tableZ) tableZ = h.point.z;
+          if (h.point.z >= lo && h.point.z <= hi) {
+            hitCount++;
+            if (h.point.z > tableZ) tableZ = h.point.z;
+          }
         }
       }
-      if (tableZ === -Infinity) tableZ = 0;    // kein Tisch unterm Teil → globaler Boden
+      // Kein Tisch unter dem Teil im Such-Korridor → Teil schwebt echt in
+      // der Luft (z.B. Hand-im-Greifer-Szenario, hier nicht real, aber als
+      // Defensive). KEIN Lift erzwingen — Standard-Boden 0 nur wenn Teil
+      // ohnehin DRUNTER ist (Anker im Schwarz-Loch-Tray).
+      if (tableZ === -Infinity) tableZ = _box.min.z < 0 ? 0 : _box.min.z;
 
       const dz = tableZ - _box.min.z;
       if (dz > 0) {
