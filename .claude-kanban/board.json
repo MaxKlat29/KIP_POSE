@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-25T17:05:33Z",
+  "updated": "2026-05-31T11:18:45Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 74,
+  "next_id": 75,
   "tickets": [
     {
       "id": "T-001",
@@ -4057,6 +4057,32 @@
           "agent": "claude",
           "level": "success",
           "msg": "Merged -> main: handover notebooks + README + safe opt"
+        }
+      ]
+    },
+    {
+      "id": "T-074",
+      "title": "Iteration final: branch merged + cleanup",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "kip-web"
+      ],
+      "session": "",
+      "created": "2026-05-31T11:17:23Z",
+      "updated": "2026-05-31T11:18:45Z",
+      "started_at": null,
+      "completed_at": "2026-05-31T11:17:23Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-05-31T11:18:45Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "PR #1 merged via GitHub (d3a8ece). 14 commits in main. Feature-branch deleted. Brain finalisiert. Live: max-utils.com/KIP grün, AR Ø 0.872."
         }
       ]
     }
