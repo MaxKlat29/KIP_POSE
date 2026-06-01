@@ -105,6 +105,15 @@ REFINE_RC_SCORER = "cpu_edge"
 # Proxy-Visibility = dokumentierter Follow-up (S-005), NICHT hier.
 REFINE_RC_VISAWARE_DEFAULT = False
 REFINE_RC_MIN_VISIB_FRACT = 0.25
+# Visibility-GESTAFFELTES Margin-Gate (ADR-020, S-003 v2, T-085). Wenn das visaware-
+# Flag AN ist UND eine Detektion eine sichtbare Region trägt, staffelt dieses
+# Schedule den effektiven Margin nach visib_fract: aggressiv (niedrig) im
+# occludierten Band, konservativ (= shipped 0.15) im well-vis Band, gar kein Switch
+# unterhalb der Mindest-Sichtbarkeit. Das ist der Hebel, der den vis-aware Score
+# operativ wirksam macht OHNE well-vis-Regression (statisches Gate kann beides nicht).
+# None -> kein Schedule (reines statisches Margin-Gate, rückwärtskompatibel). Die
+# konkreten Schwellen sind die T-085-Sweep-Kalibrierung (siehe eval_s003.md).
+REFINE_RC_MARGIN_SCHEDULE = None    # z.B. RC.DEFAULT_MARGIN_SCHEDULE wenn enabled
 # TTA (T-058, S-049). DEFAULT AUS. Inferenzseitig, RGB-only, kein Retrain. Härtet
 # die View-Empfindlichkeit der per-View-Einzel-Rotation von GDRNPP ab (in-plane
 # 90°-Rotationen des Crops, exakte Pixel-Ops, Rück-Transform + Aggregation auf
@@ -523,7 +532,8 @@ def call_gdrnpp(crop, K, bbox, obj_id, cfg=None):
 def _make_rc_refiner(obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
                      full_hw, target_mask=None, scorer=REFINE_RC_SCORER,
                      visib_mask=None, visib_fract=None,
-                     min_visib_fract=REFINE_RC_MIN_VISIB_FRACT, warn=print):
+                     min_visib_fract=REFINE_RC_MIN_VISIB_FRACT,
+                     margin_schedule=REFINE_RC_MARGIN_SCHEDULE, warn=print):
     """Baut den per-Detektion-RC-Refiner-Callback (refine_rc.refine_detection).
 
     Der Callback bekommt (R_world, t_world) der Coarse-Pose und liefert die
@@ -568,6 +578,7 @@ def _make_rc_refiner(obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
             table_origin_m=table_origin, R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K,
             hw=full_hw, target_mask=target_mask, image_edge_mask=image_edge_mask,
             visib_mask=vis, visib_fract=vf, min_visib_fract=min_visib_fract,
+            margin_schedule=margin_schedule,
             sym_axis=(0.0, 1.0, 0.0), n_fold=n_fold, stable_downs=stable_downs,
             scorer=scorer, megapose_kwargs=mk)
         va = " visaware" if info.get("visib_aware") else ""
@@ -584,6 +595,7 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
                    refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER,
                    refine_rc_visaware=REFINE_RC_VISAWARE_DEFAULT,
                    rc_min_visib_fract=REFINE_RC_MIN_VISIB_FRACT,
+                   rc_margin_schedule=REFINE_RC_MARGIN_SCHEDULE,
                    tta=TTA_DEFAULT, tta_n_rot=TTA_N_ROT, tta_hflip=TTA_HFLIP,
                    tta_agg=TTA_AGG):
     """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3) ->
@@ -629,11 +641,14 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
             # Region trägt (offline aus BOP mask_visib/). Live-Pfad: None -> No-Op.
             visib_mask = d.get("visib_mask") if refine_rc_visaware else None
             visib_fract = d.get("visib_fract") if refine_rc_visaware else None
+            # gestaffeltes Margin-Gate NUR im visaware-Pfad (sonst kein visib_fract).
+            margin_schedule = rc_margin_schedule if refine_rc_visaware else None
             rc_refiner = _make_rc_refiner(
                 obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
                 full_hw=(H, W), target_mask=d.get("mask"), scorer=rc_scorer,
                 visib_mask=visib_mask, visib_fract=visib_fract,
-                min_visib_fract=rc_min_visib_fract, warn=warn)
+                min_visib_fract=rc_min_visib_fract,
+                margin_schedule=margin_schedule, warn=warn)
             if rc_refiner is not None:
                 n_rc += 1
         r = BOP.detection_to_result(

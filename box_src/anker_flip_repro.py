@@ -233,6 +233,24 @@ def main():
                     help="min_margin (hard lower bound, ADR-020: >=0.15)")
     ap.add_argument("--visaware-all", action="store_true",
                     help="visaware-compare over ALL matched instances (ignore N cap)")
+    ap.add_argument("--visaware-sweep", type=int, default=0,
+                    help="VISIBILITY-STAGGERED gate sweep (S-003 v2 / T-085): refine "
+                         "each instance ONCE (open gate) to cache per-hyp scores + "
+                         "rot_sym, then evaluate a grid of staggered schedules purely "
+                         "analytically. Reports partial- vs well-vis flip-rate per "
+                         "schedule on a calib/report split (by scene_id parity).")
+    ap.add_argument("--sweep-margin-occ", default="0.02,0.03,0.05,0.08",
+                    help="comma list of aggressive margins for the occluded band")
+    ap.add_argument("--sweep-margin-well", default="0.15",
+                    help="comma list of conservative margins for the well-vis band")
+    ap.add_argument("--sweep-vf-occ-hi", default="0.60",
+                    help="comma list of well-vis cutoffs (vf_occ_hi)")
+    ap.add_argument("--sweep-vf-occ-lo", default="0.20",
+                    help="comma list of min-visibility floors (vf_occ_lo)")
+    ap.add_argument("--well-lo", type=float, default=0.60,
+                    help="well-vis report band lower bound")
+    ap.add_argument("--well-hi", type=float, default=0.80,
+                    help="well-vis report band upper bound")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
@@ -329,6 +347,9 @@ def main():
     if args.visaware_compare > 0 or args.visaware_all:
         result["visaware_compare"] = visaware_compare(per_inst, args, syms)
 
+    if args.visaware_sweep > 0:
+        result["visaware_sweep"] = visaware_sweep(per_inst, args, syms)
+
     # human-readable to stderr
     sys.stderr.write("\n==================== ANKER FLIP REPRO ====================\n")
     for key in ("full_vis", "mid_vis", "partial_vis"):
@@ -373,6 +394,43 @@ def main():
                 f"AFTER={b['flip_rate_after']:.4f} ({b['n_flip_after']})  "
                 f"fixed={b['n_fixed']}  broke={b['n_broke']}  "
                 f"switched={b['n_switched_after']}\n")
+    if "visaware_sweep" in result:
+        sw = result["visaware_sweep"]
+        sys.stderr.write(
+            "\n  --- VISIBILITY-STAGGERED gate sweep (calib=even scenes, "
+            "report=odd) ---\n")
+        bl = sw["baseline_static_0.15"]
+        sys.stderr.write(
+            f"  baseline static 0.15: calib partial "
+            f"{bl['calib_partial']['flip_rate_before']:.4f}->"
+            f"{bl['calib_partial']['flip_rate_after']:.4f}  well "
+            f"{bl['calib_well']['flip_rate_before']:.4f}->"
+            f"{bl['calib_well']['flip_rate_after']:.4f}\n")
+        for r in sw["grid"]:
+            s = r["schedule"]
+            cp, cw = r["calib_partial"], r["calib_well"]
+            sys.stderr.write(
+                f"  sched occ[{s['vf_occ_lo']},{s['vf_occ_hi']}) m_occ={s['margin_occ']} "
+                f"m_well={s['margin_well']}  CALIB partial "
+                f"{cp['flip_rate_before']:.4f}->{cp['flip_rate_after']:.4f} "
+                f"(fix{cp['n_fixed']}/brk{cp['n_broke']})  well "
+                f"{cw['flip_rate_before']:.4f}->{cw['flip_rate_after']:.4f} "
+                f"(fix{cw['n_fixed']}/brk{cw['n_broke']})  "
+                f"{'PARETO' if r['pareto_clean'] else '-'}\n")
+        ch = sw["chosen"]
+        if ch:
+            rp, rw = ch["report_partial"], ch["report_well"]
+            s = ch["schedule"]
+            sys.stderr.write(
+                f"  >>> CHOSEN occ[{s['vf_occ_lo']},{s['vf_occ_hi']}) "
+                f"m_occ={s['margin_occ']} m_well={s['margin_well']}\n"
+                f"      REPORT (held-out odd scenes) partial "
+                f"{rp['flip_rate_before']:.4f}->{rp['flip_rate_after']:.4f} "
+                f"(fix{rp['n_fixed']}/brk{rp['n_broke']})  well "
+                f"{rw['flip_rate_before']:.4f}->{rw['flip_rate_after']:.4f} "
+                f"(fix{rw['n_fixed']}/brk{rw['n_broke']})\n")
+        else:
+            sys.stderr.write("  >>> NO Pareto-clean schedule found (honest null result)\n")
     sys.stderr.write("==========================================================\n")
 
     if args.out:
@@ -572,6 +630,190 @@ def visaware_compare(per_inst, args, syms):
         "partial": run_group(stratum_insts(args.partial_lo, args.partial_hi)),
         "full": run_group(full_insts()),
     }
+
+
+# ── VISIBILITY-STAGGERED GATE SWEEP (S-003 v2 / T-085) ───────────────────────
+def _cache_visaware_hyps(per_inst, args, syms, n_cap):
+    """Refine each instance ONCE (open gate) and cache per-hypothesis scores +
+    per-hypothesis sym-resolved rot_err, so a grid of staggered margin-schedules
+    can be swept ANALYTICALLY (no re-rendering). Deterministic.
+
+    For each instance we store:
+      visib_fract, scene_id, the coarse rot_sym, and for every generated hypothesis
+      its vis-aware score and its rot_sym (so we know which hyp is the un-flipped /
+      correct one and whether selecting it fixes the flip).
+    """
+    cams = RR.load_cams(args.bop_root)
+    meshes, downs = RR.load_meshes(args.bop_root)
+    gt_inst = gt_R_for_inst(args.bop_root)
+
+    # union of bands we care about: occluded report band + well-vis report band.
+    lo = min(args.partial_lo, args.well_lo)
+    hi = max(args.partial_hi, args.well_hi)
+    pool = [d for d in per_inst if lo <= d["visib_fract"] < hi]
+    if not args.visaware_all and n_cap > 0:
+        # keep both bands represented: cap per band, not globally.
+        occ = [d for d in pool if args.partial_lo <= d["visib_fract"] < args.partial_hi][:n_cap]
+        well = [d for d in pool if args.well_lo <= d["visib_fract"] < args.well_hi][:n_cap]
+        seen = set()
+        pool = []
+        for d in occ + well:
+            k = (d["scene_id"], d["im_id"], d["inst"], d["obj_id"])
+            if k not in seen:
+                seen.add(k)
+                pool.append(d)
+
+    cached = []
+    for d in pool:
+        sid, im, oid, inst = d["scene_id"], d["im_id"], d["obj_id"], d["inst"]
+        cam = cams[sid][str(im)]
+        R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
+        t_w2c = np.array(cam["cam_t_w2c"], float)
+        K = np.array(cam["cam_K"], float).reshape(3, 3)
+        visib = RR.load_mask(args.bop_root, sid, im, inst)
+        full = RR.load_full_mask(args.bop_root, sid, im, inst)
+        if visib is None:
+            continue
+        if full is None:
+            full = visib
+        _, R_gt, t_gt = gt_inst[(sid, im, inst)]
+        rgb = RR.load_rgb(args.bop_root, sid, im)
+        bbox = RR.mask_bbox(full)
+        ie = None
+        if rgb is not None and bbox is not None:
+            crop = rgb[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+            ie = RC.image_edges(crop, bbox=bbox, full_hw=full.shape)
+        R_world, t_world = A.bop_pose_to_world(d["R_est"], t_gt, R_w2c, t_w2c,
+                                               RR.TABLE_ORIGIN)
+        verts_mm = np.asarray(meshes[oid].vertices, float)
+        n_fold = None
+        stable = downs[oid]
+        # generate hypotheses + vis-aware scores ONCE.
+        hyps, tags = RC.generate_hypotheses(
+            R_world, sym_axis=tuple(SYM_AXIS), n_fold=n_fold, stable_downs=stable)
+        scores, _detail = RC.cpu_edge_score(
+            hyps, verts_mm=verts_mm, t_world_m=t_world,
+            table_origin_m=RR.TABLE_ORIGIN, R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K,
+            hw=full.shape, target_mask=visib, image_edge_mask=ie,
+            visib_mask=visib, visib_dilate=2)
+        # per-hyp rot_sym (coarse is index 0).
+        hyp_rs = [rot_err_sym_contY(R_w2c @ np.asarray(h, float), R_gt, syms)
+                  for h in hyps]
+        cached.append({
+            "scene_id": sid, "im_id": im, "inst": inst, "obj_id": oid,
+            "visib_fract": float(d["visib_fract"]),
+            "scores": [float(s) for s in scores],
+            "tags": list(tags),
+            "hyp_rs": [float(x) for x in hyp_rs],
+            "rs_coarse": float(hyp_rs[0]),
+        })
+    return cached
+
+
+def _eval_schedule(cached, schedule, min_margin, min_vf, flip_thr, lo, hi):
+    """Evaluate ONE staggered schedule on cached instances within [lo,hi).
+    Pure-analytic: re-run select_best_hypothesis with the schedule, then read the
+    selected hypothesis' cached rot_sym. Returns flip-rate before(coarse)/after."""
+    grp = [c for c in cached if lo <= c["visib_fract"] < hi]
+    n = nf_before = nf_after = nfix = nbroke = nsw = 0
+    for c in grp:
+        scores = np.asarray(c["scores"], float)
+        best_idx, sel = RC.select_best_hypothesis(
+            scores, scores, coarse_idx=0, min_margin=min_margin,
+            visib_fract=c["visib_fract"], min_visib_fract=min_vf,
+            margin_schedule=schedule)
+        # NOTE: select_best_hypothesis takes (hyps, scores); hyps unused for gate.
+        rs_after = c["hyp_rs"][best_idx]
+        rs_before = c["rs_coarse"]
+        flip_before = rs_before > flip_thr
+        flip_after = rs_after > flip_thr
+        n += 1
+        nf_before += int(flip_before)
+        nf_after += int(flip_after)
+        nfix += int(flip_before and not flip_after)
+        nbroke += int((not flip_before) and flip_after)
+        nsw += int(sel.get("switched", False))
+    return {
+        "n": n,
+        "flip_rate_before": round(nf_before / n, 4) if n else 0.0,
+        "flip_rate_after": round(nf_after / n, 4) if n else 0.0,
+        "n_flip_before": nf_before, "n_flip_after": nf_after,
+        "n_fixed": nfix, "n_broke": nbroke, "n_switched": nsw,
+    }
+
+
+def visaware_sweep(per_inst, args, syms):
+    """THE S-003 v2 / T-085 calibration. Cache per-hyp vis-aware scores ONCE, then
+    grid-sweep staggered margin-schedules analytically. Clean calib/report split by
+    scene_id parity (even=calib, odd=report) so the chosen schedule is NOT picked on
+    the band it is reported on. Pareto criterion: minimise partial-vis flip-rate
+    while well-vis flip-rate (after) does NOT exceed the coarse/before well-vis rate
+    (regression guard = 0 broken net on well-vis)."""
+    sys.stderr.write("[sweep] caching per-hyp vis-aware scores (refine once)...\n")
+    cached = _cache_visaware_hyps(per_inst, args, syms, args.visaware_sweep)
+    sys.stderr.write(f"[sweep] cached {len(cached)} instances\n")
+
+    def split(parity):
+        return [c for c in cached if (c["scene_id"] % 2) == parity]
+
+    flt = lambda s: [float(x) for x in str(s).split(",") if x != ""]
+    grid = []
+    for occ in flt(args.sweep_margin_occ):
+        for well in flt(args.sweep_margin_well):
+            for vf_hi in flt(args.sweep_vf_occ_hi):
+                for vf_lo in flt(args.sweep_vf_occ_lo):
+                    grid.append({"vf_occ_lo": vf_lo, "vf_occ_hi": vf_hi,
+                                 "margin_occ": occ, "margin_well": well})
+
+    min_margin = args.visaware_min_margin   # global hard floor (kept = 0.0 for sweep)
+    min_vf = args.visaware_min_vf
+    flip_thr = args.flip_thr_deg
+    p_lo, p_hi = args.partial_lo, args.partial_hi
+    w_lo, w_hi = args.well_lo, args.well_hi
+
+    # baseline (no schedule, static shipped 0.15) for reference on each split/band.
+    def baseline(insts_parity, lo, hi):
+        return _eval_schedule(split(insts_parity), None, 0.15, min_vf, flip_thr, lo, hi)
+
+    results = []
+    for sched in grid:
+        calib_p = _eval_schedule(split(0), sched, min_margin, min_vf, flip_thr, p_lo, p_hi)
+        calib_w = _eval_schedule(split(0), sched, min_margin, min_vf, flip_thr, w_lo, w_hi)
+        rep_p = _eval_schedule(split(1), sched, min_margin, min_vf, flip_thr, p_lo, p_hi)
+        rep_w = _eval_schedule(split(1), sched, min_margin, min_vf, flip_thr, w_lo, w_hi)
+        # Pareto on CALIB: partial flip down, well-vis NOT up vs coarse-before.
+        partial_gain = calib_p["flip_rate_before"] - calib_p["flip_rate_after"]
+        well_regress = calib_w["flip_rate_after"] - calib_w["flip_rate_before"]
+        results.append({
+            "schedule": sched,
+            "calib_partial": calib_p, "calib_well": calib_w,
+            "report_partial": rep_p, "report_well": rep_w,
+            "calib_partial_gain": round(partial_gain, 4),
+            "calib_well_regress": round(well_regress, 4),
+            "pareto_clean": bool(partial_gain > 0 and well_regress <= 0),
+        })
+
+    # pick the Pareto-clean schedule with the largest calib partial gain.
+    clean = [r for r in results if r["pareto_clean"]]
+    chosen = (max(clean, key=lambda r: r["calib_partial_gain"]) if clean else None)
+
+    out = {
+        "n_cached": len(cached),
+        "split": "scene_id parity (even=calib, odd=report)",
+        "calib_n": len(split(0)), "report_n": len(split(1)),
+        "flip_thr_deg": flip_thr, "global_hard_floor": min_margin,
+        "partial_band": [p_lo, p_hi], "well_band": [w_lo, w_hi],
+        "baseline_static_0.15": {
+            "calib_partial": baseline(0, p_lo, p_hi),
+            "calib_well": baseline(0, w_lo, w_hi),
+            "report_partial": baseline(1, p_lo, p_hi),
+            "report_well": baseline(1, w_lo, w_hi),
+        },
+        "grid": results,
+        "chosen": chosen,
+        "any_pareto_clean": bool(clean),
+    }
+    return out
 
 
 if __name__ == "__main__":

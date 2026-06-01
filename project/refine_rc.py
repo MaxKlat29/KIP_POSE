@@ -381,9 +381,60 @@ def cpu_edge_score(hyps, *, verts_mm, t_world_m, table_origin_m, R_w2c, t_w2c_mm
     return np.asarray(scores), detail
 
 
+# ── Visibility-GESTAFFELTES Margin-Gate (ADR-020, S-003 v2, T-085) ───────────
+# Ein STATISCHES min_margin ist nicht global pareto-optimal (T-085 v1-Befund):
+#   • 0.15 (shipped) ist auf well-vis regressionsfrei, aber auf partial-vis INERT
+#     (schaltet 1/150 trotz besseren vis-aware Scores).
+#   • 0.05 (global gelockert) holt partial-vis (−29 %), regrediert aber well-vis
+#     (broke 10 / fixed 3 auf [0.60,0.80)).
+# → Der Margin wird visibility-konditioniert GESTAFFELT: aggressiv (niedrig) NUR
+#   im occludierten Band, in dem der vis-aware Score Evidenz hat und die Coarse
+#   am häufigsten flippt; konservativ (= shipped) im well-vis Band, wo die Coarse
+#   schon gut ist und ein Switch nur Schaden anrichtet. Unter der Mindest-
+#   Sichtbarkeit wird gar nicht geschaltet (Single-View-Restlimit).
+# Werte = T-085-Sweep-Kalibrierung (calib=even, report=odd scenes; siehe
+# eval_s003.md §2). Auf dem HELD-OUT report-Split: partial-vis [0.20,0.50) Flip-Rate
+# 7.52 %→2.26 % (−70 % rel, fix 7 / broke 0), well-vis [0.60,0.80] 6.29 % UNVERÄNDERT
+# (broke 0). Pareto-sauber + monoton robust über das ganze Margin-Grid.
+DEFAULT_MARGIN_SCHEDULE = {
+    "vf_occ_lo": 0.20,     # darunter: zu wenig Evidenz -> nie schalten (Coarse)
+    "vf_occ_hi": 0.50,     # [occ_lo, occ_hi): occludiertes Band -> aggressiver Margin
+    "margin_occ": 0.02,    # aggressiver Margin im occludierten Band (Sweep-Optimum)
+    "margin_well": 0.15,   # konservativer Margin (= shipped) ab vf_occ_hi (well-vis)
+}
+
+
+def staggered_min_margin(visib_fract, schedule):
+    """Visibility-gestaffelter min_margin als Funktion von visib_fract.
+
+    Drei Bänder (Schedule-Dict, siehe DEFAULT_MARGIN_SCHEDULE):
+      • visib_fract <  vf_occ_lo  -> +inf  (nie schalten; zu wenig sichtbare Evidenz,
+                                     Single-View-Restlimit — Coarse behalten).
+      • vf_occ_lo <= vf < vf_occ_hi -> margin_occ  (occludiertes Band: aggressiver,
+                                     niedriger Margin — hier hat der vis-aware Score
+                                     Evidenz UND die Coarse flippt am häufigsten).
+      • visib_fract >= vf_occ_hi  -> margin_well  (well-vis: konservativ = shipped
+                                     0.15 — Regressionsschutz, kein Schaden).
+
+    schedule=None oder visib_fract=None -> None (Caller nutzt sein statisches
+    min_margin; voll rückwärtskompatibel).
+
+    Returns: float min_margin (ggf. +inf) oder None.
+    """
+    if schedule is None or visib_fract is None:
+        return None
+    vf = float(visib_fract)
+    if vf < float(schedule["vf_occ_lo"]):
+        return float("inf")                       # zu occludiert -> nie schalten
+    if vf < float(schedule["vf_occ_hi"]):
+        return float(schedule["margin_occ"])      # occludiertes Band -> aggressiv
+    return float(schedule["margin_well"])         # well-vis -> konservativ (shipped)
+
+
 def select_best_hypothesis(hyps, scores, coarse_idx=0, min_margin=0.0,
                            visib_fract=None, min_visib_fract=0.0,
-                           visible_px=None, min_visible_px=None):
+                           visible_px=None, min_visible_px=None,
+                           margin_schedule=None):
     """Wähle die best-scorende Hypothese; gate gegen die Coarse (Index 0).
 
     GATE (MegaPose-Design): nur wechseln, wenn die beste Hypothese die Coarse um
@@ -398,8 +449,17 @@ def select_best_hypothesis(hyps, scores, coarse_idx=0, min_margin=0.0,
         beide gesetzt.
     Ist eine der Bedingungen gesetzt aber nicht erfüllt → Coarse behalten (zu
     wenig Evidenz, dem Single-View-Restlimit folgend). Beide None/0 → reines
-    Margin-Gate = exakt heutiges Verhalten. min_margin ist die harte Untergrenze
-    (ADR-020: ≥ 0.15) und wird NIE global gelockert, nur visibility-konditioniert.
+    Margin-Gate = exakt heutiges Verhalten.
+
+    VISIBILITY-GESTAFFELTES MARGIN-GATE (S-003 v2, T-085): wenn `margin_schedule`
+    (Dict, siehe DEFAULT_MARGIN_SCHEDULE) und `visib_fract` gesetzt sind, ersetzt
+    `staggered_min_margin(visib_fract, schedule)` den effektiven Margin — aggressiv
+    im occludierten Band, konservativ (= shipped 0.15) im well-vis Band. Der gegebene
+    `min_margin` bleibt eine HARTE UNTERGRENZE: der effektive Margin ist
+    max(min_margin, staggered) im aggressiven Band NUR wenn min_margin höher liegt —
+    d.h. der Schedule darf den globalen Hard-Floor nie unterlaufen, aber im well-vis
+    Band nicht lockerer als shipped sein. margin_schedule=None → reines statisches
+    Margin-Gate (rückwärtskompatibel).
 
     Returns: (best_idx, info dict).
     """
@@ -409,6 +469,17 @@ def select_best_hypothesis(hyps, scores, coarse_idx=0, min_margin=0.0,
     margin = float(scores[best]) - coarse_score
     base = {"best_idx": best, "best_score": float(scores[best]),
             "coarse_score": coarse_score, "margin": float(margin)}
+
+    # Effektiver Margin: gestaffelt (visibility-konditioniert) oder statisch.
+    eff_margin = float(min_margin)
+    sched_margin = staggered_min_margin(visib_fract, margin_schedule)
+    if sched_margin is not None:
+        # Der Schedule setzt den effektiven Margin: aggressiv im occludierten
+        # Band, konservativ (= shipped) im well-vis Band, +inf unterhalb von
+        # vf_occ_lo (nie schalten). max() gegen min_margin als globalem Hard-Floor.
+        eff_margin = max(float(min_margin), sched_margin)   # +inf bleibt +inf
+        base["margin_schedule"] = True
+        base["eff_min_margin"] = float(eff_margin)
 
     # Visibility-Kondition: genug sichtbare Evidenz für einen Switch?
     visib_ok = True
@@ -425,7 +496,7 @@ def select_best_hypothesis(hyps, scores, coarse_idx=0, min_margin=0.0,
     if reasons:
         base["visib_reason"] = "; ".join(reasons)
 
-    if (not visib_ok) or (margin <= float(min_margin)):
+    if (not visib_ok) or (margin <= eff_margin):
         base["switched"] = False
         return coarse_idx, base
     base["switched"] = (best != coarse_idx)
@@ -516,7 +587,7 @@ def refine_detection(R0_world, *, verts_mm, t_world_m, table_origin_m,
                      target_mask=None, image_edge_mask=None,
                      visib_mask=None, visib_fract=None,
                      min_visib_fract=DEFAULT_MIN_VISIB_FRACT, min_visible_px=None,
-                     visib_dilate=2,
+                     visib_dilate=2, margin_schedule=None,
                      sym_axis=(0.0, 1.0, 0.0), n_fold=None, stable_downs=None,
                      scorer="cpu_edge", min_margin=None,
                      megapose_kwargs=None, **gen_kwargs):
@@ -540,6 +611,12 @@ def refine_detection(R0_world, *, verts_mm, t_world_m, table_origin_m,
     ertrinken. `visib_mask=None` → exakt heutiges Verhalten (rückwärtskompatibel).
 
     min_margin=None → DEFAULT_CPU_MIN_MARGIN (0.15). Explizit setzbar für Tests.
+
+    VISIBILITY-GESTAFFELTES MARGIN-GATE (S-003 v2, T-085): `margin_schedule` (Dict,
+    siehe DEFAULT_MARGIN_SCHEDULE) staffelt den effektiven Margin nach `visib_fract`
+    — aggressiv im occludierten Band, konservativ (= shipped) im well-vis Band, nie
+    schalten unterhalb der Mindest-Sichtbarkeit. min_margin bleibt globaler Hard-
+    Floor. margin_schedule=None → reines statisches Margin-Gate (rückwärtskompatibel).
     Returns: (R_refined_world (3,3), info dict).
     """
     if min_margin is None:
@@ -576,7 +653,8 @@ def refine_detection(R0_world, *, verts_mm, t_world_m, table_origin_m,
     best_idx, sel = select_best_hypothesis(
         hyps, scores, coarse_idx=0, min_margin=min_margin,
         visib_fract=visib_fract, min_visib_fract=min_visib_fract,
-        visible_px=visible_px, min_visible_px=min_visible_px)
+        visible_px=visible_px, min_visible_px=min_visible_px,
+        margin_schedule=margin_schedule)
     info.update(sel)                                       # switched/best_score/...
     info.update(best_idx=best_idx, best_tag=tags[best_idx],
                 scores=[float(s) for s in scores], detail=detail)

@@ -441,5 +441,121 @@ def test_refine_detection_visaware_end_to_end():
     assert RC._rot_geodesic_deg(R_keep, R_flip) < 0.01     # Coarse unverändert
 
 
+# ── VISIBILITY-STAGGERED MARGIN GATE (S-003 v2, T-085) ───────────────────────
+def test_staggered_min_margin_three_bands():
+    """staggered_min_margin: occluded band -> aggressive, well-vis -> conservative,
+    below floor -> +inf (never switch)."""
+    sched = RC.DEFAULT_MARGIN_SCHEDULE
+    # below vf_occ_lo (0.20): never switch.
+    assert RC.staggered_min_margin(0.10, sched) == float("inf")
+    # occluded band [0.20, 0.60): aggressive margin_occ (0.05).
+    assert RC.staggered_min_margin(0.30, sched) == sched["margin_occ"]
+    assert RC.staggered_min_margin(0.20, sched) == sched["margin_occ"]   # lo inclusive
+    # well-vis (>= 0.60): conservative margin_well (= shipped 0.15).
+    assert RC.staggered_min_margin(0.60, sched) == sched["margin_well"]  # hi inclusive
+    assert RC.staggered_min_margin(0.95, sched) == sched["margin_well"]
+    # None schedule or None visib_fract -> None (caller uses static margin).
+    assert RC.staggered_min_margin(0.5, None) is None
+    assert RC.staggered_min_margin(None, sched) is None
+
+
+def test_staggered_gate_aggressive_in_occluded_band():
+    """Im occludierten Band schaltet das gestaffelte Gate bei einem Margin, der
+    das shipped-konservative statische Gate (0.15) NICHT durchließe."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.40, 0.48])     # Margin 0.08: < 0.15, aber > 0.05
+    sched = {"vf_occ_lo": 0.20, "vf_occ_hi": 0.60,
+             "margin_occ": 0.05, "margin_well": 0.15}
+    # statisch 0.15 -> KEIN Switch (inert), wie der v1-Befund.
+    idx_static, info_static = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.15, visib_fract=0.35)
+    assert idx_static == 0 and info_static["switched"] is False
+    # gestaffelt, occludiertes Band (vf=0.35) -> aggressiver Margin 0.05 -> Switch.
+    idx_sched, info_sched = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.0, visib_fract=0.35, margin_schedule=sched)
+    assert idx_sched == 1 and info_sched["switched"] is True
+    assert info_sched["margin_schedule"] is True
+    assert info_sched["eff_min_margin"] == 0.05
+
+
+def test_staggered_gate_conservative_in_well_vis_band():
+    """Im well-vis Band bleibt das gestaffelte Gate konservativ (= shipped 0.15):
+    der gleiche schwache Margin schaltet NICHT -> Regressionsschutz."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.40, 0.48])     # Margin 0.08: < 0.15
+    sched = {"vf_occ_lo": 0.20, "vf_occ_hi": 0.60,
+             "margin_occ": 0.05, "margin_well": 0.15}
+    idx, info = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.0, visib_fract=0.90, margin_schedule=sched)
+    assert idx == 0 and info["switched"] is False
+    assert info["eff_min_margin"] == 0.15           # well-vis -> shipped Margin
+
+
+def test_staggered_gate_never_switches_below_floor():
+    """Unter vf_occ_lo: +inf -> nie schalten, auch bei riesigem Margin."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.10, 0.99])     # Margin 0.89: riesig
+    sched = {"vf_occ_lo": 0.20, "vf_occ_hi": 0.60,
+             "margin_occ": 0.05, "margin_well": 0.15}
+    idx, info = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.0, visib_fract=0.10, margin_schedule=sched)
+    assert idx == 0 and info["switched"] is False
+    assert info["eff_min_margin"] == float("inf")
+
+
+def test_staggered_gate_respects_global_hard_floor():
+    """Der globale min_margin bleibt Hard-Floor: ist er höher als margin_occ,
+    gewinnt der Floor (Schedule darf den globalen Floor NIE unterlaufen)."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.40, 0.48])     # Margin 0.08
+    sched = {"vf_occ_lo": 0.20, "vf_occ_hi": 0.60,
+             "margin_occ": 0.05, "margin_well": 0.15}
+    # hard floor 0.10 > margin_occ 0.05 -> eff = 0.10 -> Margin 0.08 reicht NICHT.
+    idx, info = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.10, visib_fract=0.35, margin_schedule=sched)
+    assert idx == 0 and info["switched"] is False
+    assert info["eff_min_margin"] == 0.10
+
+
+def test_staggered_gate_none_is_backward_compatible():
+    """margin_schedule=None -> EXAKT das statische Margin-Gate (kein eff_min_margin
+    Feld, kein margin_schedule Flag)."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.40, 0.90])
+    idx, info = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.15, visib_fract=0.35, margin_schedule=None)
+    assert idx == 1 and info["switched"] is True
+    assert "margin_schedule" not in info
+    assert "eff_min_margin" not in info
+
+
+def test_refine_detection_staggered_schedule_threads_through():
+    """refine_detection reicht margin_schedule durch -> occludiertes Band korrigiert
+    den Flip bei einem Margin, den das statische 0.15-Gate verschlucken würde."""
+    verts = anker_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R_true = _world_lay_flat(yaw_deg=12.0)
+    R_flip = R_true @ A.axis_angle_matrix([1.0, 0, 0], np.pi)
+    sil_true = RC.render_silhouette(verts, R_true, t_world, table_origin,
+                                    R_w2c, t_w2c, K, hw)
+    visib = _occluder_visib_mask(verts, R_true, t_world, table_origin,
+                                 R_w2c, t_w2c, K, hw, keep_head=True)
+    img = np.zeros((hw[0], hw[1], 3), np.uint8); img[sil_true] = 200
+    ie = RC.image_edges(img)
+    sched = {"vf_occ_lo": 0.20, "vf_occ_hi": 0.60,
+             "margin_occ": 0.05, "margin_well": 0.15}
+    common = dict(verts_mm=verts, t_world_m=t_world, table_origin_m=table_origin,
+                  R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw, target_mask=sil_true,
+                  image_edge_mask=ie, visib_mask=visib, n_fold=None, tilt_degs=(),
+                  scorer="cpu_edge")
+    # occludiertes Band (vf=0.35), gestaffeltes Gate, hard floor 0.0.
+    R_ref, info = RC.refine_detection(R_flip, visib_fract=0.35,
+                                      min_visib_fract=0.20, min_margin=0.0,
+                                      margin_schedule=sched, **common)
+    assert info.get("margin_schedule") is True
+    assert info["eff_min_margin"] == 0.05
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
