@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-01T21:00:19Z",
+  "updated": "2026-06-01T21:08:38Z",
   "columns": [
     {
       "id": "backlog",
@@ -4971,7 +4971,7 @@
       "id": "T-087",
       "title": "S-005: Doku/Decision + optional Live-Verdrahtung kip_server + Merge-Ready",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P2",
@@ -4981,9 +4981,9 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T14:54:52Z",
-      "updated": "2026-06-01T21:00:19Z",
+      "updated": "2026-06-01T21:08:38Z",
       "started_at": "2026-06-01T16:22:34Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T21:08:38Z",
       "comments": [],
       "logs": [
         {
@@ -5009,6 +5009,18 @@
           "agent": "sam-devops",
           "level": "info",
           "msg": "moved: done → in_progress"
+        },
+        {
+          "ts": "2026-06-01T21:08:38Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "GPU heruntergefahren, Live in on-demand-Ruhe. shutdown -h now akzeptiert (sudo -n exit 0), nach ~25s Box unreachable: ping 100% loss, ssh port 22 timeout (exit 255). kip-server+kip-worker.service sauber von systemd mit-gestoppt (kein Datenverlust). max-utils.com/KIP jetzt offline = NORMALER on-demand-Zustand (Box aus, Site nur bei Wake) = Max-Wille."
+        },
+        {
+          "ts": "2026-06-01T21:08:38Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -5127,7 +5139,7 @@
       "id": "T-092",
       "title": "S-007: Occlusion-Consistency Term implementieren + Eval (Flip-Rate + AR before/after)",
       "description": "Kai: free-space-violation Scorer in refine_rc (teil-agnostisch), integriert mit visibility-aware. Eval auf Box: Flip-Rate UND sym-aware AR vorher/nachher, partial-vis + well-vis, Anker (+ Zahnrad fuer Generalitaet). flag-gated.",
-      "column": "in_review",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P0",
@@ -5137,9 +5149,9 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T19:40:42Z",
-      "updated": "2026-06-01T21:00:19Z",
+      "updated": "2026-06-01T21:05:42Z",
       "started_at": "2026-06-01T19:40:42Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T21:03:08Z",
       "comments": [],
       "logs": [
         {
@@ -5207,6 +5219,30 @@
           "agent": "ravi-qs",
           "level": "info",
           "msg": "moved: in_review → in_review"
+        },
+        {
+          "ts": "2026-06-01T21:03:08Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-06-01T21:03:08Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged -> main as 7a77151 (--no-ff, 0 Konflikte). refine_rc 33/33 gruen auf main (.venv py3.12). Diff = 4 Files, kein Live-Pfad (kip_server/e2e_infer unberuehrt), flag default AUS."
+        },
+        {
+          "ts": "2026-06-01T21:03:08Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Pushed origin/main 5b0df3d..7a77151 (fast-forward, kein force). origin==local synced."
+        },
+        {
+          "ts": "2026-06-01T21:05:42Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Deployed to box (max@100.85.216.95, /mnt/data/kip_pose). Null Live-Verhaltensaenderung: alle 3 Target-Files (refine_rc.py, box_src/anker_flip_repro.py, box_src/rc_refine_eval.py) bereits byte-identisch mit main(7a77151) -> KEIN scp/Clobber noetig. e2e_infer.py fehlt auf Box + nicht im Live-Pfad -> skip. kip-server.service restartet (PID 39658): is-active=active, /api/health=ok, /api/live/status=503-graceful, FE-guard count=3 (tab-live+cell-loader intakt), journal sauber. Kein FE/kip_server.py angefasst."
         }
       ]
     }
