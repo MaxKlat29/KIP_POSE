@@ -67,7 +67,11 @@ except Exception:                # pragma: no cover - fall back to local geodesi
     HAVE_BOP = False
 
 ANKER_OBJS = (1, 2)
-ANKER_NAME = {1: "Anker_Kurz", 2: "Anker_Lang"}
+ANKER_NAME = {1: "Anker_Kurz", 2: "Anker_Lang", 6: "Zahnrad"}
+# C_N pro obj_id (models_info): Anker continuous-Y -> kein discrete N; Zahnrad C_7.
+# Teil-AGNOSTISCH genutzt: der free-space-Term nimmt NICHTS davon an; n_fold steuert
+# nur den Hypothesen-Generator (Yaw-Varianten), nicht die Refutation.
+OBJ_NFOLD_LOCAL = {1: None, 2: None, 6: 7}
 SYM_AXIS = np.array([0.0, 1.0, 0.0])      # cont-Y symmetry axis (models_info)
 TRANSVERSE = {"X": np.array([1.0, 0.0, 0.0]), "Z": np.array([0.0, 0.0, 1.0])}
 FLIP_THR_DEG = 90.0                       # sym-resolved rot > this = a surviving flip
@@ -174,12 +178,15 @@ def gt_R_for_inst(bop_root):
     return idx
 
 
-def find_preds(preds_dir):
-    """Locate the per-object preds_best.csv for the Anker parts."""
+def find_preds(preds_dir, include_zahnrad=False):
+    """Locate the per-object preds_best.csv for the Anker parts (+ optional Zahnrad
+    for the part-agnostic proof)."""
     cand = {
         1: os.path.join(preds_dir, "anker_kurz", "preds_best.csv"),
         2: os.path.join(preds_dir, "anker_lang", "preds_best.csv"),
     }
+    if include_zahnrad:
+        cand[6] = os.path.join(preds_dir, "zahnrad", "preds_best.csv")
     return {o: p for o, p in cand.items() if os.path.isfile(p)}
 
 
@@ -251,6 +258,38 @@ def main():
                     help="well-vis report band lower bound")
     ap.add_argument("--well-hi", type=float, default=0.80,
                     help="well-vis report band upper bound")
+    # ── T-092: free-space-refutation BEFORE/AFTER (occlusion-consistency) ──
+    ap.add_argument("--occ-compare", type=int, default=0,
+                    help="OCCLUSION-CONSISTENCY before/after (ADR-020-Amend/T-092): "
+                         "vis-aware appearance (shipped T-085) vs vis-aware + "
+                         "FREE-SPACE-REFUTATION. Cap N instances PER BAND so the "
+                         "shaft-only band is represented. Reports flip-rate per "
+                         "visibility band on calib(even)/report(odd) scene split.")
+    ap.add_argument("--occ-all", action="store_true",
+                    help="occ-compare over ALL matched instances (ignore N cap)")
+    ap.add_argument("--occ-max-violation", type=float, default=0.30,
+                    help="free_space_violation threshold for hard rejection")
+    ap.add_argument("--occ-dilate", type=int, default=2,
+                    help="dilation of occupied regions when building free_space_mask "
+                         "(conservative: shrinks free space, fewer false-positive "
+                         "violations at mask borders). 0 = exact.")
+    ap.add_argument("--occ-vf-hi", type=float, default=0.0,
+                    help="band gate: only apply free-space-refutation BELOW this "
+                         "visib_fract (well-vis = false-positive regime). 0 = off.")
+    ap.add_argument("--occ-sweep", type=int, default=0,
+                    help="T-092 calibration sweep: cache per-hyp appearance + "
+                         "free-space violations ONCE per dilate, grid-sweep "
+                         "(max_violation × vf_hi) analytically on calib/report "
+                         "scene split. Reports chosen schedule on held-out.")
+    ap.add_argument("--sweep-dilate", default="0,1,2",
+                    help="comma list of free-space-mask dilations to sweep")
+    ap.add_argument("--sweep-max-violation", default="0.20,0.30,0.40,0.50",
+                    help="comma list of refutation thresholds to sweep")
+    ap.add_argument("--sweep-vf-hi", default="0,0.40,0.60",
+                    help="comma list of band-gate cutoffs (0 = no band gate)")
+    ap.add_argument("--include-zahnrad", action="store_true",
+                    help="also load Zahnrad (obj 6) preds — for the PART-AGNOSTIC "
+                         "proof (same free-space term runs, no crash, plausible).")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
@@ -258,7 +297,7 @@ def main():
     visib = load_visib_index(args.bop_root)
     gt_inst = gt_R_for_inst(args.bop_root)
     gt_index = RR.load_gt_index(args.bop_root)      # for match (sid,im,obj)->[(i,t)]
-    preds = find_preds(args.preds_dir)
+    preds = find_preds(args.preds_dir, include_zahnrad=args.include_zahnrad)
     sys.stderr.write(f"[repro] preds found: {sorted(preds)}\n")
 
     # inst_idx lookup keyed by GT translation -> back to inst_idx for visib join.
@@ -350,6 +389,14 @@ def main():
     if args.visaware_sweep > 0:
         result["visaware_sweep"] = visaware_sweep(per_inst, args, syms)
 
+    # occ_compare triggert NUR via --occ-compare (oder --occ-all NUR wenn KEIN sweep
+    # läuft — sonst würde --occ-all den teuren occ_compare doppelt mitstarten).
+    if args.occ_compare > 0 or (args.occ_all and args.occ_sweep <= 0):
+        result["occ_compare"] = occ_compare(per_inst, args, syms)
+
+    if args.occ_sweep > 0:
+        result["occ_sweep"] = occ_sweep(per_inst, args, syms)
+
     # human-readable to stderr
     sys.stderr.write("\n==================== ANKER FLIP REPRO ====================\n")
     for key in ("full_vis", "mid_vis", "partial_vis"):
@@ -431,6 +478,32 @@ def main():
                 f"(fix{rw['n_fixed']}/brk{rw['n_broke']})\n")
         else:
             sys.stderr.write("  >>> NO Pareto-clean schedule found (honest null result)\n")
+    if "occ_compare" in result:
+        oc = result["occ_compare"]
+        sys.stderr.write(
+            "\n  --- FREE-SPACE-REFUTATION: BEFORE (vis-aware) vs AFTER (+occ) ---\n")
+        p = oc["params"]
+        sys.stderr.write(
+            f"  gate: min_margin={p['min_margin']} min_vf={p['min_visib_fract']} "
+            f"max_violation={p['max_free_space_violation']} dilate={p['occ_dilate']} "
+            f"n_measured={oc['n_measured']}\n")
+        for split_name in ("bands_report", "bands_all"):
+            sys.stderr.write(f"  [{split_name}]\n")
+            for name, b in oc[split_name].items():
+                if not b.get("n"):
+                    continue
+                sys.stderr.write(
+                    f"    {name:22s} n={b['n']:4d}  flip "
+                    f"{b['flip_rate_before']:.4f}->{b['flip_rate_after']:.4f}  "
+                    f"(fix{b['n_fixed']}/brk{b['n_broke']})  "
+                    f"refuted~{b['n_refuted_mean']}  "
+                    f"coarse_viol~{b['coarse_violation_mean']}\n")
+        sys.stderr.write("  [per_obj — incl. Zahnrad agnostic proof if loaded]\n")
+        for oid, b in oc["per_obj"].items():
+            sys.stderr.write(
+                f"    obj {oid} ({ANKER_NAME.get(oid,'?')}): n={b['n']} flip "
+                f"{b['flip_rate_before']:.4f}->{b['flip_rate_after']:.4f} "
+                f"(fix{b['n_fixed']}/brk{b['n_broke']})\n")
     sys.stderr.write("==========================================================\n")
 
     if args.out:
@@ -630,6 +703,343 @@ def visaware_compare(per_inst, args, syms):
         "partial": run_group(stratum_insts(args.partial_lo, args.partial_hi)),
         "full": run_group(full_insts()),
     }
+
+
+# ── OCCLUSION-CONSISTENCY / FREE-SPACE-REFUTATION (ADR-020-Amend / T-092) ─────
+def _all_frame_masks(bop_root, sid, im, n_insts):
+    """Lade die vollen Masken ALLER Instanzen eines Frames (für die other-parts-
+    Exklusion in der free-space-Maske). Gibt {inst_idx: full_mask(H,W bool)}."""
+    out = {}
+    for i in range(n_insts):
+        m = RR.load_full_mask(bop_root, sid, im, i)
+        if m is None:
+            m = RR.load_mask(bop_root, sid, im, i)        # Fallback mask_visib
+        if m is not None:
+            out[i] = m
+    return out
+
+
+def _n_insts_in_frame(gt_inst, sid, im):
+    """Anzahl GT-Instanzen in (sid, im) — aus dem gt_R_for_inst-Index."""
+    return sum(1 for (s, m, _i) in gt_inst.keys() if s == sid and m == im)
+
+
+def occ_compare(per_inst, args, syms):
+    """T-092: BEFORE (vis-aware appearance-Score, der gemergte T-085-Pfad) vs AFTER
+    (vis-aware + FREE-SPACE-REFUTATION). Misst Flip-Rate pro Sichtbarkeits-Band,
+    insbesondere das occludierte „Kopf-verdeckt / nur-Schaft"-Band.
+
+    free_space_mask pro Instanz (TEIL-AGNOSTISCH, GT vorhanden):
+      Frame ∧ ¬mask_visib(self) ∧ ¬occluded(self) ∧ ¬(∪ andere-Teil-Masken),
+      occluded(self) = full_mask(self) \\ mask_visib(self).
+      off-frame = KEINE Verletzung (render_silhouette ist frame-begrenzt).
+
+    BEFORE und AFTER nutzen DENSELBEN visibility-aware Score + DENSELBEN harten
+    min_margin (ADR-020, nie global gelockert). AFTER fügt NUR das free-space-
+    Refutation-Gate hinzu. So isoliert der Vergleich exakt den Beitrag der
+    negativen Evidenz.
+    """
+    cams = RR.load_cams(args.bop_root)
+    meshes, downs = RR.load_meshes(args.bop_root)
+    gt_inst = gt_R_for_inst(args.bop_root)
+
+    def bands():
+        # occludiertes „nur-Schaft"-Band zuerst (Theo: visib[0.2-0.4)=43% Flip),
+        # dann das breitere partial-Band + well-vis Regressionsschutz.
+        return [
+            ("shaft_only_0.20_0.40", 0.20, 0.40),
+            ("partial_0.20_0.60", args.partial_lo, args.partial_hi),
+            ("mid_0.60_0.95", 0.60, 0.95),
+            ("full_0.95_1.01", args.full_thr, 1.01),
+        ]
+
+    def run_inst(d):
+        sid, im, oid, inst = d["scene_id"], d["im_id"], d["obj_id"], d["inst"]
+        cam = cams[sid][str(im)]
+        R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
+        t_w2c = np.array(cam["cam_t_w2c"], float)
+        K = np.array(cam["cam_K"], float).reshape(3, 3)
+        visib = RR.load_mask(args.bop_root, sid, im, inst)
+        full = RR.load_full_mask(args.bop_root, sid, im, inst)
+        if visib is None:
+            return None
+        if full is None:
+            full = visib
+        H, W = full.shape
+        occluded = full & ~visib
+        # andere Teile im selben Frame (deren Pixel sind belegt, nicht frei).
+        n_insts = _n_insts_in_frame(gt_inst, sid, im)
+        others = []
+        for j, m in _all_frame_masks(args.bop_root, sid, im, n_insts).items():
+            if j == inst:
+                continue
+            others.append(m)
+        fs = RC.build_free_space_mask((H, W), visib, occluded_mask=occluded,
+                                      other_masks=others, dilate=args.occ_dilate)
+        _, R_gt, t_gt = gt_inst[(sid, im, inst)]
+        rgb = RR.load_rgb(args.bop_root, sid, im)
+        bbox = RR.mask_bbox(full)
+        ie = None
+        if rgb is not None and bbox is not None:
+            crop = rgb[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+            ie = RC.image_edges(crop, bbox=bbox, full_hw=(H, W))
+        R_world, t_world = A.bop_pose_to_world(d["R_est"], t_gt, R_w2c, t_w2c,
+                                               RR.TABLE_ORIGIN)
+        verts_mm = np.asarray(meshes[oid].vertices, float)
+        vf = float(d["visib_fract"])
+        n_fold = OBJ_NFOLD_LOCAL.get(oid)
+        common = dict(
+            verts_mm=verts_mm, t_world_m=t_world, table_origin_m=RR.TABLE_ORIGIN,
+            R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=(H, W),
+            target_mask=visib, image_edge_mask=ie, visib_mask=visib, visib_fract=vf,
+            min_visib_fract=args.visaware_min_vf, sym_axis=tuple(SYM_AXIS),
+            n_fold=n_fold, stable_downs=downs[oid], scorer="cpu_edge",
+            min_margin=args.visaware_min_margin)
+        # BEFORE: vis-aware only (the shipped T-085 path).
+        R_before, info_b = RC.refine_detection(R_world, **common)
+        # AFTER: vis-aware + free-space-refutation (band-gated to the occluded
+        # regime; well-vis is the false-positive regime, see T-092 finding).
+        vf_hi = None if args.occ_vf_hi <= 0 else args.occ_vf_hi
+        R_after, info_a = RC.refine_detection(
+            R_world, free_space_mask=fs,
+            max_free_space_violation=args.occ_max_violation,
+            free_space_vf_hi=vf_hi, **common)
+        rs_coarse = rot_err_sym_contY(R_w2c @ R_world, R_gt, syms)
+        rs_before = rot_err_sym_contY(R_w2c @ R_before, R_gt, syms)
+        rs_after = rot_err_sym_contY(R_w2c @ R_after, R_gt, syms)
+        return {
+            "visib_fract": vf, "obj_id": oid, "scene_id": sid,
+            "rs_coarse": rs_coarse, "rs_before": rs_before, "rs_after": rs_after,
+            "fs_frac": float(fs.sum()) / float(H * W),
+            "coarse_violation": float(info_a["detail"][0]["free_space_violation"]),
+            "n_refuted": int(info_a.get("n_refuted", 0)),
+            "switched_before": bool(info_b.get("switched")),
+            "switched_after": bool(info_a.get("switched")),
+            "best_before": info_b.get("best_tag"),
+            "best_after": info_a.get("best_tag"),
+        }
+
+    # one refine pair per instance, capped per band so both splits have flips.
+    pool = [d for d in per_inst if 0.0 <= d["visib_fract"] < 1.01]
+    if not args.occ_all and args.occ_compare > 0:
+        # cap per band (not globally) so the shaft-only band is represented.
+        capped, seen = [], set()
+        for _, lo, hi in bands():
+            band = [d for d in pool if lo <= d["visib_fract"] < hi][:args.occ_compare]
+            for d in band:
+                k = (d["scene_id"], d["im_id"], d["inst"], d["obj_id"])
+                if k not in seen:
+                    seen.add(k); capped.append(d)
+        pool = capped
+    sys.stderr.write(f"[occ] refining {len(pool)} instances (before+after)...\n")
+    measured = []
+    for d in pool:
+        m = run_inst(d)
+        if m is not None:
+            measured.append(m)
+    sys.stderr.write(f"[occ] measured {len(measured)} instances\n")
+
+    thr = args.flip_thr_deg
+
+    def band_stats(lo, hi, split=None):
+        g = [m for m in measured if lo <= m["visib_fract"] < hi]
+        if split is not None:
+            g = [m for m in g if (m["scene_id"] % 2) == split]
+        if not g:
+            return {"n": 0}
+        nb = sum(m["rs_before"] > thr for m in g)
+        na = sum(m["rs_after"] > thr for m in g)
+        fixed = sum((m["rs_before"] > thr) and (m["rs_after"] <= thr) for m in g)
+        broke = sum((m["rs_before"] <= thr) and (m["rs_after"] > thr) for m in g)
+        return {
+            "n": len(g),
+            "flip_rate_before": round(nb / len(g), 4),
+            "flip_rate_after": round(na / len(g), 4),
+            "n_flip_before": nb, "n_flip_after": na,
+            "n_fixed": fixed, "n_broke": broke,
+            "n_switched_after": sum(m["switched_after"] for m in g),
+            "n_refuted_mean": round(float(np.mean([m["n_refuted"] for m in g])), 2),
+            "coarse_violation_mean": round(
+                float(np.mean([m["coarse_violation"] for m in g])), 3),
+        }
+
+    out = {
+        "params": {"min_margin": args.visaware_min_margin,
+                   "min_visib_fract": args.visaware_min_vf,
+                   "max_free_space_violation": args.occ_max_violation,
+                   "occ_dilate": args.occ_dilate,
+                   "flip_thr_deg": thr, "all": bool(args.occ_all)},
+        "n_measured": len(measured),
+        # calib = even scenes, report = odd scenes (held-out).
+        "bands_calib": {name: band_stats(lo, hi, split=0) for name, lo, hi in bands()},
+        "bands_report": {name: band_stats(lo, hi, split=1) for name, lo, hi in bands()},
+        "bands_all": {name: band_stats(lo, hi) for name, lo, hi in bands()},
+        "per_obj": {},
+    }
+    for oid in (1, 2, 6):
+        g = [m for m in measured if m["obj_id"] == oid]
+        if not g:
+            continue
+        nb = sum(m["rs_before"] > thr for m in g)
+        na = sum(m["rs_after"] > thr for m in g)
+        out["per_obj"][oid] = {
+            "n": len(g),
+            "flip_rate_before": round(nb / len(g), 4),
+            "flip_rate_after": round(na / len(g), 4),
+            "n_fixed": sum((m["rs_before"] > thr) and (m["rs_after"] <= thr) for m in g),
+            "n_broke": sum((m["rs_before"] <= thr) and (m["rs_after"] > thr) for m in g),
+        }
+    return out
+
+
+def _cache_occ(per_inst, args, syms, dilate, n_cap):
+    """Cache per-instance: per-hyp appearance score, per-hyp free_space_violation
+    (at THIS dilate), per-hyp rot_sym, visib_fract, scene_id. Lets a threshold +
+    band-gate grid be swept ANALYTICALLY (no re-render per param). Deterministic."""
+    cams = RR.load_cams(args.bop_root)
+    meshes, downs = RR.load_meshes(args.bop_root)
+    gt_inst = gt_R_for_inst(args.bop_root)
+
+    def band_bounds():
+        return [(0.20, 0.40), (args.partial_lo, args.partial_hi),
+                (0.60, 0.95), (args.full_thr, 1.01)]
+
+    pool = [d for d in per_inst if 0.0 <= d["visib_fract"] < 1.01]
+    if not args.occ_all and n_cap > 0:
+        capped, seen = [], set()
+        for lo, hi in band_bounds():
+            for d in [x for x in pool if lo <= x["visib_fract"] < hi][:n_cap]:
+                k = (d["scene_id"], d["im_id"], d["inst"], d["obj_id"])
+                if k not in seen:
+                    seen.add(k); capped.append(d)
+        pool = capped
+
+    cached = []
+    for d in pool:
+        sid, im, oid, inst = d["scene_id"], d["im_id"], d["obj_id"], d["inst"]
+        cam = cams[sid][str(im)]
+        R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
+        t_w2c = np.array(cam["cam_t_w2c"], float)
+        K = np.array(cam["cam_K"], float).reshape(3, 3)
+        visib = RR.load_mask(args.bop_root, sid, im, inst)
+        full = RR.load_full_mask(args.bop_root, sid, im, inst)
+        if visib is None:
+            continue
+        if full is None:
+            full = visib
+        H, W = full.shape
+        occluded = full & ~visib
+        n_insts = _n_insts_in_frame(gt_inst, sid, im)
+        others = [m for j, m in _all_frame_masks(args.bop_root, sid, im, n_insts).items()
+                  if j != inst]
+        fs = RC.build_free_space_mask((H, W), visib, occluded_mask=occluded,
+                                      other_masks=others, dilate=dilate)
+        _, R_gt, t_gt = gt_inst[(sid, im, inst)]
+        rgb = RR.load_rgb(args.bop_root, sid, im)
+        bbox = RR.mask_bbox(full)
+        ie = None
+        if rgb is not None and bbox is not None:
+            crop = rgb[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+            ie = RC.image_edges(crop, bbox=bbox, full_hw=(H, W))
+        R_world, t_world = A.bop_pose_to_world(d["R_est"], t_gt, R_w2c, t_w2c,
+                                               RR.TABLE_ORIGIN)
+        verts_mm = np.asarray(meshes[oid].vertices, float)
+        n_fold = OBJ_NFOLD_LOCAL.get(oid)
+        hyps, tags = RC.generate_hypotheses(
+            R_world, sym_axis=tuple(SYM_AXIS), n_fold=n_fold, stable_downs=downs[oid])
+        scores, detail = RC.cpu_edge_score(
+            hyps, verts_mm=verts_mm, t_world_m=t_world, table_origin_m=RR.TABLE_ORIGIN,
+            R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=(H, W), target_mask=visib,
+            image_edge_mask=ie, visib_mask=visib, visib_dilate=2, free_space_mask=fs)
+        hyp_rs = [rot_err_sym_contY(R_w2c @ np.asarray(h, float), R_gt, syms)
+                  for h in hyps]
+        cached.append({
+            "scene_id": sid, "im_id": im, "inst": inst, "obj_id": oid,
+            "visib_fract": float(d["visib_fract"]),
+            "scores": [float(s) for s in scores],
+            "viol": [float(x["free_space_violation"]) for x in detail],
+            "hyp_rs": [float(x) for x in hyp_rs],
+            "rs_coarse": float(hyp_rs[0]),
+        })
+    return cached
+
+
+def _eval_occ_schedule(cached, thr, vf_hi, min_margin, min_vf, flip_thr, lo, hi,
+                       split=None):
+    """Analytic eval of ONE (threshold, vf_hi) on cached occ instances in [lo,hi).
+    Re-runs select_best_hypothesis with the cached scores + violations + band gate."""
+    grp = [c for c in cached if lo <= c["visib_fract"] < hi]
+    if split is not None:
+        grp = [c for c in grp if (c["scene_id"] % 2) == split]
+    n = nb = na = nfix = nbroke = nsw = 0
+    for c in grp:
+        scores = np.asarray(c["scores"], float)
+        # band gate: above vf_hi -> no refutation (false-positive regime).
+        use_viol = (vf_hi is None) or (c["visib_fract"] < vf_hi)
+        viol = c["viol"] if use_viol else None
+        best_idx, sel = RC.select_best_hypothesis(
+            scores, scores, coarse_idx=0, min_margin=min_margin,
+            visib_fract=c["visib_fract"], min_visib_fract=min_vf,
+            free_space_violations=viol, max_free_space_violation=thr)
+        rs_after = c["hyp_rs"][best_idx]
+        rs_before = c["rs_coarse"]   # BEFORE = coarse (vis-aware would also be gated)
+        fb = rs_before > flip_thr
+        fa = rs_after > flip_thr
+        n += 1; nb += int(fb); na += int(fa)
+        nfix += int(fb and not fa); nbroke += int((not fb) and fa)
+        nsw += int(sel.get("switched", False))
+    return {"n": n,
+            "flip_rate_before": round(nb / n, 4) if n else 0.0,
+            "flip_rate_after": round(na / n, 4) if n else 0.0,
+            "n_fixed": nfix, "n_broke": nbroke, "n_switched": nsw}
+
+
+def occ_sweep(per_inst, args, syms):
+    """T-092 calibration: cache per-hyp appearance + free-space violations ONCE per
+    dilate, then grid-sweep (max_violation × vf_hi) analytically on a calib(even)/
+    report(odd) scene split. Pareto: minimise shaft-only flip-rate while well-vis
+    flip-rate does NOT increase. Reports the chosen schedule on the held-out split."""
+    flt = lambda s: [float(x) for x in str(s).split(",") if x != ""]
+    dilates = [int(x) for x in str(args.sweep_dilate).split(",") if x != ""]
+    thrs = flt(args.sweep_max_violation)
+    vf_his = [None if float(x) <= 0 else float(x) for x in flt(args.sweep_vf_hi)]
+    min_margin = args.visaware_min_margin
+    min_vf = args.visaware_min_vf
+    flip_thr = args.flip_thr_deg
+    so_lo, so_hi = 0.20, 0.40           # shaft-only / head-occluded band
+    w_lo, w_hi = args.well_lo, args.well_hi
+
+    grid = []
+    for dil in dilates:
+        sys.stderr.write(f"[occ-sweep] caching at dilate={dil} ...\n")
+        cached = _cache_occ(per_inst, args, syms, dil, args.occ_sweep)
+        sys.stderr.write(f"[occ-sweep] dilate={dil}: cached {len(cached)}\n")
+        for thr in thrs:
+            for vf_hi in vf_his:
+                cal_so = _eval_occ_schedule(cached, thr, vf_hi, min_margin, min_vf,
+                                            flip_thr, so_lo, so_hi, split=0)
+                cal_w = _eval_occ_schedule(cached, thr, vf_hi, min_margin, min_vf,
+                                           flip_thr, w_lo, w_hi, split=0)
+                rep_so = _eval_occ_schedule(cached, thr, vf_hi, min_margin, min_vf,
+                                            flip_thr, so_lo, so_hi, split=1)
+                rep_w = _eval_occ_schedule(cached, thr, vf_hi, min_margin, min_vf,
+                                           flip_thr, w_lo, w_hi, split=1)
+                gain = cal_so["flip_rate_before"] - cal_so["flip_rate_after"]
+                regress = cal_w["flip_rate_after"] - cal_w["flip_rate_before"]
+                grid.append({
+                    "dilate": dil, "max_violation": thr, "vf_hi": vf_hi,
+                    "calib_shaft": cal_so, "calib_well": cal_w,
+                    "report_shaft": rep_so, "report_well": rep_w,
+                    "calib_shaft_gain": round(gain, 4),
+                    "calib_well_regress": round(regress, 4),
+                    "pareto_clean": bool(gain > 0 and regress <= 0),
+                })
+    clean = [g for g in grid if g["pareto_clean"]]
+    chosen = max(clean, key=lambda g: g["calib_shaft_gain"]) if clean else None
+    return {"grid": grid, "chosen": chosen, "any_pareto_clean": bool(clean),
+            "split": "scene_id parity (even=calib, odd=report)",
+            "shaft_band": [so_lo, so_hi], "well_band": [w_lo, w_hi],
+            "min_margin": min_margin, "min_visib_fract": min_vf}
 
 
 # ── VISIBILITY-STAGGERED GATE SWEEP (S-003 v2 / T-085) ───────────────────────

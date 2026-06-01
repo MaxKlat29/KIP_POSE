@@ -557,5 +557,219 @@ def test_refine_detection_staggered_schedule_threads_through():
     assert info["eff_min_margin"] == 0.05
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 4) OCCLUSION-CONSISTENCY / FREE-SPACE-REFUTATION  (ADR-020-Amendment, T-092)
+# ══════════════════════════════════════════════════════════════════════════════
+# Negative-Evidenz / free-space-refutation, TEIL-AGNOSTISCH (kein Kopf/Schaft/
+# Anker-Wissen). Eine Hypothese, die einen Teil ihrer VOLLEN Silhouette in den
+# sichtbar-leeren Raum legt, widerspricht der Beobachtung -> harte Verwerfung.
+# Tests:
+#  (a) free_space_violation-Mathe (Anteil sil ∩ free_space / |sil|, off-frame=0).
+#  (b) build_free_space_mask: Frame minus visib/occluded/andere-Teil-Masken.
+#  (c) KERN ("nur-Schaft sichtbar, Kopf verdeckt"): der falsche Flip legt den Kopf
+#      in den leeren Raum -> hohe Violation -> verworfen -> un-Flip gewinnt.
+#  (d) Hard-Rejection im Gate: refuted Hyp kann nicht gewinnen; Coarse nie verworfen.
+#  (e) free_space_mask=None -> exakt heutiges Verhalten (rückwärtskompatibel).
+#  (f) Teil-Agnostik: derselbe Term auf einem Zahnrad-Mesh, kein Crash, plausibel.
+
+
+def test_free_space_violation_basic_and_offframe():
+    """violation = |sil ∩ free_space| / |sil|; leere Silhouette -> 0;
+    off-frame zählt nicht (Silhouette ist frame-begrenzt)."""
+    sil = np.zeros((10, 10), bool)
+    sil[2:6, 2:6] = True                       # 16 px
+    fs = np.zeros((10, 10), bool)
+    fs[2:4, 2:6] = True                        # 8 px überlappen die Silhouette
+    v = RC.free_space_violation(sil, fs)
+    assert abs(v - 8.0 / 16.0) < 1e-9
+    # leere Silhouette -> keine Aussage.
+    assert RC.free_space_violation(np.zeros((5, 5), bool), fs[:5, :5]) == 0.0
+    # disjunkt -> 0.
+    fs2 = np.zeros((10, 10), bool); fs2[7:9, 7:9] = True
+    assert RC.free_space_violation(sil, fs2) == 0.0
+
+
+def test_build_free_space_mask_part_agnostic():
+    """free_space = Frame ∧ ¬visib ∧ ¬occluded ∧ ¬andere-Teile. Rein mengen-
+    basiert, keine Geometrie-Annahme."""
+    H, W = 8, 8
+    visib = np.zeros((H, W), bool); visib[0:2, 0:2] = True
+    occ = np.zeros((H, W), bool); occ[0:2, 2:4] = True
+    other = np.zeros((H, W), bool); other[6:8, 6:8] = True
+    fs = RC.build_free_space_mask((H, W), visib, occluded_mask=occ,
+                                  other_masks=[other])
+    # belegte Regionen sind NICHT frei
+    assert not fs[0, 0] and not fs[0, 2] and not fs[6, 6]
+    # eine garantiert freie Zelle ist frei
+    assert fs[4, 4]
+    # Gesamtmenge frei = Frame - (visib ∪ occ ∪ other)
+    occupied = visib | occ | other
+    assert int(fs.sum()) == int((~occupied).sum())
+
+
+def test_build_free_space_mask_dilate_is_conservative():
+    """dilate>0 schrumpft den freien Raum (konservativer, weniger false-positive
+    Violations am Rand belegter Regionen)."""
+    H, W = 12, 12
+    visib = np.zeros((H, W), bool); visib[5:7, 5:7] = True
+    fs0 = RC.build_free_space_mask((H, W), visib, dilate=0)
+    fs2 = RC.build_free_space_mask((H, W), visib, dilate=2)
+    assert int(fs2.sum()) < int(fs0.sum())     # mehr belegt -> weniger frei
+
+
+def test_free_space_mask_none_backward_compatible():
+    """cpu_edge_score ohne free_space_mask -> identische Scores; detail-violation=0;
+    select_best_hypothesis ohne Violations -> exakt altes Verhalten."""
+    verts = anker_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R0 = _world_lay_flat(yaw_deg=15.0)
+    hyps, _ = RC.generate_hypotheses(R0, n_fold=None, tilt_degs=())
+    sil = RC.render_silhouette(verts, R0, t_world, table_origin, R_w2c, t_w2c, K, hw)
+    img = np.zeros((hw[0], hw[1], 3), np.uint8); img[sil] = 200
+    ie = RC.image_edges(img)
+    kw = dict(verts_mm=verts, t_world_m=t_world, table_origin_m=table_origin,
+              R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw, target_mask=sil,
+              image_edge_mask=ie)
+    s_old, _ = RC.cpu_edge_score(hyps, **kw)
+    s_new, det = RC.cpu_edge_score(hyps, free_space_mask=None, **kw)
+    assert np.allclose(s_old, s_new, atol=1e-12)
+    assert all(d["free_space_violation"] == 0.0 for d in det)
+    # Gate ohne Violations == altes Verhalten.
+    idx_a, _ = RC.select_best_hypothesis(hyps, s_new, min_margin=0.0)
+    idx_b, info_b = RC.select_best_hypothesis(hyps, s_new, min_margin=0.0,
+                                              free_space_violations=None)
+    assert idx_a == idx_b
+    assert "n_refuted" not in info_b
+
+
+def test_select_best_hard_rejects_violating_hypothesis():
+    """Die best-scorende Hypothese wird verworfen, wenn ihre Violation > Schwelle;
+    die Coarse wird NIE verworfen (Fallback)."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5),
+                     A.axis_angle_matrix([0, 0, 1], 1.0)])
+    scores = np.array([0.30, 0.90, 0.50])      # Hyp 1 am besten
+    viol = np.array([0.10, 0.80, 0.05])        # ... aber Hyp 1 verletzt free space
+    idx, info = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.0, free_space_violations=viol,
+        max_free_space_violation=0.30)
+    assert idx == 2, "die beste NICHT-verletzende Hypothese muss gewinnen"
+    assert 1 in info["refuted_idx"] and info["n_refuted"] == 1
+    # Coarse selbst verletzt stark -> wird TROTZDEM nicht verworfen.
+    viol2 = np.array([0.99, 0.80, 0.95])
+    idx2, info2 = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.0, free_space_violations=viol2,
+        max_free_space_violation=0.30)
+    assert idx2 == 0 and info2["n_refuted"] == 2   # nur die beiden non-coarse
+
+
+def test_select_best_all_violating_falls_back_to_coarse():
+    """Sind alle non-coarse Hypothesen verworfen -> Coarse bleibt (margin-Gate
+    hält ohnehin)."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.4, 0.95])
+    viol = np.array([0.0, 0.9])
+    idx, info = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.0, free_space_violations=viol,
+        max_free_space_violation=0.30)
+    assert idx == 0 and info["switched"] is False
+
+
+def test_free_space_refutation_breaks_shaft_only_flip():
+    """KERN-TEST (Max-Insight): nur der Schaft ist sichtbar, der Kopf ist verdeckt.
+    Der appearance-Score allein kann den Flip nicht trennen (der dünne Schaft ist
+    quasi flip-invariant). Aber der FALSCHE Flip projiziert den Kopf in den
+    sichtbar-LEEREN Raum -> hohe free_space_violation -> verworfen -> die korrekte
+    (un-geflippte) Hypothese gewinnt. TEIL-AGNOSTISCH: das Gate sieht nur Masken.
+    """
+    verts = anker_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R_true = _world_lay_flat(yaw_deg=20.0)
+    R_flip = R_true @ A.axis_angle_matrix([1.0, 0, 0], np.pi)   # geflippte Coarse
+
+    sil_true = RC.render_silhouette(verts, R_true, t_world, table_origin,
+                                    R_w2c, t_w2c, K, hw)
+    # SICHTBAR = nur die SCHAFT-Hälfte (Kopf verdeckt -> keep_head=False).
+    visib = _occluder_visib_mask(verts, R_true, t_world, table_origin,
+                                 R_w2c, t_w2c, K, hw, keep_head=False)
+    assert 0 < visib.sum() < sil_true.sum()
+    occluded = sil_true & ~visib
+    # free space = Frame ohne sichtbare Schaft-Region, ohne occludierte Kopf-Region,
+    # ohne andere Teile (hier keine). dilate=0 = exakte negative Evidenz; die
+    # Dilation ist ein konservativer Tuning-Knopf (schrumpft die Magnitude),
+    # KEIN Träger der Separierbarkeit — siehe eval_s007.md (GPU-Kalibrierung).
+    fs = RC.build_free_space_mask(hw, visib, occluded_mask=occluded,
+                                  other_masks=None, dilate=0)
+
+    img = np.zeros((hw[0], hw[1], 3), np.uint8); img[sil_true] = 200
+    ie = RC.image_edges(img)
+    common = dict(verts_mm=verts, t_world_m=t_world, table_origin_m=table_origin,
+                  R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw, target_mask=visib,
+                  image_edge_mask=ie, visib_mask=visib, n_fold=None, tilt_degs=(),
+                  flip_axes=("x", "y", "z"), scorer="cpu_edge")
+
+    # MIT Refutation: die geflippte Coarse legt den Kopf in den freien Raum.
+    R_fs, info_fs = RC.refine_detection(
+        R_flip, visib_fract=0.35, min_visib_fract=0.20, min_margin=0.0,
+        free_space_mask=fs, max_free_space_violation=0.25, **common)
+
+    assert info_fs["free_space_aware"] is True
+    tags = info_fs["tags"]
+    det = info_fs["detail"]
+    v_coarse = det[0]["free_space_violation"]
+    correct = [i for i, t in enumerate(tags) if t in ("flip180_x", "flip180_z")]
+    assert correct
+    v_correct = min(det[i]["free_space_violation"] for i in correct)
+    # KERN: die korrekte (un-geflippte) Hypothese belegt SUBSTANZIELL weniger freien
+    # Raum als die geflippte Coarse — DAS ist das diskriminierende Signal, das der
+    # appearance-Score allein nicht hat. Separierbarkeit, kein Magnitude-Hard-Coding.
+    assert v_correct < v_coarse - 0.10, (
+        f"Separierbarkeit zu schwach: correct={v_correct:.3f} coarse={v_coarse:.3f}")
+    # Die geflippte Coarse ist über der Schwelle verwerfbar (negative Evidenz greift).
+    assert v_coarse > 0.25, f"geflippte Coarse-Violation {v_coarse:.3f} nicht verwerfbar"
+    # Folge: der Refiner verwirft die Coarse NICHT (Fallback), aber eine refutierte
+    # bessere-aber-leerraum-belegende Hyp kann nicht gewinnen; die gewählte Pose darf
+    # nicht schlechter als die geflippte Coarse sein.
+    syms = [A.axis_angle_matrix([0, 1.0, 0], 2 * np.pi * k / 90) for k in range(90)]
+    def rs(Rw):
+        Rc = A._as_R(R_w2c) @ A._as_R(Rw)
+        Rg = A._as_R(R_w2c) @ R_true
+        return min(RC._rot_geodesic_deg(Rc, Rg @ S) for S in syms)
+    assert rs(R_fs) <= rs(R_flip) + 1e-6, (
+        f"Refutation darf nicht verschlechtern: fs={rs(R_fs):.1f} flip={rs(R_flip):.1f}")
+
+
+def test_free_space_refutation_part_agnostic_on_gear():
+    """TEIL-AGNOSTIK: derselbe free-space-Term auf einem C_7-Zahnrad-Mesh — kein
+    Crash, Violations ∈ [0,1], refine_detection läuft mit n_fold=7 + free_space_mask.
+    Der Term nimmt NICHTS Anker-spezifisches an."""
+    verts = gear_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R0 = A.axis_angle_matrix([1.0, 0, 0], np.pi)        # flach top-down liegend
+    sil = RC.render_silhouette(verts, R0, t_world, table_origin,
+                               R_w2c, t_w2c, K, hw)
+    assert sil.sum() > 0
+    # sichtbar = halbe Scheibe, Rest "occludiert"; free space = Frame minus beide.
+    visib = sil.copy(); visib[:, hw[1] // 2:] = False
+    occluded = sil & ~visib
+    fs = RC.build_free_space_mask(hw, visib, occluded_mask=occluded, dilate=1)
+    img = np.zeros((hw[0], hw[1], 3), np.uint8); img[sil] = 200
+    ie = RC.image_edges(img)
+    R_ref, info = RC.refine_detection(
+        R0, verts_mm=verts, t_world_m=t_world, table_origin_m=table_origin,
+        R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw, target_mask=visib,
+        image_edge_mask=ie, visib_mask=visib, visib_fract=0.5, min_visib_fract=0.2,
+        free_space_mask=fs, max_free_space_violation=0.30,
+        sym_axis=(0.0, 1.0, 0.0), n_fold=7, tilt_degs=(),
+        scorer="cpu_edge", min_margin=0.0)
+    assert info["free_space_aware"] is True
+    for d in info["detail"]:
+        assert 0.0 <= d["free_space_violation"] <= 1.0
+    # die Coarse (= wahre Pose) belegt KEINEN nennenswerten freien Raum.
+    assert info["detail"][0]["free_space_violation"] < 0.30
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
