@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-01T14:04:22Z",
+  "updated": "2026-06-01T16:22:34Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 82,
+  "next_id": 89,
   "tickets": [
     {
       "id": "T-001",
@@ -4675,6 +4675,306 @@
           "msg": "moved: in_progress → done"
         }
       ]
+    },
+    {
+      "id": "T-082",
+      "title": "Dach: Anker-180-Flip-Fix bei partieller Sicht (/team 2026-06-01-anker-flip-fix)",
+      "description": "",
+      "column": "backlog",
+      "assignee": "queen",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T14:51:09Z",
+      "updated": "2026-06-01T14:51:09Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-083",
+      "title": "S-001: Root-Cause + Repro-Harness Anker-Flip (partial-vis, wann flippt's)",
+      "description": "Theo: deterministisch reproduzieren auf >=10 partial-vis-Szenen, Mechanismus bestaetigen (GDRNPP falsches Becken; refine_rc bricht bei full-vis aber nicht partial).",
+      "column": "done",
+      "assignee": "theo-debug",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T14:54:52Z",
+      "updated": "2026-06-01T15:09:21Z",
+      "started_at": "2026-06-01T14:55:16Z",
+      "completed_at": "2026-06-01T15:09:21Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T14:55:16Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T14:57:01Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "Pipeline-Read: refine_rc.py + e2e_infer.py verstanden. e2e_infer ist standalone+Mock-GDRNPP; echter GDRNPP läuft auf Box via eval_bop. _make_rc_refiner baut image_edge_mask aus GANZEM Crop (keine Occlusion-Awareness). T-058 doku: offenes Gate flippt 460/519 → AR runter."
+        },
+        {
+          "ts": "2026-06-01T15:03:34Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "Repro läuft: 2559 Anker-Instanzen real GDRNPP. Flip-Rate (rot_sym>90°): well-vis[0.6-0.95]=2.0% vs partial[0.2-0.6]=11.2% (5.5×). Metric CATCHES Flip (sym_mean=180° für exakten transverse flip — cont-Y verzeiht NICHT). cpu_edge bei partial: 1/6 fixed, korrekte flip180-Hyp scort NIEDRIGER als geflippte coarse."
+        },
+        {
+          "ts": "2026-06-01T15:05:32Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "AK3 bewiesen: cpu_edge OPEN-gate trennt well-vis 8/12 (korrekte flip180-Hyp gewinnt) aber partial nur 2/12. DEFAULT-gate(0.15) schaltet selbst well-vis fast nie (2/12 switch, 0 fixed) → T-058-Konservatismus blockt auch legitime Fixes. Root-Cause + Mechanismus isoliert."
+        },
+        {
+          "ts": "2026-06-01T15:08:17Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "S-001 DONE. Root-Cause: GDRNPP-Coarse selbst wählt 180°-Quer-Becken bei Occlusion (Single-View-Ambiguität, Adapter unschuldig). Flip-Rate well-vis[0.6-0.8]=1.8% vs partial[0.2-0.4]=43% (~24×), [0.2-0.6]=11.2%. Metrik MISST den Flip (cont-Y verzeiht NICHT, sym=180°) → keine Falle. cpu_edge: well-vis 8/12 fixbar (offenes Gate) aber Default-Gate(0.15) schaltet nicht; partial 2/12 nicht trennbar. Harness: box_src/anker_flip_repro.py. Output: repro.md + bug-note. Nichts committed."
+        },
+        {
+          "ts": "2026-06-01T15:09:21Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-084",
+      "title": "S-002: Approach-ADR Anker-Flip-Fix (a/b/c/d, training-frei bevorzugt)",
+      "description": "Viktor: Fix-Strategie entscheiden + ADR. Hebel = visibility-aware scoring (Nora-Befund).",
+      "column": "done",
+      "assignee": "viktor-lead",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T14:54:52Z",
+      "updated": "2026-06-01T15:09:21Z",
+      "started_at": "2026-06-01T14:55:16Z",
+      "completed_at": "2026-06-01T15:09:21Z",
+      "comments": [
+        {
+          "ts": "2026-06-01T15:00:57Z",
+          "author": "viktor-lead",
+          "text": "ADR-020 linked: decisions/adr-020-pose-anker-flip-visibility-aware.md + session adr.md. S-004-Vorbedingung: models_info.json Anker = nur continuous-Y, kein discreter Quer-Twist."
+        }
+      ],
+      "logs": [
+        {
+          "ts": "2026-06-01T14:55:16Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T15:00:57Z",
+          "agent": "viktor-lead",
+          "level": "success",
+          "msg": "ADR fertig: Option (a) visibility-aware cpu_edge-Scorer (Score nur ueber mask_visib), training-frei. T-058-ceiling widerlegt (war full-vis-Voll-Crop, nie partial-vis-restringiert). Limit: greift nur wenn Kopf sichtbar."
+        },
+        {
+          "ts": "2026-06-01T15:09:21Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-085",
+      "title": "S-003: Fix implementieren — occlusion/visibility-aware Flip-Resolution + Wiring e2e_infer",
+      "description": "Kai: e2e_infer _make_rc_refiner baut edge-mask aus ganzem Crop ohne Visibility-Awareness -> Angriffspunkt.",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T14:54:52Z",
+      "updated": "2026-06-01T16:20:05Z",
+      "started_at": "2026-06-01T15:09:21Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T15:09:21Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T15:09:21Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Spawn: visibility-aware refine_rc (cpu_edge_score visib_mask + visibility-konditioniertes Gate), Wiring e2e_infer, Eval before/after auf partial-vis-Subset. Branch team/anker-flip-fix."
+        },
+        {
+          "ts": "2026-06-01T15:16:22Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "refine_rc visibility-aware + e2e_infer visaware-Flag implementiert. Tests grün: 18/18 test_refine_rc (6 neue visib-Tests), gesamte Suite 121/121 (1 vorbestehender TTA-Float-Flake 1.2e-6<1e-6 auch auf main, unabhängiger Pfad)."
+        },
+        {
+          "ts": "2026-06-01T15:43:21Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "S-003 DONE. Commits dd406f2 (vis-aware refine_rc Code, 18/18 Tests grün) + 674a59b (before/after Eval-Harness). FLIP-RATE partial-vis[0.2-0.6): Separierbarkeit 36%->71% (open gate, ~2x), Flip-Rate ~halbiert. Default-Gate 0.15: inert aber REGRESSIONSFREI (AFTER=RAW). well-vis[0.6-0.8) Default-Gate: AFTER=RAW=0.085 keine Regression. Score-Fix bewiesen; Gate-Recalibration = S-004-Reststellhebel. Limit bestätigt (greift bei Kopf-sichtbar, nicht 0)."
+        },
+        {
+          "ts": "2026-06-01T15:43:21Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-01T15:44:50Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_review → in_progress"
+        },
+        {
+          "ts": "2026-06-01T15:44:51Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Scorer-Fix wirkt (Separierbarkeit 2x, Flip ~halbiert) aber bei Default-Gate inert. Continuation: visibility-gestaffeltes Gate kalibrieren (partial-vis-Gewinn OHNE well-vis-Regression)."
+        },
+        {
+          "ts": "2026-06-01T15:52:02Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "v2 Staggered-Gate Code fertig + Unit-Tests 25/25 grün (7 neue: 3-Band-Schedule, aggressiv-occ, konservativ-well, never-below-floor, hard-floor-respect, backward-compat, refine_detection-threading)."
+        },
+        {
+          "ts": "2026-06-01T16:12:16Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Gate-Kalibrierung PARETO-SAUBER: held-out report partial-vis Flip 7.52%->2.26% (-70% rel, fix7/brk0), well-vis 6.29%->6.29% (brk0, strukturell garantiert). Schedule=occ[0.20,0.50) margin_occ=0.02 margin_well=0.15 (=DEFAULT_MARGIN_SCHEDULE). Commit b1a715d. Tests 25/25. Live-Default None (flag-gated). eval_s003.md aktualisiert."
+        },
+        {
+          "ts": "2026-06-01T16:12:16Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-01T16:13:34Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
+        },
+        {
+          "ts": "2026-06-01T16:20:05Z",
+          "agent": "ravi-qs",
+          "level": "success",
+          "msg": "Gate PASS — 25/25 refine_rc grün (12 alt + 13 neu), Rückwärtskompat empirisch bewiesen (96-Kombi-Sweep 0 Mismatch + boundary <= identisch), Clipping korrekt (sil∩vis/tgt∩vis/edges∩vis_dil = ADR §5.1), staggered Bänder verifiziert, Live-Default unverändert (3 Flags AUS/None), kip_server unangetastet. Eval trägt."
+        }
+      ]
+    },
+    {
+      "id": "T-086",
+      "title": "S-004: Eval-Gate — sym-aware BOP misst Quer-Flip wirklich + before/after Flip-Rate",
+      "description": "Ravi: rot_err_deg_sym darf den 180-Quer-Flip NICHT als Y-Sym verzeihen. >=10 partial-vis Szenen vorher/nachher.",
+      "column": "done",
+      "assignee": "ravi-qs",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T14:54:52Z",
+      "updated": "2026-06-01T16:20:05Z",
+      "started_at": "2026-06-01T16:13:34Z",
+      "completed_at": "2026-06-01T16:20:05Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T16:13:34Z",
+          "agent": "ravi-qs",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T16:20:05Z",
+          "agent": "ravi-qs",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-06-01T16:20:05Z",
+          "agent": "ravi-qs",
+          "level": "success",
+          "msg": "Eval-Gate PASS. Metrik misst den Flip (PART_SYMMETRY=continuous-Y only, kein discreter C₂; metric_check Self-Test CATCHES). calib/report scene_id-Parität sauber (Schedule auf calib gepickt, auf held-out report berichtet, kein Overfit). well-vis broke=0 STRUKTURELL verifiziert (m_well=shipped 0.15 → well-vis byte-identisch zur Baseline, Spot-Check st_well==sc_well). Effekt-Richtung lokal reproduziert (static inert / staggered fixes 0 broke). Box-Absolutzahlen nicht re-run (zu teuer), Methodik+Kern+Metrik bewiesen."
+        }
+      ]
+    },
+    {
+      "id": "T-087",
+      "title": "S-005: Doku/Decision + optional Live-Verdrahtung kip_server + Merge-Ready",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T14:54:52Z",
+      "updated": "2026-06-01T16:22:34Z",
+      "started_at": "2026-06-01T16:22:34Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T16:22:34Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        }
+      ]
+    },
+    {
+      "id": "T-088",
+      "title": "Fix pre-existing TTA medoid-Float-Flake (test_tta_wrapper_recovers_true_rotation 1.2e-6<1e-6)",
+      "description": "",
+      "column": "backlog",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P3",
+      "tags": [
+        "pose,tech-debt"
+      ],
+      "session": "",
+      "created": "2026-06-01T16:20:05Z",
+      "updated": "2026-06-01T16:20:05Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
     }
   ]
 }

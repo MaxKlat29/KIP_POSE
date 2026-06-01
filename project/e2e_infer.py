@@ -95,6 +95,25 @@ PLANAR_TILT_CORRECT = False
 # scorer: "cpu_edge" (kein GPU, default) | "megapose" (GPU, finish-time).
 REFINE_RC_DEFAULT = False
 REFINE_RC_SCORER = "cpu_edge"
+# Visibility-aware Render-Compare (ADR-020, S-003, T-085). DEFAULT AUS. Eng
+# gescopter Pfad NUR für Eval/Repro: wenn AN und eine Detektion eine sichtbare
+# Region (`d["visib_mask"]`, offline aus BOP `mask_visib/`) trägt, scoret refine_rc
+# NUR über die sichtbare Region + ein visibility-konditioniertes Gate. Löst den
+# Anker-180°-Quer-Flip bei partieller Sicht (Kopf sichtbar, Schaft occludiert).
+# LIVE bleibt unberührt: der OBB-Detektor liefert keine `mask_visib` -> visib_mask
+# ist im Live-Pfad None -> exakt heutiges Verhalten (kein stiller Drift). Live-
+# Proxy-Visibility = dokumentierter Follow-up (S-005), NICHT hier.
+REFINE_RC_VISAWARE_DEFAULT = False
+REFINE_RC_MIN_VISIB_FRACT = 0.25
+# Visibility-GESTAFFELTES Margin-Gate (ADR-020, S-003 v2, T-085). Wenn das visaware-
+# Flag AN ist UND eine Detektion eine sichtbare Region trägt, staffelt dieses
+# Schedule den effektiven Margin nach visib_fract: aggressiv (niedrig) im
+# occludierten Band, konservativ (= shipped 0.15) im well-vis Band, gar kein Switch
+# unterhalb der Mindest-Sichtbarkeit. Das ist der Hebel, der den vis-aware Score
+# operativ wirksam macht OHNE well-vis-Regression (statisches Gate kann beides nicht).
+# None -> kein Schedule (reines statisches Margin-Gate, rückwärtskompatibel). Die
+# konkreten Schwellen sind die T-085-Sweep-Kalibrierung (siehe eval_s003.md).
+REFINE_RC_MARGIN_SCHEDULE = None    # z.B. RC.DEFAULT_MARGIN_SCHEDULE wenn enabled
 # TTA (T-058, S-049). DEFAULT AUS. Inferenzseitig, RGB-only, kein Retrain. Härtet
 # die View-Empfindlichkeit der per-View-Einzel-Rotation von GDRNPP ab (in-plane
 # 90°-Rotationen des Crops, exakte Pixel-Ops, Rück-Transform + Aggregation auf
@@ -511,12 +530,20 @@ def call_gdrnpp(crop, K, bbox, obj_id, cfg=None):
 
 
 def _make_rc_refiner(obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
-                     full_hw, target_mask=None, scorer=REFINE_RC_SCORER, warn=print):
+                     full_hw, target_mask=None, scorer=REFINE_RC_SCORER,
+                     visib_mask=None, visib_fract=None,
+                     min_visib_fract=REFINE_RC_MIN_VISIB_FRACT,
+                     margin_schedule=REFINE_RC_MARGIN_SCHEDULE, warn=print):
     """Baut den per-Detektion-RC-Refiner-Callback (refine_rc.refine_detection).
 
     Der Callback bekommt (R_world, t_world) der Coarse-Pose und liefert die
     verfeinerte Welt-Rotation. None, wenn RC nicht verfügbar / kein Mesh. RGB-only:
     Kanten aus dem Crop, Silhouetten-Render aus dem CAD (mm).
+
+    VISIBILITY-AWARE (ADR-020, S-003): wenn `visib_mask` (sichtbare Region, offline
+    aus BOP `mask_visib/`) gegeben ist, scoret refine_rc NUR über die sichtbare
+    Region und gated visibility-konditioniert (`visib_fract`/`min_visib_fract`).
+    `visib_mask=None` (Live-Pfad) -> exakt heutiges Verhalten.
     """
     if RC is None or mesh_m is None:
         return None
@@ -524,6 +551,14 @@ def _make_rc_refiner(obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
     # Bildkanten des Crops, ins Vollbild an die bbox eingebettet (passt zum
     # Vollbild-Silhouetten-Render). Metall -> starke Kanten (ContourPose-Idee).
     image_edge_mask = RC.image_edges(crop, bbox=bbox, full_hw=full_hw)
+    vis = None if visib_mask is None else np.asarray(visib_mask, bool)
+    # visib_fract aus der Maske ableiten, falls nicht separat gegeben (sichtbare
+    # Pixel / Gesamt-Silhouette via target_mask, sonst absolut über visible_px-Gate).
+    vf = visib_fract
+    if vis is not None and vf is None and target_mask is not None:
+        tgt = np.asarray(target_mask, bool)
+        denom = float(max(tgt.sum(), vis.sum(), 1))
+        vf = float(vis.sum()) / denom
     # Ruhelagen-Body-Downs (für die Ruhelagen-Hypothesen) — optional, via trimesh.
     stable_downs = None
     try:
@@ -542,9 +577,12 @@ def _make_rc_refiner(obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
             R_world, verts_mm=verts_mm, t_world_m=t_world,
             table_origin_m=table_origin, R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K,
             hw=full_hw, target_mask=target_mask, image_edge_mask=image_edge_mask,
+            visib_mask=vis, visib_fract=vf, min_visib_fract=min_visib_fract,
+            margin_schedule=margin_schedule,
             sym_axis=(0.0, 1.0, 0.0), n_fold=n_fold, stable_downs=stable_downs,
             scorer=scorer, megapose_kwargs=mk)
-        warn(f"[rc] obj{obj_id}: {info['n_hyps']} Hyps, scorer={info['scorer']}, "
+        va = " visaware" if info.get("visib_aware") else ""
+        warn(f"[rc] obj{obj_id}: {info['n_hyps']} Hyps, scorer={info['scorer']}{va}, "
              f"best={info.get('best_tag')} switched={info.get('switched')}")
         return R_ref
 
@@ -555,6 +593,9 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
                    planar_refine=PLANAR_REFINE_DEFAULT,
                    tilt_correct=PLANAR_TILT_CORRECT,
                    refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER,
+                   refine_rc_visaware=REFINE_RC_VISAWARE_DEFAULT,
+                   rc_min_visib_fract=REFINE_RC_MIN_VISIB_FRACT,
+                   rc_margin_schedule=REFINE_RC_MARGIN_SCHEDULE,
                    tta=TTA_DEFAULT, tta_n_rot=TTA_N_ROT, tta_hflip=TTA_HFLIP,
                    tta_agg=TTA_AGG):
     """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3) ->
@@ -596,10 +637,18 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
         mesh_m = _load_mesh_verts_m(obj_id, warn=warn) if need_mesh else None
         rc_refiner = None
         if refine_rc:
+            # visibility-aware NUR wenn Flag AN UND die Detektion eine sichtbare
+            # Region trägt (offline aus BOP mask_visib/). Live-Pfad: None -> No-Op.
+            visib_mask = d.get("visib_mask") if refine_rc_visaware else None
+            visib_fract = d.get("visib_fract") if refine_rc_visaware else None
+            # gestaffeltes Margin-Gate NUR im visaware-Pfad (sonst kein visib_fract).
+            margin_schedule = rc_margin_schedule if refine_rc_visaware else None
             rc_refiner = _make_rc_refiner(
                 obj_id, mesh_m, crop, bbox, K, R_w2c, t_w2c, table_origin,
                 full_hw=(H, W), target_mask=d.get("mask"), scorer=rc_scorer,
-                warn=warn)
+                visib_mask=visib_mask, visib_fract=visib_fract,
+                min_visib_fract=rc_min_visib_fract,
+                margin_schedule=margin_schedule, warn=warn)
             if rc_refiner is not None:
                 n_rc += 1
         r = BOP.detection_to_result(
@@ -735,6 +784,7 @@ def build_pose_result(img_path, aligned, table_origin=TABLE_ORIGIN_SCENE):
 def run(image, out_path, cfg=None, warn=print,
         planar_refine=PLANAR_REFINE_DEFAULT, tilt_correct=PLANAR_TILT_CORRECT,
         refine_rc=REFINE_RC_DEFAULT, rc_scorer=REFINE_RC_SCORER,
+        refine_rc_visaware=REFINE_RC_VISAWARE_DEFAULT,
         tta=TTA_DEFAULT, tta_n_rot=TTA_N_ROT, tta_hflip=TTA_HFLIP,
         tta_agg=TTA_AGG):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
@@ -759,7 +809,9 @@ def run(image, out_path, cfg=None, warn=print,
     aligned = estimate_poses(rgb, dets, table_origin=TABLE_ORIGIN_SCENE,
                              cfg=cfg, warn=warn, planar_refine=planar_refine,
                              tilt_correct=tilt_correct, refine_rc=refine_rc,
-                             rc_scorer=rc_scorer, tta=tta, tta_n_rot=tta_n_rot,
+                             rc_scorer=rc_scorer,
+                             refine_rc_visaware=refine_rc_visaware,
+                             tta=tta, tta_n_rot=tta_n_rot,
                              tta_hflip=tta_hflip, tta_agg=tta_agg)
     doc = build_pose_result(image, aligned, table_origin=TABLE_ORIGIN_SCENE)
     errors = check_pose_result(doc) + _check_with_jsonschema(doc)
@@ -822,6 +874,10 @@ def main(argv=None):
     ap.add_argument("--rc-scorer", default=REFINE_RC_SCORER,
                     choices=["cpu_edge", "megapose"],
                     help="RC-Scorer: cpu_edge (kein GPU, default) | megapose (GPU)")
+    ap.add_argument("--refine-rc-visaware", action="store_true",
+                    help="RC visibility-aware: scoren NUR über die sichtbare Region "
+                         "(BOP mask_visib) + vis-konditioniertes Gate (Eval/Repro; "
+                         "Live ohne mask_visib = No-Op). ADR-020/T-085. Default aus.")
     ap.add_argument("--tta", action="store_true",
                     help="Test-Time-Augmentation (in-plane-Rotationen) an (default aus)")
     ap.add_argument("--tta-n-rot", type=int, default=TTA_N_ROT, choices=[1, 2, 4],
@@ -836,7 +892,8 @@ def main(argv=None):
     out = a.out or str(HERE / "temp" / "pose_result.json")
     doc = run(a.image, out, cfg=cfg, planar_refine=not a.no_planar_refine,
               tilt_correct=a.tilt_correct, refine_rc=a.refine_rc,
-              rc_scorer=a.rc_scorer, tta=a.tta, tta_n_rot=a.tta_n_rot,
+              rc_scorer=a.rc_scorer, refine_rc_visaware=a.refine_rc_visaware,
+              tta=a.tta, tta_n_rot=a.tta_n_rot,
               tta_hflip=a.tta_hflip, tta_agg=a.tta_agg)
     print(f"\n[e2e] {len(doc['results'])} Teile -> {out}")
     for r in doc["results"]:
