@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-01T16:22:34Z",
+  "updated": "2026-06-01T21:00:19Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 89,
+  "next_id": 93,
   "tickets": [
     {
       "id": "T-001",
@@ -4680,7 +4680,7 @@
       "id": "T-082",
       "title": "Dach: Anker-180-Flip-Fix bei partieller Sicht (/team 2026-06-01-anker-flip-fix)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "queen",
       "instance": "",
       "priority": "P0",
@@ -4690,11 +4690,24 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T14:51:09Z",
-      "updated": "2026-06-01T14:51:09Z",
+      "updated": "2026-06-01T16:26:23Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T16:26:23Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T16:26:23Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        },
+        {
+          "ts": "2026-06-01T16:26:23Z",
+          "agent": "queen",
+          "level": "success",
+          "msg": "Session anker-flip-fix komplett: Root-Cause (Theo) + ADR-020 (Viktor) + visibility-aware Fix (Kai, partial-vis Flip -70%, 0 well-vis-Regression) + Gate PASS (Ravi) + merged 5b0df3d gepusht (Sam). Flag-gated, kein Deploy. FUs angelegt."
+        }
+      ]
     },
     {
       "id": "T-083",
@@ -4802,7 +4815,7 @@
       "id": "T-085",
       "title": "S-003: Fix implementieren — occlusion/visibility-aware Flip-Resolution + Wiring e2e_infer",
       "description": "Kai: e2e_infer _make_rc_refiner baut edge-mask aus ganzem Crop ohne Visibility-Awareness -> Angriffspunkt.",
-      "column": "in_review",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P0",
@@ -4812,9 +4825,9 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T14:54:52Z",
-      "updated": "2026-06-01T16:20:05Z",
+      "updated": "2026-06-01T16:24:52Z",
       "started_at": "2026-06-01T15:09:21Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T16:24:52Z",
       "comments": [],
       "logs": [
         {
@@ -4888,6 +4901,18 @@
           "agent": "ravi-qs",
           "level": "success",
           "msg": "Gate PASS — 25/25 refine_rc grün (12 alt + 13 neu), Rückwärtskompat empirisch bewiesen (96-Kombi-Sweep 0 Mismatch + boundary <= identisch), Clipping korrekt (sil∩vis/tgt∩vis/edges∩vis_dil = ADR §5.1), staggered Bänder verifiziert, Live-Default unverändert (3 Flags AUS/None), kip_server unangetastet. Eval trägt."
+        },
+        {
+          "ts": "2026-06-01T16:24:52Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-06-01T16:24:52Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged -> main as 5b0df3d (--no-ff Merge von team/2026-06-01-anker-flip-fix; commits dd406f2+674a59b+b1a715d). Pushed origin/main ba8ce9d..5b0df3d. Tests auf main: 25/25 refine_rc gruen."
         }
       ]
     },
@@ -4905,9 +4930,9 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T14:54:52Z",
-      "updated": "2026-06-01T16:20:05Z",
+      "updated": "2026-06-01T20:57:31Z",
       "started_at": "2026-06-01T16:13:34Z",
-      "completed_at": "2026-06-01T16:20:05Z",
+      "completed_at": "2026-06-01T20:57:31Z",
       "comments": [],
       "logs": [
         {
@@ -4927,6 +4952,18 @@
           "agent": "ravi-qs",
           "level": "success",
           "msg": "Eval-Gate PASS. Metrik misst den Flip (PART_SYMMETRY=continuous-Y only, kein discreter C₂; metric_check Self-Test CATCHES). calib/report scene_id-Parität sauber (Schedule auf calib gepickt, auf held-out report berichtet, kein Overfit). well-vis broke=0 STRUKTURELL verifiziert (m_well=shipped 0.15 → well-vis byte-identisch zur Baseline, Spot-Check st_well==sc_well). Effekt-Richtung lokal reproduziert (static inert / staggered fixes 0 broke). Box-Absolutzahlen nicht re-run (zu teuer), Methodik+Kern+Metrik bewiesen."
+        },
+        {
+          "ts": "2026-06-01T20:53:28Z",
+          "agent": "ravi-qs",
+          "level": "info",
+          "msg": "moved: done → in_progress"
+        },
+        {
+          "ts": "2026-06-01T20:57:31Z",
+          "agent": "ravi-qs",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -4944,7 +4981,7 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T14:54:52Z",
-      "updated": "2026-06-01T16:22:34Z",
+      "updated": "2026-06-01T21:00:19Z",
       "started_at": "2026-06-01T16:22:34Z",
       "completed_at": null,
       "comments": [],
@@ -4954,6 +4991,24 @@
           "agent": "sam-devops",
           "level": "info",
           "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T16:24:52Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-06-01T16:24:52Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merge-Coordinator-Job fertig. Branch -> main gemergt (5b0df3d) + gepusht (origin/main ba8ce9d..5b0df3d). anker_flip_repro.py sauber als create-mode mitgekommen (820 Z., kein untracked-Konflikt). Volle Suite regressionsfrei (128 passed/7 skipped/1 pre-existing TTA-Flake=T-088). KEIN Deploy (refine_rc_visaware-Enablement = separate Max/Viktor-Entscheidung, braucht Live-mask_visib-Quelle)."
+        },
+        {
+          "ts": "2026-06-01T21:00:19Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: done → in_progress"
         }
       ]
     },
@@ -4975,6 +5030,185 @@
       "completed_at": null,
       "comments": [],
       "logs": []
+    },
+    {
+      "id": "T-089",
+      "title": "FU: refine_rc_visaware in deployter Pipeline aktivieren (braucht Live-mask_visib-Quelle)",
+      "description": "Enablement-Entscheidung Max/Viktor. OBB-Detektor liefert keine mask_visib -> Proxy-Visibility-Quelle noetig (Detektor-Maske/Segmentierung). Erst dann greift der Flip-Fix LIVE (aktuell nur Eval/flag).",
+      "column": "backlog",
+      "assignee": "viktor-lead",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "sprint-anker-flip",
+        "pose",
+        "followup"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T16:26:23Z",
+      "updated": "2026-06-01T16:26:23Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-090",
+      "title": "FU: Retrain-DR mit partial/cropped/occluded Anker-Views (prinzipieller Fix fuer side-on/Residual)",
+      "description": "Kai: gen_sdg_arm_visible um Occlusion/Crop-DR erweitern, GDRNPP-Anker re-trainieren -> Kopf-Eigenasymmetrie lernen. Loest den side-on-Outlier [0.95,1.0] + Residual, das training-frei nicht geht. GPU-Stunden.",
+      "column": "backlog",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "pose",
+        "followup"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T16:26:23Z",
+      "updated": "2026-06-01T16:26:23Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-091",
+      "title": "S-006: Occlusion-Consistency Design (teil-agnostisch) + ADR-020-Amendment",
+      "description": "Viktor: free-space-refutation Scoring-Term, teil-agnostisch (kein Kopf/Spitze-Wissen), free-space-map Definition Eval(GT mask\\mask_visib) vs Live(Proxy). Architektur-Sanity + ADR-020 erweitern.",
+      "column": "done",
+      "assignee": "viktor-lead",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T19:40:42Z",
+      "updated": "2026-06-01T20:53:28Z",
+      "started_at": "2026-06-01T19:40:42Z",
+      "completed_at": "2026-06-01T19:47:06Z",
+      "comments": [
+        {
+          "ts": "2026-06-01T19:46:55Z",
+          "author": "viktor-lead",
+          "text": "ADR-020 amended (decisions/adr-020-pose-anker-flip-visibility-aware.md, Abschnitt 'Amendment 2026-06-01: Occlusion-Consistency teil-agnostisch') + session adr.md Wave-D-Block. Integration=HYBRID, free_space_mask Eval+Live definiert, Teil-Agnostik harte Anforderung, Rest-Grenze ehrlich."
+        }
+      ],
+      "logs": [
+        {
+          "ts": "2026-06-01T19:40:42Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T19:46:55Z",
+          "agent": "viktor-lead",
+          "level": "success",
+          "msg": "ADR-020 amended (Abschnitt 'Amendment 2026-06-01: Occlusion-Consistency, teil-agnostisch'): free-space-refutation = negative Evidenz komplementaer zum vis-aware Score. Integration HYBRID (weiche Penalty -w_free*violation + harte Veto-Schwelle violation>tau_veto~0.5-0.6). free=Frame ^ !mask_visib ^ !occluded ^ !andere_Masken (occluded=mask_full\\mask_visib); off-frame+eigene-occludierte KEIN free. Teil-agnostisch als harte Anforderung. Kein Architektur-Block fuer Kais T-092 (disjunkte Pixel, komplementaer)."
+        },
+        {
+          "ts": "2026-06-01T19:47:06Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-06-01T20:53:28Z",
+          "agent": "viktor-lead",
+          "level": "info",
+          "msg": "moved: done → done"
+        }
+      ]
+    },
+    {
+      "id": "T-092",
+      "title": "S-007: Occlusion-Consistency Term implementieren + Eval (Flip-Rate + AR before/after)",
+      "description": "Kai: free-space-violation Scorer in refine_rc (teil-agnostisch), integriert mit visibility-aware. Eval auf Box: Flip-Rate UND sym-aware AR vorher/nachher, partial-vis + well-vis, Anker (+ Zahnrad fuer Generalitaet). flag-gated.",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "sprint-anker-flip",
+        "pose"
+      ],
+      "session": "2026-06-01-anker-flip-fix",
+      "created": "2026-06-01T19:40:42Z",
+      "updated": "2026-06-01T21:00:19Z",
+      "started_at": "2026-06-01T19:40:42Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T19:40:42Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T19:42:21Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Starting S-007: Occlusion-Consistency-Scoring (free-space-refutation, teil-agnostisch). Branch team/2026-06-01-anker-flip-occ von main 5b0df3d. Komplement zum gemergten vis-aware Score (T-085)."
+        },
+        {
+          "ts": "2026-06-01T19:49:14Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "refine_rc.py: free_space_violation + build_free_space_mask + hartes Refutation-Gate (teil-agnostisch) gebaut. Unit-Tests 33/33 gruen (8 neue, inkl. nur-Schaft-Separierbarkeit + Zahnrad-Agnostik). Rueckwaertskompatibel (free_space_mask=None = altes Verhalten)."
+        },
+        {
+          "ts": "2026-06-01T19:54:19Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Box-Smoke (cap=8/band) EHRLICH: free-space-violation NICHT band-vergleichbar. Occluded-Baender coarse_viol~0.05 (refutation feuert kaum, dilate=2 erodiert Signal), full-vis coarse_viol~0.34 (riesige free-space-mask = render-vs-mask-misalignment = FALSE POSITIVE, brach 1 full-vis Fall). Brauche band-aware/dilate-Kalibrierung wie T-085 staggered. Sweep folgt."
+        },
+        {
+          "ts": "2026-06-01T20:19:05Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "EHRLICHES KERN-ERGEBNIS (real GDRNPP, shaft-only [0.20,0.40), n=238): coarse flip 0.433 -> vis-aware appearance ALLEIN (open gate) 0.198 (-54%) -> +free-space-refutation 0.193 (fixt nur 1/238 zusaetzlich). Free-space-Signal WEAK auf echtem Anker: der falsche Flip legt den Kopf in die OCCLUDED-Region (aus free-space ausgeschlossen), nicht in sichtbar-leeren Raum. Max-Hypothese empirisch ueberwiegend widerlegt — appearance+Gate (T-085) bleibt der Hebel."
+        },
+        {
+          "ts": "2026-06-01T20:26:16Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "TEIL-AGNOSTIK bestaetigt: free-space-Term laeuft auf Zahnrad (obj 6, n=16) ohne Crash, plausible Violations, n_fold=7 — nimmt nichts Anker-spezifisches an. coarse_violation full-vis band 0.233 bestaetigt false-positive-Regime (band-gate vf_hi=0.40 unterdrueckt korrekt). AR before/after laeuft noch (rc_anker_vis render slow)."
+        },
+        {
+          "ts": "2026-06-01T20:51:04Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "T-092 FERTIG. Commit 222a26d (Branch team/2026-06-01-anker-flip-occ). Flip-Rate nur-Schaft-Band [0.20,0.40) n=238: coarse 0.433 -> vis-aware appearance 0.198 (-54%) -> +free-space 0.193 (+1/238, marginal). AR before/after (sym-aware BOP-AR, val) KEINE Regression: Anker_Kurz 0.801=0.801, Anker_Lang 0.846->0.847, Zahnrad 0.645=0.645. Teil-Agnostik bestaetigt (Zahnrad crashfrei+schadensfrei). 33/33 Tests. EHRLICH: free-space-Signal schwach auf Single-View (Kopf in occluded, nicht free-space); Max-Hypothese ueberwiegend widerlegt, Term default AUS als Multi-View-Baustein."
+        },
+        {
+          "ts": "2026-06-01T20:51:04Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-01T20:57:31Z",
+          "agent": "ravi-qs",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
+        },
+        {
+          "ts": "2026-06-01T20:57:31Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Gate PASS — 33/33, free-space schliesst occluded+offframe korrekt aus, 0 AR-Regression, flag-off merge-safe"
+        },
+        {
+          "ts": "2026-06-01T21:00:19Z",
+          "agent": "ravi-qs",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
+        }
+      ]
     }
   ]
 }
