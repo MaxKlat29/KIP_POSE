@@ -1,0 +1,3 @@
+# Platzhalter. Hier wird das ROHE, unformatierte externe Python-Projekt (von Max)
+# abgelegt — 1:1 wie geliefert, ohne Umbau. Der adapter.py im Elternverzeichnis
+# kapselt es und bringt seinen Output auf den pose_result-Contract.

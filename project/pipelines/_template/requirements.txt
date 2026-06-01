@@ -1,0 +1,15 @@
+# Isolierte Dependencies fuer DIESE eine fremde Pipeline.
+#
+# Fremde Projekte bringen oft Deps mit, die mit project/requirements.txt (numpy/
+# pillow/jsonschema) ODER mit den Box-venvs (Isaac/GDRNPP/bop_toolkit) kollidieren.
+# Darum kriegt jede Pipeline ihre EIGENE venv:
+#
+#   python3 -m venv pipelines/<id>/.venv
+#   pipelines/<id>/.venv/bin/pip install -r pipelines/<id>/requirements.txt
+#
+# Der Adapter ruft die Pipeline dann entweder (a) in-process wenn die Deps
+# kompatibel sind, oder (b) als Subprocess in deren eigener venv (robuster bei
+# Dep-Konflikten — empfohlen fuer "komplett andere" Projekte).
+#
+# Hier die Pins des gelieferten Projekts eintragen:
+# beispiel-paket==1.2.3

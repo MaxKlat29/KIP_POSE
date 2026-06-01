@@ -104,6 +104,34 @@ def _discover_trained() -> set[str]:
     return found or set(TRAINED_OBJS)
 
 
+# ── Pipeline-Vergleich-Seam (additiv; bricht den Boot NIE) ──────
+# Erlaubt den Vergleich komplett anderer Pose-Pipelines (siehe pipelines/ +
+# docs/PIPELINE_INTEGRATION.md). Aktuell nur die gdrnpp-Referenz live; fremde
+# Pipelines werden als Adapter unter pipelines/<id>/ angebunden.
+try:
+    from pipelines import registry as _pipe_registry
+except Exception:  # noqa: BLE001 — Seam ist optional, darf den Server nie crashen
+    _pipe_registry = None
+
+
+def _resolve_pipeline(pipeline: str) -> str:
+    """Validiert den optionalen pipeline-Param. Default 'gdrnpp' = UNVERAENDERTER
+    Live-Pfad. Fremde, noch nicht angebundene Pipelines -> 501 (kein stiller Fallback)."""
+    pid = (pipeline or "gdrnpp").strip()
+    if pid == "gdrnpp":
+        return pid
+    if _pipe_registry is None:
+        raise HTTPException(501, "Pipeline-Vergleich nicht verfuegbar (pipelines-Paket fehlt).")
+    try:
+        ad = _pipe_registry.get(pid)
+    except KeyError:
+        raise HTTPException(404, f"Unbekannte Pipeline '{pid}'.")
+    if not ad.available:
+        raise HTTPException(501, f"Pipeline '{pid}' ist noch nicht angebunden (Scaffold).")
+    # Routing in einen fremden Adapter wird verdrahtet, sobald welche geliefert sind.
+    raise HTTPException(501, f"Routing fuer Pipeline '{pid}' folgt — bisher nur gdrnpp live.")
+
+
 # ── Static frontend (gemountet zuletzt, damit /api Vorrang hat) ──
 # /api/* zuerst definieren, dann StaticFiles auf "/" als Catch-all.
 
@@ -141,6 +169,95 @@ def metrics():
         else:
             out[slug] = {"status": "training_or_pending"}
     return {"objects": out, "trained": sorted(_discover_trained())}
+
+
+@app.get("/api/pipelines")
+def pipelines():
+    """Registrierte Pose-Pipelines fuer den Vergleich (Dropdown + Harness).
+
+    Fallback wenn das Seam-Paket fehlt: nur die gdrnpp-Referenz. Der Web-Viewer
+    befuellt das Modell-Dropdown hieraus (verfuegbar=enabled, sonst disabled)."""
+    if _pipe_registry is None:
+        return {"seam": "unavailable",
+                "pipelines": [{"id": "gdrnpp", "name": "GDRNPP (RGB)",
+                               "description": "Referenz/Baseline", "available": True}]}
+    return {"seam": "ok", "pipelines": _pipe_registry.all_pipelines()}
+
+
+@app.get("/api/compare")
+def compare(scene: int = 0, im: int = -1, pipelines: str = ""):
+    """STUB: Multi-Pipeline-Side-by-Side. Aktiv sobald >=2 Pipelines verfuegbar sind
+    (siehe docs/PIPELINE_INTEGRATION.md + compare_pipelines.py)."""
+    avail = _pipe_registry.available_ids() if _pipe_registry else ["gdrnpp"]
+    if len(avail) < 2:
+        raise HTTPException(501, f"Vergleich braucht >=2 verfuegbare Pipelines; aktuell verfuegbar: "
+                                 f"{avail}. Fremde Pipelines werden via pipelines/<id>/ angebunden.")
+    raise HTTPException(501, "Side-by-Side-Verdrahtung folgt (siehe docs/PIPELINE_INTEGRATION.md).")
+
+
+# ── Live-Tab: on-demand Proxy zum Jetson-Zellen-Controller ──────────────────
+# Die Workstation erreicht den Jetson (172.22.192.166, KIT-wbk) on-demand ueber
+# SCOPED KIT-VPN — NUR Route zum Jetson, KEIN Full-Tunnel (box_src/kit_vpn_scoped_connect.sh).
+# Auf dem Jetson laeuft on-demand (von Max gestartet, NICHT von uns deployt)
+# jetson_live/live_server.py. Solange das nicht laeuft -> saubere 503 (kein Crash).
+LIVE_JETSON = os.environ.get("LIVE_JETSON_URL", "http://172.22.192.166:8090").rstrip("/")
+
+
+def _live_fetch(path, method="GET", timeout=8):
+    import urllib.request
+    req = urllib.request.Request(f"{LIVE_JETSON}{path}", method=method)
+    r = urllib.request.urlopen(req, timeout=timeout)
+    return r.status, r.headers.get_content_type(), r.read()
+
+
+@app.get("/api/live/status")
+def live_status():
+    """Erreichbarkeit des Jetson-live_server (on-demand-Check, kein Dauerzustand)."""
+    try:
+        _st, _ct, body = _live_fetch("/health", timeout=5)
+        d = json.loads(body.decode())
+        return {"reachable": True, "jetson": LIVE_JETSON,
+                "camera_connected": d.get("camera_connected"), "detail": d}
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse(status_code=503, content={
+            "reachable": False, "jetson": LIVE_JETSON,
+            "hint": "Jetson-live_server nicht erreichbar. Workstation-VPN aktiv "
+                    "(box_src/kit_vpn_scoped_connect.sh)? live_server auf dem Jetson gestartet? Kamera dran?",
+            "detail": str(e)})
+
+
+@app.get("/api/live/preview")
+def live_preview():
+    """Proxyt EIN aktuelles Vorschau-Frame (JPEG) vom Jetson. FE pollt on-demand."""
+    import io as _io
+    try:
+        _st, ct, body = _live_fetch("/preview", timeout=10)
+        return StreamingResponse(_io.BytesIO(body), media_type=ct or "image/jpeg")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(503, f"Live-Vorschau nicht verfuegbar: {e}")
+
+
+@app.post("/api/live/capture_infer")
+def live_capture_infer():
+    """Triggert on-demand Capture+Inferenz auf dem Jetson, reicht das Ergebnis durch."""
+    try:
+        _st, _ct, body = _live_fetch("/capture_infer", method="POST", timeout=120)
+        return JSONResponse(json.loads(body.decode()))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(503, f"Capture+Inferenz fehlgeschlagen (Jetson erreichbar? Kamera dran?): {e}")
+
+
+@app.get("/api/live/frame/{name}")
+def live_frame(name: str):
+    """Proxyt ein vom Jetson nach /capture_infer geliefertes Ergebnis-Bild (image_url)."""
+    import io as _io, re as _re
+    if not _re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+        raise HTTPException(400, "ungueltiger Name")
+    try:
+        _st, ct, body = _live_fetch(f"/frame/{name}", timeout=10)
+        return StreamingResponse(_io.BytesIO(body), media_type=ct or "image/png")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(503, f"Frame nicht verfuegbar: {e}")
 
 
 @app.get("/api/sim/scenes")
@@ -340,8 +457,13 @@ def _real_infer_job(job, img_bytes, fname):
 
 
 @app.post("/api/real/infer_async")
-async def real_infer_async(image: UploadFile = File(...)):
-    """Startet Real-Upload-Inferenz im Hintergrund. Frontend pollt /api/real/job/<id>."""
+async def real_infer_async(image: UploadFile = File(...),
+                           pipeline: str = Form("gdrnpp")):
+    """Startet Real-Upload-Inferenz im Hintergrund. Frontend pollt /api/real/job/<id>.
+
+    pipeline (optional, default 'gdrnpp'): waehlt die Pose-Pipeline. Default = der
+    unveraenderte Live-Pfad; fremde Pipelines -> 501 bis angebunden (Seam-Scaffold)."""
+    _resolve_pipeline(pipeline)
     job = uuid.uuid4().hex[:8]
     _job_set(job, phase="Upload empfangen", pct=5)
     img_bytes = await image.read()
@@ -817,8 +939,12 @@ def _sim_generate_job(job):
 
 
 @app.get("/api/sim/generate_async")
-def sim_generate_async():
-    """Live-Isaac-Generation: NEUES Isaac-Bild rendern (~60s) → Detektor → GDRNPP."""
+def sim_generate_async(pipeline: str = "gdrnpp"):
+    """Live-Isaac-Generation: NEUES Isaac-Bild rendern (~60s) → Detektor → GDRNPP.
+
+    pipeline (optional, default 'gdrnpp'): Default = unveraenderter Live-Pfad;
+    fremde Pipelines -> 501 bis angebunden (Seam-Scaffold)."""
+    _resolve_pipeline(pipeline)
     job = uuid.uuid4().hex[:8]
     _job_set(job, phase="Isaac Sim startet", pct=5)
     threading.Thread(target=_sim_generate_job, args=(job,), daemon=True).start()

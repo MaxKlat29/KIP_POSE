@@ -5,6 +5,7 @@
 
 import { createViewer } from "./scene.js";
 import { createOriginMarker } from "./origin.js";
+import { createLive } from "./live.js";
 
 const API = "./api";
 const canvas = document.getElementById("scene");
@@ -38,12 +39,35 @@ async function pollHealth() {
 }
 pollHealth(); setInterval(pollHealth, 30000);
 
-// ── Modellauswahl: nur GDRNPP ist verfügbar, die anderen Optionen sind
-//    deaktivierte Platzhalter für den späteren Architektur-Vergleich. ──
+// ── Modellauswahl: Pipeline-Vergleich-Seam. Das Dropdown wird aus /api/pipelines
+//    befüllt (verfügbar=enabled, sonst disabled). Fremde Pipelines werden als
+//    Adapter unter pipelines/<id>/ angebunden (siehe docs/PIPELINE_INTEGRATION.md).
+//    Default + Fallback bei Fehler = "gdrnpp" -> unveränderter Live-Pfad. ──
 const modelSel = document.getElementById("model-sel");
+function currentPipeline() { return modelSel.value || "gdrnpp"; }
 modelSel.addEventListener("change", () => {
   if (!modelSel.value) modelSel.value = "gdrnpp";   // Platzhalter -> zurück auf GDRNPP
 });
+async function populatePipelines() {
+  try {
+    const data = await (await fetch(`${API}/pipelines`)).json();
+    const list = data.pipelines || [];
+    if (!list.length) return;                         // Fallback: statisches Markup behalten
+    modelSel.innerHTML = "";
+    for (const p of list) {
+      const opt = document.createElement("option");
+      opt.value = p.available ? p.id : "";
+      opt.disabled = !p.available;
+      opt.textContent = p.available ? p.name : `${p.name} — noch nicht angebunden`;
+      if (p.id === "gdrnpp") opt.selected = true;
+      modelSel.appendChild(opt);
+    }
+    if (!modelSel.value) modelSel.value = "gdrnpp";
+  } catch {
+    /* Endpoint (noch) nicht da -> statisches gdrnpp-Markup bleibt. */
+  }
+}
+populatePipelines();
 
 // ── Ladebalken-Helper ──
 //   set(pct, phase) — echter Prozent + Phasen-Label (z.B. aus /api/.../job/<id>)
@@ -91,33 +115,39 @@ document.getElementById("reset-view").addEventListener("click", () => {
   viewer.resetView?.();
 });
 
-// ── Tab-Switch ──
+// ── Tab-Switch (Real / Simulation / Live) ──
 const tabReal = document.getElementById("tab-real");
 const tabSim  = document.getElementById("tab-sim");
+const tabLive = document.getElementById("tab-live");
 const scrReal = document.getElementById("screen-real");
 const scrSim  = document.getElementById("screen-sim");
+const scrLive = document.getElementById("screen-live");
 const legend  = document.getElementById("legend");
+const live = createLive();
 let simInited = false;
 function showScreen(which) {
-  const real = which === "real";
-  tabReal.classList.toggle("kip-tab--active", real);
-  tabSim.classList.toggle("kip-tab--active", !real);
-  scrReal.hidden = !real; scrSim.hidden = real;
-  legend.hidden = real;                 // blau/rot-Legende nur im Sim-Screen
+  tabReal.classList.toggle("kip-tab--active", which === "real");
+  tabSim.classList.toggle("kip-tab--active", which === "sim");
+  tabLive.classList.toggle("kip-tab--active", which === "live");
+  scrReal.hidden = which !== "real";
+  scrSim.hidden  = which !== "sim";
+  scrLive.hidden = which !== "live";
+  legend.hidden  = which !== "sim";     // blau/rot-Legende nur im Sim-Screen
   const pip = document.getElementById("pip");
-  if (real) {
+  if (which !== "live") live.onHide();  // Live-Polling stoppen beim Wegwechseln
+  if (which === "real") {
     viewer.setParts([]);                // Real ohne Foto: nur Zelle, keine Geister
     if (!chosenFile) pip.hidden = true;
-  } else {
+  } else if (which === "sim") {
     loadMetrics();
-    // erstes Mal Sim-Tab: nicht automatisch live generieren (60s Wartezeit) —
-    // Max druckt selbst auf den Button. Bei Folge-Tab-Wechseln zeigen wir die
-    // letzte Inferenz weiterhin im Viewer.
     simInited = true;
+  } else if (which === "live") {
+    live.onShow();
   }
 }
 tabReal.addEventListener("click", () => showScreen("real"));
 tabSim.addEventListener("click", () => showScreen("sim"));
+tabLive.addEventListener("click", () => showScreen("live"));
 
 // ── PiP-Controls: Boxen-Toggle + Foto-View + Vergroesserung ──
 let lastCamPose = null;   // {cam_pos, look_at, up, fov_y} der zuletzt geladenen Szene
@@ -221,6 +251,7 @@ runBtn.addEventListener("click", async () => {
     fd.append("image", chosenFile);
     fd.append("tta", document.getElementById("real-tta").checked);
     fd.append("refine_rc", document.getElementById("real-rc").checked);
+    fd.append("pipeline", currentPipeline());     // Default gdrnpp = unveränderter Pfad
     const r = await fetch(`${API}/real/infer_async`, { method: "POST", body: fd });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     const { job } = await r.json();
@@ -279,7 +310,7 @@ async function inferLiveSim() {
   simStat.className = "kip-status"; simStat.textContent = "";
   simBar.set(5, "Isaac Sim startet");
   try {
-    const r = await fetch(`${API}/sim/generate_async`);
+    const r = await fetch(`${API}/sim/generate_async?pipeline=${encodeURIComponent(currentPipeline())}`);
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     const { job } = await r.json();
     // Live-Pipeline dauert ~60-80s, daher laengeres Polling-Intervall.
