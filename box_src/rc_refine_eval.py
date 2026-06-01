@@ -119,6 +119,16 @@ def load_mask(bop_root, sid, im, inst_idx):
     return np.array(Image.open(p)) > 0
 
 
+def load_full_mask(bop_root, sid, im, inst_idx):
+    """Volle Silhouetten-Maske (mask/, inkl. occludierter Teile) — der Detektor-
+    Maske-Proxy für den 'before'-Fall (Scorer über den ganzen Crop)."""
+    p = os.path.join(bop_root, "val", f"{sid:06d}", "mask",
+                     f"{im:06d}_{inst_idx:06d}.png")
+    if not os.path.isfile(p):
+        return None
+    return np.array(Image.open(p)) > 0
+
+
 def load_rgb(bop_root, sid, im):
     p = os.path.join(bop_root, "val", f"{sid:06d}", "rgb", f"{im:06d}.png")
     if not os.path.isfile(p):
