@@ -307,9 +307,92 @@ def render_silhouette(verts_mm, R_world, t_world_m, table_origin_m,
                                   BOP._as_R(K), hw)
 
 
+# ── Occlusion-Consistency / Free-Space-Refutation (ADR-020-Amendment, T-092) ──
+# TEIL-AGNOSTISCH — KEIN Kopf/Spitze/Schaft/Anker-Wissen. Reines negative-Evidenz-
+# Prinzip: eine Hypothese, die einen Teil ihrer VOLLEN Silhouette in eine Region
+# legt, die im Bild SICHTBAR LEER ist (frei von diesem Teil, von seiner eigenen
+# Occlusion und von anderen Teilen), widerspricht der Beobachtung — dort MÜSSTE man
+# das Teil sehen, sieht es aber nicht. Das ist der Hebel, den ein reiner appearance-
+# /visibility-aware-Score NICHT hat: er bewertet nur die SICHTBARE Region (wo
+# Evidenz IST), nicht die negative Evidenz (wo Evidenz FEHLT). Genau das löst den
+# „nur-Schaft-sichtbar, Kopf-verdeckt"-Fall: der falsche Flip projiziert den Kopf
+# in den sichtbar-leeren Raum → free_space_violation hoch → Hypothese verworfen.
+#
+# free_space_violation(hyp) = |full_silhouette(hyp) ∩ free_space_mask| / |full_silhouette(hyp)|
+#   ∈ [0,1].  Normiert auf die Silhouetten-Fläche der Hypothese (NICHT auf die
+#   free-space-Fläche), damit der Term skalen-invariant bleibt und „wie viel der
+#   Hypothese steht auf sichtbar-leerem Raum" misst.
+#
+# free_space_mask (Eval, GT vorhanden) = Frame ∧ ¬mask_visib(self) ∧ ¬occluded(self)
+#   ∧ ¬andere-Teil-Masken, mit occluded(self) = mask(self) \ mask_visib(self).
+#   OFF-FRAME (jenseits der Bildgrenzen) ist KEINE Verletzung — eine Silhouette
+#   jenseits des Frames kann man nicht sehen, also kann ihr Fehlen nicht widerlegen.
+#   `_camera_silhouette` rastert ohnehin nur Pixel innerhalb [0,H)×[0,W) → off-frame
+#   fällt automatisch aus dem Intersektions-Zähler heraus.
+
+
+def free_space_violation(full_silhouette, free_space_mask):
+    """Anteil der vollen Hypothesen-Silhouette, der auf sichtbar-leeren Raum fällt.
+
+    TEIL-AGNOSTISCH: nimmt nur eine bool-Silhouette + eine bool free-space-Maske.
+    Keine Annahme über Teil-Geometrie, Achsen, Kopf/Spitze.
+
+      violation = |silhouette ∩ free_space| / |silhouette|   ∈ [0,1]
+
+    Hoch = die Hypothese belegt viel sichtbar-leeren Raum = widerspricht der
+    Beobachtung (dort müsste das Teil zu sehen sein). Leere Silhouette → 0.0
+    (keine Aussage). off-frame zählt nicht (silhouette ist bereits frame-begrenzt).
+
+    Returns: float ∈ [0,1].
+    """
+    sil = np.asarray(full_silhouette, bool)
+    fs = np.asarray(free_space_mask, bool)
+    a = int(sil.sum())
+    if a == 0:
+        return 0.0
+    inter = int(np.logical_and(sil, fs).sum())
+    return float(inter) / float(a)
+
+
+def build_free_space_mask(frame_hw, visib_mask, occluded_mask=None,
+                          other_masks=None, dilate=0):
+    """Baue die free-space-Maske TEIL-AGNOSTISCH aus den GT-Masken eines Frames.
+
+    free_space = Frame ∧ ¬visib(self) ∧ ¬occluded(self) ∧ ¬(∪ andere-Teil-Masken)
+
+    Args:
+      frame_hw      : (H,W) des Vollbilds.
+      visib_mask    : (H,W) bool sichtbare Region DIESES Teils (BOP mask_visib).
+      occluded_mask : (H,W) bool occludierte Region dieses Teils
+                      (= full_mask \\ visib_mask). None → 0 (keine Occlusion bekannt).
+      other_masks   : Liste von (H,W) bool — sichtbare/volle Masken ANDERER Teile im
+                      selben Frame (ihre Pixel sind belegt, nicht frei). None → keine.
+      dilate        : optionale Pixel-Dilation der NICHT-freien Regionen, bevor sie
+                      vom Frame abgezogen werden (Sub-Pixel-Offset Render↔GT-Maske
+                      abfedern → konservativer, weniger false-positive-Violations am
+                      Rand belegter Regionen). 0 = exakt.
+
+    Returns: (H,W) bool free-space-Maske.
+    """
+    H, W = frame_hw
+    occupied = np.zeros((H, W), bool)
+    if visib_mask is not None:
+        occupied |= np.asarray(visib_mask, bool)
+    if occluded_mask is not None:
+        occupied |= np.asarray(occluded_mask, bool)
+    if other_masks:
+        for m in other_masks:
+            if m is not None:
+                occupied |= np.asarray(m, bool)
+    if dilate and dilate > 0:
+        occupied = _dilate_bool(occupied, int(dilate))
+    return ~occupied
+
+
 def cpu_edge_score(hyps, *, verts_mm, t_world_m, table_origin_m, R_w2c, t_w2c_mm,
                    K, hw, target_mask=None, image_edge_mask=None,
                    visib_mask=None, visib_dilate=2,
+                   free_space_mask=None,
                    w_iou=0.5, w_chamfer=0.5):
     """CPU-Render-and-Compare-Score pro Hypothese (höher = besser).
 
@@ -332,12 +415,23 @@ def cpu_edge_score(hyps, *, verts_mm, t_world_m, table_origin_m, R_w2c, t_w2c_mm
         Bildrand-Fremdkanten fließen nicht mehr in den Match.
     `visib_mask=None` → EXAKT das heutige Verhalten (rückwärtskompatibel).
 
-    Args:
-      visib_mask  : (H,W) bool sichtbare Region, oder None (= heutiges Verhalten).
-      visib_dilate: Pixel-Dilation der Visibility-Region fürs Chamfer-Clipping
-                    (Sub-Pixel-Offset Render↔GT-Maske abfedern). 0 = exaktes Clip.
+    OCCLUSION-CONSISTENCY / FREE-SPACE-REFUTATION (ADR-020-Amendment, T-092): wenn
+    `free_space_mask` (H,W bool, der sichtbar-LEERE Raum) gegeben ist, wird pro
+    Hypothese zusätzlich die `free_space_violation` über die VOLLE Silhouette
+    berechnet (NICHT visibility-geclippt — gerade der occludierte/leere Teil ist die
+    negative Evidenz) und in `detail[i]["free_space_violation"]` abgelegt. Der
+    appearance-Score selbst (IoU+Chamfer) bleibt unverändert; die Violation wird vom
+    Gate (`select_best_hypothesis`) als HARTES Verwerfungs-Kriterium genutzt. So
+    bleibt der Term sauber komplementär zum visibility-aware Score.
 
-    Returns: (scores (M,), detail list[dict] mit iou/chamfer pro Hypothese).
+    Args:
+      visib_mask     : (H,W) bool sichtbare Region, oder None (= heutiges Verhalten).
+      visib_dilate   : Pixel-Dilation der Visibility-Region fürs Chamfer-Clipping
+                       (Sub-Pixel-Offset Render↔GT-Maske abfedern). 0 = exaktes Clip.
+      free_space_mask: (H,W) bool sichtbar-leerer Raum, oder None (keine Violation).
+
+    Returns: (scores (M,), detail list[dict] mit iou/chamfer/free_space_violation
+             pro Hypothese).
     """
     hyps = np.asarray(hyps, float)
     if hyps.ndim == 2:
@@ -347,6 +441,7 @@ def cpu_edge_score(hyps, *, verts_mm, t_world_m, table_origin_m, R_w2c, t_w2c_mm
     tgt = None if target_mask is None else np.asarray(target_mask, bool)
     ie = None if image_edge_mask is None else np.asarray(image_edge_mask, bool)
     vis = None if visib_mask is None else np.asarray(visib_mask, bool)
+    fs = None if free_space_mask is None else np.asarray(free_space_mask, bool)
     vis_dil = (None if vis is None
                else (_dilate_bool(vis, visib_dilate) if visib_dilate > 0 else vis))
     # Visibility-restringierte Score-Inputs einmalig vorbereiten (hyp-invariant).
@@ -356,6 +451,9 @@ def cpu_edge_score(hyps, *, verts_mm, t_world_m, table_origin_m, R_w2c, t_w2c_mm
     for R in hyps:
         sil = render_silhouette(verts_mm, R, t_world_m, table_origin_m,
                                 R_w2c, t_w2c_mm, K, hw)
+        # Free-space-Violation auf der VOLLEN Silhouette (negative Evidenz) — vor
+        # dem visibility-Clipping, weil gerade die occludierte/leere Hälfte zählt.
+        fsv = 0.0 if fs is None else free_space_violation(sil, fs)
         # IoU: Silhouette gegen target — beide auf die sichtbare Region clippen.
         if tgt is not None:
             sil_iou = sil if vis is None else (sil & vis)
@@ -377,7 +475,8 @@ def cpu_edge_score(hyps, *, verts_mm, t_world_m, table_origin_m, R_w2c, t_w2c_mm
         wsum = wi + wc if (wi + wc) > 0 else 1.0
         s = (wi * iou + wc * cham) / wsum
         scores.append(s)
-        detail.append({"iou": float(iou), "chamfer": float(cham), "score": float(s)})
+        detail.append({"iou": float(iou), "chamfer": float(cham), "score": float(s),
+                       "free_space_violation": float(fsv)})
     return np.asarray(scores), detail
 
 
@@ -431,15 +530,40 @@ def staggered_min_margin(visib_fract, schedule):
     return float(schedule["margin_well"])         # well-vis -> konservativ (shipped)
 
 
+# ── Free-space-Refutation-Default (ADR-020-Amendment, T-092) ─────────────────
+# Schwelle für die HARTE VERWERFUNG einer Hypothese wegen free-space-Violation.
+# Eine Hypothese, deren VOLLE Silhouette zu mehr als diesem Anteil auf sichtbar-
+# leeren Raum fällt, wird disqualifiziert (kann nicht gewinnen — Ausnahme: die
+# Coarse selbst, die als Fallback IMMER wählbar bleibt). Konservativ gewählt:
+# erst eine SUBSTANZIELLE Masse auf leerem Raum widerlegt (Sub-Pixel-Render-Offset
+# + Maskenrand-Rauschen sollen nicht fälschlich verwerfen). Auf der Box kalibriert
+# (T-092-Sweep, siehe eval_s007.md). free_space_violations=None → kein Refutation-
+# Gate (exakt heutiges Verhalten, rückwärtskompatibel).
+DEFAULT_MAX_FREE_SPACE_VIOLATION = 0.30
+
+
 def select_best_hypothesis(hyps, scores, coarse_idx=0, min_margin=0.0,
                            visib_fract=None, min_visib_fract=0.0,
                            visible_px=None, min_visible_px=None,
-                           margin_schedule=None):
+                           margin_schedule=None,
+                           free_space_violations=None,
+                           max_free_space_violation=None):
     """Wähle die best-scorende Hypothese; gate gegen die Coarse (Index 0).
 
     GATE (MegaPose-Design): nur wechseln, wenn die beste Hypothese die Coarse um
     > min_margin schlägt — sonst Coarse behalten (ein schwacher Refiner soll eine
     gute Coarse nicht verschlechtern).
+
+    FREE-SPACE-REFUTATION-GATE (ADR-020-Amendment, T-092, teil-agnostisch): wenn
+    `free_space_violations` (M,) gegeben ist, wird JEDE Hypothese, deren Violation
+    `> max_free_space_violation` ist, HART VERWORFEN — sie kann nicht gewinnen, weil
+    sie sichtbar-leeren Raum belegt (negative Evidenz widerlegt sie). Die Coarse
+    (coarse_idx) wird NIE verworfen (Fallback muss wählbar bleiben). Die Selektion
+    nimmt das argmax NUR über die überlebenden Hypothesen; das Margin-Gate gilt
+    danach unverändert gegen die Coarse. Dies ist die komplementäre negative-Evidenz-
+    Schicht zum (positiven) visibility-aware appearance-Score: der Score sagt „wo
+    Evidenz IST", die Refutation sagt „wo Evidenz FEHLEN müsste". free_space_
+    violations=None → kein Refutation-Gate (rückwärtskompatibel).
 
     VISIBILITY-KONDITIONIERTES GATE (ADR-020, S-003): zusätzlich zum Margin-Gate
     nur wechseln, wenn die sichtbare Region GROSS/aussagekräftig genug ist, dass
@@ -464,11 +588,35 @@ def select_best_hypothesis(hyps, scores, coarse_idx=0, min_margin=0.0,
     Returns: (best_idx, info dict).
     """
     scores = np.asarray(scores, float)
-    best = int(np.argmax(scores))
+
+    # Free-space-Refutation: disqualifiziere Hypothesen mit zu hoher Violation
+    # (Coarse bleibt immer wählbarer Fallback), bevor das argmax gezogen wird.
+    eligible = np.ones(len(scores), bool)
+    refuted = []
+    if free_space_violations is not None:
+        thr = (DEFAULT_MAX_FREE_SPACE_VIOLATION if max_free_space_violation is None
+               else float(max_free_space_violation))
+        fsv = np.asarray(free_space_violations, float)
+        for i in range(len(scores)):
+            if i == coarse_idx:
+                continue                          # Coarse nie verwerfen (Fallback)
+            if i < len(fsv) and fsv[i] > thr:
+                eligible[i] = False
+                refuted.append(i)
+
+    # argmax NUR über die überlebenden (eligible) Hypothesen.
+    masked = np.where(eligible, scores, -np.inf)
+    best = int(np.argmax(masked))
     coarse_score = float(scores[coarse_idx])
     margin = float(scores[best]) - coarse_score
     base = {"best_idx": best, "best_score": float(scores[best]),
             "coarse_score": coarse_score, "margin": float(margin)}
+    if free_space_violations is not None:
+        base["n_refuted"] = len(refuted)
+        base["refuted_idx"] = refuted
+        base["max_free_space_violation"] = (
+            DEFAULT_MAX_FREE_SPACE_VIOLATION if max_free_space_violation is None
+            else float(max_free_space_violation))
 
     # Effektiver Margin: gestaffelt (visibility-konditioniert) oder statisch.
     eff_margin = float(min_margin)
@@ -588,6 +736,8 @@ def refine_detection(R0_world, *, verts_mm, t_world_m, table_origin_m,
                      visib_mask=None, visib_fract=None,
                      min_visib_fract=DEFAULT_MIN_VISIB_FRACT, min_visible_px=None,
                      visib_dilate=2, margin_schedule=None,
+                     free_space_mask=None, max_free_space_violation=None,
+                     free_space_vf_hi=None,
                      sym_axis=(0.0, 1.0, 0.0), n_fold=None, stable_downs=None,
                      scorer="cpu_edge", min_margin=None,
                      megapose_kwargs=None, **gen_kwargs):
@@ -617,6 +767,24 @@ def refine_detection(R0_world, *, verts_mm, t_world_m, table_origin_m,
     — aggressiv im occludierten Band, konservativ (= shipped) im well-vis Band, nie
     schalten unterhalb der Mindest-Sichtbarkeit. min_margin bleibt globaler Hard-
     Floor. margin_schedule=None → reines statisches Margin-Gate (rückwärtskompatibel).
+
+    OCCLUSION-CONSISTENCY / FREE-SPACE-REFUTATION (ADR-020-Amendment, T-092, teil-
+    agnostisch): `free_space_mask` (H,W bool, der sichtbar-LEERE Raum, gebaut via
+    `build_free_space_mask`) aktiviert das harte Refutation-Gate — jede Hypothese,
+    deren VOLLE Silhouette zu > `max_free_space_violation` (Default 0.30) auf
+    sichtbar-leeren Raum fällt, wird disqualifiziert (kann nicht gewinnen; Coarse
+    bleibt Fallback). Komplementär zum (positiven) visibility-aware Score: löst den
+    „nur-Schaft-sichtbar"-Fall, weil der falsche Flip Masse in den leeren Raum legt.
+    `free_space_mask=None` → kein Refutation-Gate (rückwärtskompatibel).
+
+    BAND-GATE (`free_space_vf_hi`, T-092-Befund): bei hoher Sichtbarkeit ist die
+    free-space-Maske riesig (occluded≈0 → fast der ganze Frame ist „frei"), und schon
+    ein Sub-Pixel-Render-vs-GT-Maske-Versatz erzeugt eine FALSCHE Violation (das
+    confounded die Refutation und kann eine korrekte well-vis-Coarse beschädigen).
+    Deshalb wird die Refutation NUR unterhalb von `free_space_vf_hi` angewendet —
+    dort, wo es genuine Occlusion gibt und die negative Evidenz aussagekräftig ist
+    (Max-Insight). `free_space_vf_hi=None` → keine Band-Begrenzung (Refutation gilt
+    immer, wenn free_space_mask gesetzt; für Tests/Vollkontrolle).
     Returns: (R_refined_world (3,3), info dict).
     """
     if min_margin is None:
@@ -625,7 +793,8 @@ def refine_detection(R0_world, *, verts_mm, t_world_m, table_origin_m,
         R0_world, sym_axis=sym_axis, n_fold=n_fold, stable_downs=stable_downs,
         **gen_kwargs)
     info = {"n_hyps": len(hyps), "tags": tags, "scorer": scorer,
-            "visib_aware": visib_mask is not None}
+            "visib_aware": visib_mask is not None,
+            "free_space_aware": free_space_mask is not None}
 
     if scorer == "megapose":
         try:
@@ -645,16 +814,31 @@ def refine_detection(R0_world, *, verts_mm, t_world_m, table_origin_m,
         hyps, verts_mm=verts_mm, t_world_m=t_world_m,
         table_origin_m=table_origin_m, R_w2c=R_w2c, t_w2c_mm=t_w2c_mm, K=K, hw=hw,
         target_mask=target_mask, image_edge_mask=image_edge_mask,
-        visib_mask=visib_mask, visib_dilate=visib_dilate)
+        visib_mask=visib_mask, visib_dilate=visib_dilate,
+        free_space_mask=free_space_mask)
     # sichtbare Konturpixel als absolutes Evidenz-Maß fürs Gate (falls gefordert).
     visible_px = None
     if visib_mask is not None and min_visible_px is not None:
         visible_px = int(np.asarray(visib_mask, bool).sum())
+    # Per-Hyp free-space-Violations fürs harte Refutation-Gate (teil-agnostisch).
+    # Band-Gate: bei hoher Sichtbarkeit (vf >= free_space_vf_hi) ist die free-space-
+    # Maske riesig → false-positive-Regime → Refutation aussetzen (Coarse schützen).
+    refute_band_ok = True
+    if (free_space_mask is not None and free_space_vf_hi is not None
+            and visib_fract is not None
+            and float(visib_fract) >= float(free_space_vf_hi)):
+        refute_band_ok = False
+        info["free_space_band_gated_out"] = True
+    free_space_violations = (
+        [d.get("free_space_violation", 0.0) for d in detail]
+        if (free_space_mask is not None and refute_band_ok) else None)
     best_idx, sel = select_best_hypothesis(
         hyps, scores, coarse_idx=0, min_margin=min_margin,
         visib_fract=visib_fract, min_visib_fract=min_visib_fract,
         visible_px=visible_px, min_visible_px=min_visible_px,
-        margin_schedule=margin_schedule)
+        margin_schedule=margin_schedule,
+        free_space_violations=free_space_violations,
+        max_free_space_violation=max_free_space_violation)
     info.update(sel)                                       # switched/best_score/...
     info.update(best_idx=best_idx, best_tag=tags[best_idx],
                 scores=[float(s) for s in scores], detail=detail)
