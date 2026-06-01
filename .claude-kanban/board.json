@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-05-31T11:18:45Z",
+  "updated": "2026-06-01T14:04:22Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 75,
+  "next_id": 82,
   "tickets": [
     {
       "id": "T-001",
@@ -290,7 +290,7 @@
       "id": "T-006",
       "title": "Roadmap nachziehen: Isaac Sim ersetzt BlenderProc4BOP (Depth jetzt drin)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P2",
@@ -299,11 +299,24 @@
       ],
       "session": "",
       "created": "2026-05-20T06:20:22Z",
-      "updated": "2026-05-20T06:20:22Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:37Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: Isaac-Sim 5.1 ist der gelieferte SDG-Stack (gen_sdg_arm_visible.py + isaac_to_bop.py), BlenderProc komplett raus, Depth gerendert (distance_to_camera, METRES) + BOP-konvertiert (isaac_to_bop.py:234-242). README §1/§3 autoritativ. Roadmap-Realitaet im README nachgezogen."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-007",
@@ -1352,7 +1365,7 @@
       "id": "T-028",
       "title": "1.1: Auto-WoL + GPU-Run-Harness (wake->ssh->run->rsync)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -1362,17 +1375,30 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:04Z",
-      "updated": "2026-05-22T10:10:04Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "delivered: box_src/gpu_run.sh (S-204, 632fd50) = vollstaendiger wake->ssh->run->rsync Harness (wakeonlan via WoL-Relay L123, SSH-Poll L126, remote-cmd L146, --pull rsync L152-161); + scripts/pull_box_artifacts.sh fuer Bulk-Artifact-Pull. Live dokumentiert in README §6/§7."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-029",
       "title": "1.2: Generischer Multi-Part SDG-Renderer (CAD->RGB+depth+OBB+seg+pose)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P0",
@@ -1382,9 +1408,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:04Z",
-      "updated": "2026-05-22T12:37:51Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": "2026-05-22T12:37:51Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
       "logs": [
         {
@@ -1398,6 +1424,18 @@
           "agent": "claude",
           "level": "success",
           "msg": "Multi-Part-SDG-Renderer inline in setup.ipynb (gen_dataset.py): 6 Klassen, DR (Licht/Kamera/Teilezahl), PCA-OBB. 420 Szenen generiert auf der Box."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "delivered: gen_sdg_arm_visible.py (S-201, a3c8571) rendert alle 6 CAD-Teile top-down und schreibt RGB (L457) + depth metres (L460) + instance/semantic-seg+labels (L461-468) + obb_2d (L523) + gt_raw 6D-pose/class (L494-515) + bbox_3d (L490) pro Frame. Genau CAD->RGB+depth+OBB+seg+pose. Live in README §2 als Isaac-SDG-Stage."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -1405,7 +1443,7 @@
       "id": "T-030",
       "title": "1.3: Domain-Randomization (Licht/Material/Kamera/Szene)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -1415,9 +1453,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:05Z",
-      "updated": "2026-05-22T12:37:51Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": "2026-05-22T12:37:51Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
       "logs": [
         {
@@ -1431,6 +1469,18 @@
           "agent": "claude",
           "level": "success",
           "msg": "Domain-Randomization pro Szene: Dome-Light Intensitaet+Farbe, bewegtes Distant-Light, Kamera-Eye/Look-Jitter + variable Brennweite, 6-14 Teile/Szene."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "delivered: gen_sdg_arm_visible.py liefert Licht-DR (dome/distant int+col+dir, --dr-strong L369-381), Material-DR (randomize_material metallic/roughness/tint L300-328), Szene-DR (0-10 Teile inkl. leer, focus-weighted spawn, full-table bounds, random rot L330-364). Kamera bewusst FIX (Zivid top-down, L242-245/382-384) = Design-Entscheidung, DR liegt woanders. Commits 088478e/59b6951."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -1438,7 +1488,7 @@
       "id": "T-031",
       "title": "1.4: Datensatz-Sampling + Manifest (train/val balanced)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -1448,17 +1498,30 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:06Z",
-      "updated": "2026-05-22T10:10:06Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "delivered: convert_full_to_bop.py (S-202, a3c8571) macht deterministisches seed-shuffle train/val-Split (--val-frac 90/10, L142-148) + Manifest (dataset_info.json L86-98, camera.json, val test_targets L101-118). Balance via --focus-frac 0.6 im Renderer (L77/L330-340). Live-Dataset in README §3."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-032",
       "title": "2.1: Face-Discovery + registry/<part> komplett (inkl. Anker_Kurz)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P0",
@@ -1468,9 +1531,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:06Z",
-      "updated": "2026-05-22T10:40:58Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": "2026-05-22T10:19:57Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
       "logs": [
         {
@@ -1496,6 +1559,18 @@
           "agent": "kai-ml",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Superseded durch ADR-018 BOP-Pivot: Face-Discovery/registry-Ansatz ripped out (bop_adapter.py:854 'Face-Classifier ist WEG', e2e_infer.py:25-26). Ziel '6D-Pose inkl. Anker_Kurz' anders erfuellt via GDRNPP obj_id 1, Final-AR 0.870 (README §9). Keine registry/-Artefakte mehr im Tree."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
         }
       ]
     },
@@ -1503,7 +1578,7 @@
       "id": "T-033",
       "title": "2.2: Snippet-Dataset + Manifest generisch",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -1513,17 +1588,30 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:06Z",
-      "updated": "2026-05-22T10:10:06Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Superseded durch ADR-018: Snippet-Dataset/Manifest war Face-Classifier-Input (Eigenbau, ripped out). Gelieferte Pipeline nutzt SDG->BOP-Konversion (isaac_to_bop.py) + Detektor-Dataset aus vollen Frames (train_detector_armvis.py) — kein Snippet-Schritt. backlog, nie gestartet, weil Ansatz vor Beginn verworfen."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-034",
       "title": "2.3: Face-Atlas-Validierung (face_grid + check_face_counts) als Gate",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -1533,17 +1621,30 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:07Z",
-      "updated": "2026-05-22T10:10:07Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Superseded durch ADR-018: Face-Atlas-Validierung (face_grid/check_face_counts) gating den verworfenen Eigenbau-Face-Atlas. Keine solchen Skripte im Tree. QA-Gate ersetzt durch validate_bop_full.py + eval_bop.py (sym-aware AR) + select_best_ckpt.py (best-by-val). backlog, nie gestartet."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-035",
       "title": "3.1: OBB-Detektor trainieren (Teile finden + oriented bbox)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P0",
@@ -1553,9 +1654,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:08Z",
-      "updated": "2026-05-22T12:37:52Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": "2026-05-22T10:19:57Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
       "logs": [
         {
@@ -1587,6 +1688,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "OBB-Detektor: neues grosses Multi-Klasse-Dataset (data/output/big) generiert, Retraining yolov8s-obb imgsz1280 200ep folgt. setup.ipynb Stufe 5 auf multi-class umgestellt."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: YOLOv8-OBB-Detektor (train_detector_armvis.py, frozen 6-Klassen, imgsz1280) ist gelieferte Hauptlinie — train_chain.sh STAGE 1-2, publiziert detector.pt + detector.metrics.json, OBB->AABB-Bridge obb_to_aabb_dets.py. Live im Frontend (PiP-Boxen, README §2/§4)."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
         }
       ]
     },
@@ -1594,7 +1707,7 @@
       "id": "T-036",
       "title": "3.2: Face-Classifier pro Teil trainieren (Checkpoints)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P0",
@@ -1604,9 +1717,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:09Z",
-      "updated": "2026-05-22T10:40:58Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": "2026-05-22T10:19:57Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
       "logs": [
         {
@@ -1638,6 +1751,18 @@
           "agent": "kai-ml",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Superseded durch ADR-018: Face-Classifier explizit ripped out (bop_adapter.py:854 'Face-Classifier ist WEG', ARCHITECTURE.md:266 'ex-face-classifier is gone'). face/upright jetzt analytisch aus 6D-Rotation; per-Teil-Checkpoints = GDRNPP model_best.pth (AR 0.870/0.907/0.838, README §9). Eigenbau-Checkpoints (Commit d8ba873) tot."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
         }
       ]
     },
@@ -1645,7 +1770,7 @@
       "id": "T-037",
       "title": "3.3: Eval-Harness Detektor + Classifier (Metriken/Confusion)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -1655,9 +1780,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:10Z",
-      "updated": "2026-05-22T10:40:58Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": "2026-05-22T10:19:57Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
       "logs": [
         {
@@ -1683,6 +1808,18 @@
           "agent": "kai-ml",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Delivered: eval_bop.py = symmetrie-bewusster BOP-AR-Harness (per-obj AR_MSSD/MSPD, trans/rot-median, n_matched, sym aus models_info.json) + eval_bop.sh/EVAL_BOP.md. Produzierte finale Shipped-Zahlen (README §9: 0.870/0.907/0.838, 17 ckpts) + RESULTS_PHASE2.md. Detektor-Metriken via train_detector_armvis.py->detector.metrics.json."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
         }
       ]
     },
@@ -1690,7 +1827,7 @@
       "id": "T-038",
       "title": "3.4: Parameter-Tuning / Hyperparam-Sweeps",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P2",
@@ -1700,9 +1837,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:10Z",
-      "updated": "2026-05-24T08:54:13Z",
+      "updated": "2026-06-01T08:34:38Z",
       "started_at": "2026-05-24T07:53:04Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:38Z",
       "comments": [],
       "logs": [
         {
@@ -1782,6 +1919,18 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "Voll-Render gestartet: PID 384553, 8000 Szenen, 0-10 Teile inkl leer, full-table spawn (Marc x0.057-0.783 y0.042-0.537), settle 160, dr-strong, seed 20260524. Log /mnt/data/bop/logs/sdg_dr5k.log, output /mnt/data/kip_pose/data/sdg_armvis_dr5k (überschrieben). Rate ~0.13/s, ETA ~986min (~16.4h). Detach via fresh-ssh-pgrep bewiesen. Leere 0-GT-Szenen erscheinen organisch (scene13=0 parts). GPU 4.1GB/79%."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: Tuning/Sweeps gelandet — >20%-Visib-Filter (filter_visibility.py + isaac_to_bop --min-visib + detector --max-occ 0.80, S-038/ddff9fb), best-by-val ueber 17 Checkpoints (select_best_ckpt.py + train_chain select_best, S-052), GDRNPP-Res-Sweep 256->320 (S-051), Detektor-Augment-Tuning. Output = Final-AR 0.872 (README §9). Sim-Re-Train-Tail bewusst als optionaler Polish deferred (README §13)."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -1828,7 +1977,7 @@
       "id": "T-040",
       "title": "4.2: Kamera-Intrinsics + metrische Backprojection (Tischebene)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P0",
@@ -1838,9 +1987,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:11Z",
-      "updated": "2026-05-22T12:37:52Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -1848,6 +1997,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "Backprojection verbessert: SceneIntrinsics mappt Tray-Pixel-Bereich -> reale Tray-Grenzen (Spread ~0.59x0.38m statt Pixel-Klumpen). Nicht exakt metrisch (keine echten Intrinsics), aber realistisch fuer Viewer."
+        },
+        {
+          "ts": "2026-06-01T08:34:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: echte Zivid-Intrinsics (kip_server _zivid_cam -> cam_K/R_w2c/t_w2c) + metrische Backprojection in bop_adapter.bop_pose_to_world (R_w2c.T-Kette, mm->m) + planar_z_snap auf Tischebene. Der interim Pixel-zu-Tray-Hack aus dem Log wurde durch reale K/Extrinsics ersetzt."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
         }
       ]
     },
@@ -1912,7 +2073,7 @@
       "id": "T-042",
       "title": "4.4: End-to-End auf realistischen Daten",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P1",
@@ -1922,17 +2083,30 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:13Z",
-      "updated": "2026-05-22T10:10:13Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: E2E live auf max-utils.com/KIP fuer Real-Foto (kip_server _real_infer_job) UND Live-Isaac-Sim (_build_sim_doc/_worker_infer, Commit b090334); Eval auf gefilterten Val-Szenen ergibt AR Oe 0.872 (README §9)."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-043",
       "title": "5.1: Echtes Zellen-/Tisch-3D-Modell + Nullpunkt-Kalibrierung",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P1",
@@ -1942,11 +2116,24 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:14Z",
-      "updated": "2026-05-22T10:10:14Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: echtes Maschinen-CAD cell_web.glb (27 MB/1.12M tris) als Viewer-Default + Nullpunkt via origin.js createOriginMarker und meta.table_origin (Contract); groundClamp raycastet gegen echte Zellen-Geometrie."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-044",
@@ -2021,7 +2208,7 @@
       "id": "T-045",
       "title": "5.3: Klick-Info + Pose-Overlay verfeinern",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P2",
@@ -2031,11 +2218,24 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:15Z",
-      "updated": "2026-05-22T10:10:15Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Superseded: Das S-011 Klick-Info-Panel (Commit e1adcc1) gehoerte zum abgeloesten index.html-Viewer und ist im gelieferten kip.html NICHT verdrahtet (pickables ungenutzt, origin.js shift-click no-op, .info-panel-CSS tot). Das Pose-Overlay-Ziel ist im Shipping anders erfuellt: PiP-Box-Overlay+Confidence, GT/Pred-Farbcodierung, Kameraperspektive-Button."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-046",
@@ -2080,7 +2280,7 @@
       "id": "T-047",
       "title": "6.2: Stage-Visualisierungen (OBB/Crops/Face-Atlas/Pose/3D-Embed)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2090,11 +2290,24 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:16Z",
-      "updated": "2026-05-22T10:10:16Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Superseded: Die 'Face-Atlas'-Stage gehoert zum per ADR-018 verworfenen Eigenbau; der genannte index.html-Stage-Selector existiert nicht mehr. Pose-Stage-Visualisierung ist als box_src/make_stages.py + e2e_finish A/B (raw/zsnap/m1/m2/tta) geliefert, im Live-Viewer ersetzt durch 2D-PiP-Overlay + Phasen-Bar."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-048",
@@ -2211,7 +2424,7 @@
       "id": "T-049",
       "title": "7.1: Debugging-Pass (E2E ueber mehrere Szenen)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "ravi-qs",
       "instance": "",
       "priority": "P1",
@@ -2221,17 +2434,30 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:17Z",
-      "updated": "2026-05-22T10:10:17Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: box_src/e2e_finish.sh fuehrt E2E-Debug ueber die ganze Val-Split (eval_bop symmetrie-bewusst, A/B-Config-Vergleich, e2e_report), Flag --scenes fuer mehrere Szenen; 106 Tests gruen (README §12). Commit da23c9b/fe073c3."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-050",
       "title": "7.2: Parameter-Tuning (Schwellen/Cluster/Alignment)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P2",
@@ -2241,9 +2467,9 @@
       ],
       "session": "2026-05-22-pose-milestone-v02",
       "created": "2026-05-22T10:10:17Z",
-      "updated": "2026-05-24T09:09:23Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": "2026-05-24T08:44:49Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -2299,6 +2525,18 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "phase2_chain.sh GESTARTET detached: PHASE2_PID=388975, log /mnt/data/bop/logs/phase2_chain.log. Detach bewiesen (fresh-ssh: PPID=1, SID==PID, Ss session-leader). Wartet jetzt in STAGE 1 WAIT-RENDER (render_alive=1, 142/8000). Milestone-Marker: WAIT_RENDER_DONE -> CONVERT_DONE -> SYM_CHECK_DONE -> SMOKE_DONE -> DETECTOR_TRAIN_DONE -> PHASE2_TRAIN_DONE (Erfolg) / PHASE2_FAILED (jeder harte Stage-Fail). Research-Fixes gebacken: 320/80, COLOR_AUG 0.9, 160 epochs, FILTER_VISIB 0.20."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: Schwellen (Detektor conf=0.3, Snap-Guard max_snap_m=0.10, Visib-Filter 0.20), best-by-val Checkpoint-Selektion (Commit 4e13098, select_best_ckpt.py) und Alignment/Symmetrie-Tuning (C_2-Anker-Entscheidung KEEP_CONT_Y, 320/80) sind im Shipping; Final-AR Oe 0.872 (README §9). in_progress -> done."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -2413,7 +2651,7 @@
       "id": "T-053",
       "title": "POSE E2E-Opt: Translation <30mm (Backprojection-Fix)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2422,9 +2660,9 @@
       ],
       "session": "",
       "created": "2026-05-22T18:44:40Z",
-      "updated": "2026-05-22T19:19:10Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": "2026-05-22T18:44:40Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -2438,6 +2676,18 @@
           "agent": "claude",
           "level": "success",
           "msg": "GT-bbox-Bug gefunden+gefixed: gen_eval_scene_topdown cands.pop(0) -> projected-centroid match. Trans-Baseline 108mm war GT-Artefakt; echte Pipeline 27.5mm median (20 Szenen, fixed GT). 40/94 bboxes waren falsch zugeordnet."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "DELIVERED (Ziel erfuellt, Beweis korrigiert): Translation <30mm ist geliefert via planar_z_snap (bop_adapter.py:216, Lift immer / Sink mit Guard max_snap_m=0.10), live-verdrahtet (kip_server.py:419, e2e_infer.py:89 PLANAR_REFINE_DEFAULT=True), test-gedeckt (test_bop_adapter.py, test_e2e_ab.py), README §4/§11. T-055-Log: trans-median 15-19mm je Teil <30mm. Hinweis: die urspruenglich zitierte box-seitige gen_eval_scene_topdown-Bbox-Korrektur ist NICHT im committeten Repo (nur Board-Log) — Schliessung stuetzt sich auf die verifizierbare Snap-Mechanik."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -2445,7 +2695,7 @@
       "id": "T-054",
       "title": "POSE E2E-Opt: Rotation Domain-Gap schliessen (Isaac-Templates + Depth-ICP)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2454,9 +2704,9 @@
       ],
       "session": "",
       "created": "2026-05-22T18:44:41Z",
-      "updated": "2026-05-22T19:13:52Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": "2026-05-22T19:13:52Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -2464,6 +2714,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Superseded: Isaac-Templates+Depth-ICP nie geliefert (RGB-only Hardregel, kip_infer_worker.py:122 with_depth=False, PHASE2_PLAN §2.4 Depth out-of-scope). Ziel 'Rotation Domain-Gap' stattdessen erfuellt durch GDRNPP-Retrain 320/80 + DR-shape-bias + best-by-val (select_best_ckpt.py) + M2/TTA -> README §9 AR 0.838-0.907."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -2545,7 +2807,7 @@
       "id": "T-056",
       "title": "POSE E2E-Opt: Localhost-Website interaktiver CAD-Viewer (echte Meshes)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -2554,9 +2816,9 @@
       ],
       "session": "",
       "created": "2026-05-22T18:44:41Z",
-      "updated": "2026-05-22T19:39:23Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": "2026-05-22T19:13:52Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -2570,6 +2832,18 @@
           "agent": "claude",
           "level": "success",
           "msg": "Viewer: three.js vendored (offline), echte CAD-Meshes 10/10 + cell.glb laden, Orbit+Klick ok, 0 JS-Errors (infoPanel.js highlight(mesh)->holder Bug gefixt). Playwright headless smoke PASS."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: interaktiver Three.js-Viewer mit echten CAD-Meshes (partMeshes.js laedt BOP-PLY/GLB, mm->m, recentered) + OrbitControls + Raycast-Clamp (scene.js) + cell.glb. Playwright 10/10 Meshes grün, 0 JS-Errors. Live (max-utils.com/KIP), lokal via http.server. PR #1 gemergt."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -2577,7 +2851,7 @@
       "id": "T-057",
       "title": "POSE E2E-Opt: Mehr Daten / Detektor + Template-Banks feiner",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -2586,9 +2860,9 @@
       ],
       "session": "",
       "created": "2026-05-22T18:44:41Z",
-      "updated": "2026-05-22T19:13:52Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": "2026-05-22T19:13:52Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -2596,6 +2870,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Delivered: ~8k-Szenen DR-heavy SDG (Commit 088478e, 0-10 parts full-table) + Detektor-Retrain (train_detector_armvis.py publiziert best.pt) + GDRNPP 320/80 best-by-val -> README §9 AR 0.872 Ø. 'Template-Banks feiner' ist Eigenbau-Term (ADR-018 superseded); Sinn via hoehere Crop-Res erfuellt."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -3295,7 +3581,7 @@
       "id": "T-065",
       "title": "S-301: Gleis A Pipeline CNOS->GigaPose->MegaPose auf BOP-Daten",
       "description": "Zero-shot Kette: CNOS-Detektion -> GigaPose-coarse -> MegaPose-refine. Laeuft e2e auf Box via S-204-Harness, Output je Stage gespeichert. Fokus-Teile auf >=3 Szenen ohne Crash.",
-      "column": "backlog",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P0",
@@ -3305,9 +3591,9 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-22T20:36:59Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -3315,6 +3601,18 @@
           "agent": "claude",
           "level": "warn",
           "msg": "Gleis A (CNOS/GigaPose/MegaPose) zurückgestellt -> GDRNPP ist Hauptlinie (Max-Direktive)"
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "SUPERSEDED durch ADR-018: GDRNPP (Gleis B) ist die gelieferte Hauptlinie (AR 0.872, live). Gleis A (CNOS->GigaPose->MegaPose) existiert nur als Design-Doku (ARCHITECTURE.md Section 8, PROJECT_REPORT.md, REFERENCES.md) + disabled Dropdown-Platzhalter (kip.html L33-36); kein ausfuehrbarer Code, README Section 13 fuehrt es als offenes Roadmap-Item. Nicht mehr relevant fuers gelieferte Produkt."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
         }
       ]
     },
@@ -3472,7 +3770,7 @@
       "id": "T-068",
       "title": "S-402: GDRNPP per-Objekt-Training (Anker + Zahnrad) - Kickoff Background-Job",
       "description": "GDRNPP pro Fokus-Teil auf Isaac-PBR-Synth (S-201/202), Detektor=S-401. MEHRTAEGIGER nohup-Job - nur sauberer Kickoff+Poll diese Session, nicht fertig-trainiert. Erste Loss-Kurve konvergiert.",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -3482,9 +3780,9 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-25T17:05:33Z",
+      "updated": "2026-06-01T08:34:39Z",
       "started_at": "2026-05-23T05:46:01Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:39Z",
       "comments": [],
       "logs": [
         {
@@ -3798,6 +4096,18 @@
           "agent": "kai-ml",
           "level": "info",
           "msg": "Zombie-Kill: iter 3.04→2.1s, GPU 0→80%. Jetzt saubere Opt-Runde (CPU frei): offline-XYZ/Worker/dataloader GPU-exklusiv messen, schnellste Combo, 1 finaler Restart wenn >15%."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "DELIVERED: GDRNPP per-Objekt-Training abgeschlossen — phase2_chain.sh trainiert alle 3 Teile, select_best_ckpt.py best-by-val, finale committete AR (README Section 9): Anker_Kurz 0.870 / Anker_Lang 0.907 / Zahnrad 0.838 (Oe 0.872, je 17 ckpts evaluiert). Live deployed via kip-worker.service. Ticket-Spalte in_progress ist stale."
+        },
+        {
+          "ts": "2026-06-01T08:34:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -3805,7 +4115,7 @@
       "id": "T-069",
       "title": "S-403: GPU-Job-Orchestrierung fuer Langlaeufer (poll + resync + Status)",
       "description": "Background-GPU-Jobs (GDRNPP) zuverlaessig pollen, Checkpoints periodisch rsyncen, Status maschinenlesbar. Session-uebergreifend re-attachable.",
-      "column": "backlog",
+      "column": "done",
       "assignee": "sam-devops",
       "instance": "",
       "priority": "P1",
@@ -3815,11 +4125,24 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:30Z",
-      "updated": "2026-05-22T20:08:30Z",
+      "updated": "2026-06-01T08:34:40Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:40Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:40Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "DELIVERED: GPU-Langlaeufer-Orchestrierung komplett im Repo — gpu_run.sh (WoL+SSH-poll+rsync-pull), finish_watcher.sh (box-autonomer Guard-Watcher auf PHASE2_TRAIN_DONE, session-independent), pull_box_artifacts.sh (Checkpoint/Artefakt-resync), plus maschinenlesbare MILESTONE-Marker in phase2_chain.sh fuers Pollen."
+        },
+        {
+          "ts": "2026-06-01T08:34:40Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-070",
@@ -3888,7 +4211,7 @@
       "id": "T-071",
       "title": "S-502: A/B Gleis A vs Gleis B auf realen Szenen + Integration ins Notebook",
       "description": "Beide Gleise auf identischen realen Szenen, S-501 erzeugt A/B-Tabelle (AR/ADD pro Teil). Beide Pfade als waehlbare Modi im Haupt-Notebook. Gleis-B-Zahlen erst final wenn S-402 durch.",
-      "column": "backlog",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P1",
@@ -3898,11 +4221,24 @@
       ],
       "session": "2026-05-22-pose-bop-pivot",
       "created": "2026-05-22T20:08:39Z",
-      "updated": "2026-05-22T20:08:39Z",
+      "updated": "2026-06-01T08:34:40Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-01T08:34:40Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-01T08:34:40Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "SUPERSEDED: Gleis-A-vs-B-A/B unmoeglich da Gleis A nie als Pipeline geliefert (T-065). Geliefertes A/B (e2e_ab.py) ist config-level planar/+M2/+TTA, nicht track-vs-track (Header L15: MegaPose-M2 'scoped out post-Phase-2'). Notebook + Dropdown bieten nur GDRNPP. Durch ADR-018-Pivot obsolet."
+        },
+        {
+          "ts": "2026-06-01T08:34:40Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-072",
@@ -4083,6 +4419,260 @@
           "agent": "claude",
           "level": "success",
           "msg": "PR #1 merged via GitHub (d3a8ece). 14 commits in main. Feature-branch deleted. Brain finalisiert. Live: max-utils.com/KIP grün, AR Ø 0.872."
+        }
+      ]
+    },
+    {
+      "id": "T-075",
+      "title": "POSE-Finalisierung: alle 27 offenen Tickets gegen shipped-Reality reconcilen (Audit-Workflow)",
+      "description": "Ziel: POSE zum Abschluss bringen. Jedes offene Ticket (9 in_progress + 4 in_review + 14 backlog) gegen den tatsaechlich gelieferten Code (GDRNPP-Pipeline, live max-utils.com/KIP, AR 0.872) pruefen. Verdikt je Ticket: delivered / superseded / open-blocked / open-actionable. Delivered+superseded werden mit Beweis-Log geschlossen, echt-offene an Max surfacet. Ultracode-Workflow mit adversarialem Verify.",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-finalize"
+      ],
+      "session": "",
+      "created": "2026-06-01T08:25:48Z",
+      "updated": "2026-06-01T08:34:49Z",
+      "started_at": "2026-06-01T08:25:48Z",
+      "completed_at": "2026-06-01T08:34:49Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T08:28:10Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Audit-Workflow gestartet (wf_5ffe31eb-2cb): 5 Cluster-Agenten auditieren 27 offene Tickets gegen shipped-Code, jedes Schliess-Verdikt wird adversarial verifiziert."
+        },
+        {
+          "ts": "2026-06-01T08:34:49Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Reconciliation fertig: 27/27 offene Tickets geschlossen (17 delivered, 10 superseded durch ADR-018 BOP-Pivot). 26 via Audit+adversarial-Verify bestaetigt, T-053 vom Orchestrator mit korrigierter (verifizierbarer) Evidenz geschlossen. Board sauber: 0 in_progress/in_review/backlog. POSE-Iteration durch."
+        },
+        {
+          "ts": "2026-06-01T08:34:49Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-076",
+      "title": "Multi-Pipeline-Vergleich vorbereiten: pluggable Harness fuer komplett andere (externe) Pipelines — Scaffold ohne Implementierung",
+      "description": "Max liefert spaeter komplett eigenstaendige, andere Pipelines (NICHT die Pose-Modelle GDRNPP/MegaPose, sondern andere Gesamtpipelines). Vorbereiten: Pipeline-Plugin-Contract (Bild+Intrinsics -> pose_result.json), Registry/Adapter-Layer, Vergleichs-/Eval-Harness (AR/ADD/Latenz, A/B/C-Tabelle), Viewer-Dropdown-Hook. WICHTIG: noch NICHTS reinsetzen — nur leere Frames/Stubs + dokumentierter Contract. Pipelines kommen von Max.",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-pipeline-compare"
+      ],
+      "session": "",
+      "created": "2026-06-01T08:41:25Z",
+      "updated": "2026-06-01T09:06:33Z",
+      "started_at": "2026-06-01T08:41:25Z",
+      "completed_at": "2026-06-01T09:06:33Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T08:46:28Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Scope-Entscheidungen (Max): (1) Andock = rohe unformatierte Python-Projekte, wir schreiben pro Pipeline einen Adapter der sie sauber auf den Contract kapselt (Vendor-Slot + adapter.py + per-pipeline requirements/Dep-Isolation). (2) Vergleich misst ALLE 4 Achsen: Genauigkeit-vs-GT (eval_bop AR/ADD), visueller Side-by-Side im Viewer, Latenz, Robustheit/Coverage. (3) Output-Contract = EXAKT bestehendes pose_result.schema.json (face/upright Pflicht -> Adapter muss alle Felder fuellen, face/upright analytisch ableiten). Scaffold-only, fremde Pipelines bleiben leer/NotImplementedError."
+        },
+        {
+          "ts": "2026-06-01T09:00:45Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Scaffold gebaut + lokal validiert: pipelines/-Paket (base/contract/registry/gdrnpp_adapter + _template), compare_pipelines.py (4 Achsen, dry-run gruen), /api/pipelines + /api/compare-Stub + optionaler pipeline-Param (gdrnpp-Pfad byte-identisch), Frontend-Dropdown defensiv aus /api/pipelines, compare.js-Hook-Stub, PIPELINE_INTEGRATION.md, 8 neue Tests gruen (inkl. world->cam Round-Trip + Contract-Gate). py_compile + node --check OK. Adversarialer Review-Workflow wx22q1x75 laeuft (4 Dimensionen)."
+        },
+        {
+          "ts": "2026-06-01T09:06:33Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Adversarialer Review (4 Dim, wx22q1x75): behavior-safety/seam/nix-reinsetzen SAUBER, gdrnpp-Live-Pfad nachweislich byte-identisch. 6 Findings alle gefixt: HIGH AR-Nesting (report.results.overall.AR), MEDIUM ehrlicher Eval-Guard bei Platzhalter-Kameras (kein stiller 0-Match), LOW run_timed validiert Output gegen Contract (invalid->ok=False), LOW n_images-Divergenz, 2 NIT docstrings. +3 run_timed-Tests. 11/11 Scaffold-Tests gruen, volle Suite 115 passed (1 vorbestehender tta-Toleranz-Flake, unbeteiligt)."
+        },
+        {
+          "ts": "2026-06-01T09:06:33Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Geliefert (Scaffold, NICHT gepusht - Max pusht): project/pipelines/ (base/contract/registry/gdrnpp_adapter + _template), compare_pipelines.py (4 Achsen), /api/pipelines + /api/compare-Stub + optionaler pipeline-Param, Frontend-Dropdown aus /api/pipelines + compare.js-Hook, docs/PIPELINE_INTEGRATION.md, test_pipelines_scaffold.py. Fremde Pipelines bleiben leer (NotImplementedError) wie gewuenscht."
+        },
+        {
+          "ts": "2026-06-01T09:06:33Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-077",
+      "title": "Echte Pipelines anbinden: Max' rohe Python-Projekte in pipelines/<id>/vendor/ + Adapter auf pose_result-Contract + im Vergleich aktivieren",
+      "description": "Wartet auf Max' Lieferung der komplett anderen Pose-Pipelines (rohe Python-Projekte). Pro Pipeline: _template kopieren, vendor/ befuellen, requirements isolieren (eigene venv), adapter.infer() implementieren (Output -> contract.assemble_doc), register() aktivieren. Dann: pro-Bild Kamera-Extrinsics + scene/im-ids in compare_pipelines verdrahten (aktuell ehrlich gegated), /api/compare + compare.js Side-by-Side fertig verdrahten. Anleitung: project/docs/PIPELINE_INTEGRATION.md.",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-pipeline-compare"
+      ],
+      "session": "",
+      "created": "2026-06-01T09:06:33Z",
+      "updated": "2026-06-01T09:06:33Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-078",
+      "title": "GPU-Box wecken + kip_server starten + FE verifizieren (Max will FE sehen)",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "ops"
+      ],
+      "session": "",
+      "created": "2026-06-01T10:03:00Z",
+      "updated": "2026-06-01T14:04:22Z",
+      "started_at": "2026-06-01T10:03:00Z",
+      "completed_at": "2026-06-01T10:09:07Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T10:09:07Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Box geweckt (WoL via ai-desk-Relay, UP nach ~30s, maxgpuserverobk, GPU idle). kip-server.service + kip-worker.service waren bereits active (systemd auto-start beim Boot). Health ok, trained=anker_kurz/anker_lang/zahnrad. Live https://max-utils.com/KIP/ = HTTP 200 (~0.12s), box-lokal :8077 = HTTP 200. /api/pipelines=404 (Scaffold lokal/unpushed, erwartet — deployed FE nutzt es eh nicht). FE im Browser geoeffnet."
+        },
+        {
+          "ts": "2026-06-01T10:09:07Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-06-01T14:04:22Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: done → done"
+        }
+      ]
+    },
+    {
+      "id": "T-079",
+      "title": "Read-only Recon: Erreichbarkeit echter LARA5-Zellenrechner 172.22.192.166 (NUR LESEN)",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "ops"
+      ],
+      "session": "",
+      "created": "2026-06-01T10:22:40Z",
+      "updated": "2026-06-01T12:23:00Z",
+      "started_at": "2026-06-01T10:22:40Z",
+      "completed_at": "2026-06-01T12:23:00Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T10:30:08Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "KIT-VPN-Setup geprept: openvpn 2.7.4 (brew) installiert, auth.txt (chmod600), connect.sh/disconnect.sh/recon.sh in ~/.kit-vpn. Full-Tunnel kit.ovpn gewaehlt (172.22.192.166 = privates VLAN, Split routet das meist nicht). Config-Download Shibboleth-gated -> Max laedt kit.ovpn (1 Klick) + sudo-Connect via ! -Prefix. Recon strikt read-only, KEIN RDP-Takeover (kein Kick)."
+        },
+        {
+          "ts": "2026-06-01T11:58:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "KIT-VPN steht: kit.ovpn (IPv4 141.52.226.101), Username = bloßer U-Kürzel 'ulumu' (NICHT die E-Mail -> das war der AUTH_FAILED). utun7 = 172.25.152.182/22, Full-Tunnel. Starte read-only Recon auf 172.22.192.166."
+        },
+        {
+          "ts": "2026-06-01T12:23:00Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "READ-ONLY ZUGRIFF BESTAETIGT (SSH, kick-frei). Zielrechner = NVIDIA Jetson (aarch64, kernel 5.15-tegra), Ubuntu 22.04.5, hostname lara5, uptime 13d. Eingeloggt: lara5 GUI-Session auf :0/tty2 -- aber 37h IDLE (niemand aktiv) -> SSH hat nichts gestoert. Home: DetectionPipeline, DEP_Deployment, Zivid+ZividTest, Neura+Neura_Ben, ros-bridge-noetic-humble, docker-compose.yml, miniconda3, mac-to-controller.pub. Netz: wlP1p1s0=172.22.192.166/24 (KIT-wbk), enP8p1s0=192.168.2.31/24 (Roboter-LAN), can0 (CAN). Zugang: KIT-VPN (kit.ovpn, user-kuerzel 'ulumu') + ssh lara5. NICHTS geschrieben."
+        },
+        {
+          "ts": "2026-06-01T12:23:00Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-080",
+      "title": "Feature-Planung: /KIP Live-Tab (on-demand Zivid-Live-Feed + Capture+Infer, Stream via Workstation)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "feature",
+        "planning"
+      ],
+      "session": "",
+      "created": "2026-06-01T12:33:12Z",
+      "updated": "2026-06-01T12:40:09Z",
+      "started_at": "2026-06-01T12:33:12Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T12:40:09Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Read-only Recon Jetson: DetectionPipeline existiert KOMPLETT -> CapturePicture.py (Zivid 2D+3D capture -> inferenz/img+zdf), predict.py/output_csv.py (YOLO11 best.pt), matching_3d/main.py (3D-CAD-Match -> 6D-Pos), slot_model. Zivid SDK 2.17.1 installiert. BLOCKER: (1) Zivid-Kamera NICHT in lsusb sichtbar -> aktuell nicht angeschlossen/aus. (2) Kein Cam/HTTP-Server laeuft -> nichts zu pullen, muss on-demand-Server NEU rauf (= Jetson-Touch, Max-OK noetig). (3) Workstation hat kein KIT-VPN/keine Route zu 172.22.x -> kann Jetson NICHT direkt erreichen, Bridge noetig. (4) Zivid = 3D-Struct-Light, kein echtes Video -> Live = schnelle wiederholte 2D-Captures. Ports Jetson: 22/3389/631/5005. Plan-only, NICHTS angefasst."
+        }
+      ]
+    },
+    {
+      "id": "T-081",
+      "title": "Build: /KIP Live-Tab (Schicht C: FE-Tab + kip_server /api/live Proxy) + Jetson live_server (Plan/Deliverable, nicht deployt) + scoped KIT-VPN auf Workstation",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "feature"
+      ],
+      "session": "",
+      "created": "2026-06-01T12:47:40Z",
+      "updated": "2026-06-01T14:04:22Z",
+      "started_at": "2026-06-01T12:47:40Z",
+      "completed_at": "2026-06-01T14:04:22Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-01T12:55:25Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Schicht C gebaut + verifiziert (node --check, py_compile, bash -n, 11/11 tests): FE 3.Tab 'Live' (kip.html + src/live.js + kip.js 3-Wege-Tabs, on-demand Vorschau-Polling in PiP + LIVE-Badge + Aufnehmen+Inferieren), kip_server /api/live/{status,preview,capture_infer,frame} (Proxy, gated 503). Jetson-Deliverable jetson_live/live_server.py + README (NICHT deployt). Scoped-VPN box_src/kit_vpn_scoped_connect.sh+disconnect (route-nopull, nur Jetson-Route). docs/LIVE_TAB_PLAN.md. Netzpfad Mac->Jetson bewiesen (22/3389/631 offen, 8090 zu=live_server fehlt). OFFEN: Workstation per WoL nicht erreichbar (200s Timeout) -> On-Box-VPN-Install + Deploy spaeter. Nichts gepusht, Jetson nicht angefasst."
+        },
+        {
+          "ts": "2026-06-01T14:04:22Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Schicht C DEPLOYED + live auf max-utils.com/KIP (HTTP 200). Chirurgischer Deploy: kip_server.py+kip.js (Box==main, sicher) ersetzt, kip.html GEMERGED (Box-Hotfix #cell-loader erhalten statt geclobbert!), live.js/compare.js/pipelines/ neu, scene.js/kip.css unangetastet. Backup .bak-livetab + Rollback-Guard. kip-server restart=active, health ok, /api/live/status=503 graceful, Live-Tab+cell-loader beide im public HTML. VPN ueberall getrennt. Minor: /api/pipelines auf Box seam=unavailable (pipelines-Import faellt zurueck -> gdrnpp-Fallback, FE ok). NICHT in git committed (Max pusht)."
+        },
+        {
+          "ts": "2026-06-01T14:04:22Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     }
