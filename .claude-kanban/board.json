@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-01T21:08:38Z",
+  "updated": "2026-06-01T21:12:40Z",
   "columns": [
     {
       "id": "backlog",
@@ -4615,7 +4615,7 @@
       "id": "T-080",
       "title": "Feature-Planung: /KIP Live-Tab (on-demand Zivid-Live-Feed + Capture+Infer, Stream via Workstation)",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -4625,9 +4625,9 @@
       ],
       "session": "",
       "created": "2026-06-01T12:33:12Z",
-      "updated": "2026-06-01T12:40:09Z",
+      "updated": "2026-06-01T21:12:40Z",
       "started_at": "2026-06-01T12:33:12Z",
-      "completed_at": null,
+      "completed_at": "2026-06-01T21:12:40Z",
       "comments": [],
       "logs": [
         {
@@ -4635,6 +4635,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "Read-only Recon Jetson: DetectionPipeline existiert KOMPLETT -> CapturePicture.py (Zivid 2D+3D capture -> inferenz/img+zdf), predict.py/output_csv.py (YOLO11 best.pt), matching_3d/main.py (3D-CAD-Match -> 6D-Pos), slot_model. Zivid SDK 2.17.1 installiert. BLOCKER: (1) Zivid-Kamera NICHT in lsusb sichtbar -> aktuell nicht angeschlossen/aus. (2) Kein Cam/HTTP-Server laeuft -> nichts zu pullen, muss on-demand-Server NEU rauf (= Jetson-Touch, Max-OK noetig). (3) Workstation hat kein KIT-VPN/keine Route zu 172.22.x -> kann Jetson NICHT direkt erreichen, Bridge noetig. (4) Zivid = 3D-Struct-Light, kein echtes Video -> Live = schnelle wiederholte 2D-Captures. Ports Jetson: 22/3389/631/5005. Plan-only, NICHTS angefasst."
+        },
+        {
+          "ts": "2026-06-01T21:12:40Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Live-Tab-Planung umgesetzt: FE-Tab + /api/live gebaut, deployt (Live), Jetson-Server als Deliverable. Plan -> Umsetzung done."
+        },
+        {
+          "ts": "2026-06-01T21:12:40Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
