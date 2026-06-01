@@ -266,5 +266,180 @@ def test_gear_silhouette_cn_invariant_honest():
         f"C_7-Yaws sollten silhouetten-invariant sein, Spannweite {ious.ptp():.3f}")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 3) VISIBILITY-AWARE SCORER  (ADR-020, S-003, T-085)
+# ══════════════════════════════════════════════════════════════════════════════
+# Der Anker-180°-Quer-Flip bei partieller Sicht: der Scorer soll NUR über die
+# sichtbare Region (visib_mask, BOP mask_visib) scoren. Tests:
+#  (a) visib_mask=None -> EXAKT heutiges Verhalten (Rückwärtskompatibilität).
+#  (b) Score-Clipping: visib_mask beschränkt IoU/Chamfer auf die sichtbare Region.
+#  (c) Visibility-Gate: zu geringe visib_fract -> Coarse behalten.
+#  (d) Kern: bei occludiertem Schaft (visib_mask = nur Kopf) trennt der vis-aware
+#      Scorer den Flip, wo der Voll-Crop-Scorer das Asymmetrie-Signal ertränkt.
+
+def _occluder_visib_mask(verts, R_pose, t_world, table_origin, R_w2c, t_w2c, K, hw,
+                         keep_head=True, head_y_mm=10.0):
+    """Sichtbare Region = die Silhouette der WAHREN Pose, aber nur die Hälfte des
+    Teils, die auf der Kopf- (bzw. Schaft-)Seite der Längsachse liegt. Simuliert
+    einen Occluder, der genau die andere Hälfte verdeckt."""
+    # gefüllte Silhouette der wahren Pose
+    sil = RC.render_silhouette(verts, R_pose, t_world, table_origin,
+                               R_w2c, t_w2c, K, hw)
+    # Welche Bildpixel gehören zur Kopf-Hälfte? Projiziere die Kopf-Vertices.
+    head_sel = verts[:, 1] >= head_y_mm if keep_head else verts[:, 1] < head_y_mm
+    R_w2c_ = A._as_R(R_w2c)
+    R_pose_ = A._as_R(R_pose)
+    t_world_ = A._as_vec3(t_world); to = A._as_vec3(table_origin)
+    t_m2w_mm = (t_world_ + to) * 1000.0
+    t_m2c = R_w2c_ @ t_m2w_mm + A._as_vec3(t_w2c)
+    R_m2c = R_w2c_ @ R_pose_
+    half_sil = A._camera_silhouette(verts[head_sel], R_m2c, t_m2c, A._as_R(K), hw)
+    return sil & half_sil
+
+
+def test_visib_none_is_backward_compatible():
+    """visib_mask=None -> cpu_edge_score liefert EXAKT die alten Scores."""
+    verts = anker_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R0 = _world_lay_flat(yaw_deg=15.0)
+    hyps, _ = RC.generate_hypotheses(R0, n_fold=None, tilt_degs=())
+    sil = RC.render_silhouette(verts, R0, t_world, table_origin, R_w2c, t_w2c, K, hw)
+    img = np.zeros((hw[0], hw[1], 3), np.uint8); img[sil] = 200
+    ie = RC.image_edges(img)
+    kw = dict(verts_mm=verts, t_world_m=t_world, table_origin_m=table_origin,
+              R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw, target_mask=sil,
+              image_edge_mask=ie)
+    s_old, _ = RC.cpu_edge_score(hyps, **kw)
+    s_new, _ = RC.cpu_edge_score(hyps, visib_mask=None, **kw)
+    assert np.allclose(s_old, s_new, atol=1e-12)
+
+
+def test_visib_clip_reduces_to_visible_region():
+    """Mit visib_mask = nur Kopf-Hälfte zählt IoU nur über die sichtbare Region:
+    die korrekte Pose hat dort IoU ~1, weil sil & visib == target & visib."""
+    verts = anker_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R_true = _world_lay_flat(yaw_deg=0.0)
+    sil_true = RC.render_silhouette(verts, R_true, t_world, table_origin,
+                                    R_w2c, t_w2c, K, hw)
+    visib = _occluder_visib_mask(verts, R_true, t_world, table_origin,
+                                 R_w2c, t_w2c, K, hw, keep_head=True)
+    assert 0 < visib.sum() < sil_true.sum(), "visib sollte echte Teilregion sein"
+    scores, detail = RC.cpu_edge_score(
+        R_true[None], verts_mm=verts, t_world_m=t_world,
+        table_origin_m=table_origin, R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw,
+        target_mask=sil_true, visib_mask=visib, w_iou=1.0, w_chamfer=0.0)
+    # gleiche Pose, auf die sichtbare Region geclippt -> IoU nahe 1.
+    assert detail[0]["iou"] > 0.9
+
+
+def test_visib_gate_keeps_coarse_when_too_occluded():
+    """Visibility-Gate: zu geringe visib_fract -> kein Switch (Coarse behalten),
+    selbst wenn eine andere Hypothese besser scort."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.4, 0.9])     # Hyp 1 klar besser
+    # ohne Visibility-Kondition: switcht.
+    idx_open, info_open = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.15, visib_fract=0.5, min_visib_fract=0.25)
+    assert idx_open == 1 and info_open["switched"] is True
+    # mit zu geringer Sichtbarkeit: bleibt Coarse, visib_gated_out gesetzt.
+    idx_gate, info_gate = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.15, visib_fract=0.10, min_visib_fract=0.25)
+    assert idx_gate == 0 and info_gate["switched"] is False
+    assert info_gate["visib_gated_out"] is True
+
+
+def test_visib_gate_min_visible_px():
+    """absolutes Pixel-Gate: zu wenige sichtbare Pixel -> Coarse behalten."""
+    hyps = np.stack([np.eye(3), A.axis_angle_matrix([0, 0, 1], 0.5)])
+    scores = np.array([0.4, 0.9])
+    idx, info = RC.select_best_hypothesis(
+        hyps, scores, min_margin=0.15, visible_px=50, min_visible_px=200)
+    assert idx == 0 and info["switched"] is False and info["visib_gated_out"]
+
+
+def test_visaware_scorer_separates_flip_under_occlusion():
+    """Kern-Test (ADR-020): Schaft occludiert (visib_mask = nur Kopf-Region).
+    Der VOLL-Crop-Scorer (visib=None) trennt den Flip schlechter als der
+    VISIBILITY-AWARE Scorer. Wir prüfen: die korrekte (un-geflippte) Hypothese
+    schlägt die geflippte Coarse beim vis-aware Scorer mit größerem Margin als
+    beim Voll-Crop-Scorer — d.h. das Asymmetrie-Signal wird NICHT ertränkt.
+
+    EHRLICH: das synthetische Anker-Mesh ist top-down ohnehin stark asymmetrisch.
+    Der Test zeigt die Score-MECHANIK (vis-aware Margin >= voll-Crop Margin), nicht
+    eine harte 0-Flip-Garantie — das echte Single-View-Limit misst die GPU-Eval.
+    """
+    verts = anker_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R_true = _world_lay_flat(yaw_deg=25.0)
+    R_flip = R_true @ A.axis_angle_matrix([1.0, 0, 0], np.pi)   # geflippte Coarse
+
+    # WAHRES Bild: volle wahre Silhouette als Detektor-Maske + Bildkanten, ABER
+    # die occludierte Schaft-Hälfte wird im "Bild" mit Occluder-Rauschen überdeckt.
+    sil_true = RC.render_silhouette(verts, R_true, t_world, table_origin,
+                                    R_w2c, t_w2c, K, hw)
+    visib = _occluder_visib_mask(verts, R_true, t_world, table_origin,
+                                 R_w2c, t_w2c, K, hw, keep_head=True)
+    occluded = sil_true & ~visib
+    img = np.zeros((hw[0], hw[1], 3), np.uint8)
+    img[sil_true] = 200
+    # Occluder: helle Störung über der verdeckten Hälfte -> Fremdkanten im Voll-Crop.
+    rng = np.random.default_rng(7)
+    img[occluded] = rng.integers(60, 255, size=(int(occluded.sum()), 3), dtype=np.uint8)
+    ie = RC.image_edges(img)
+
+    hyps, tags = RC.generate_hypotheses(R_flip, n_fold=None, tilt_degs=(),
+                                        flip_axes=("x", "y", "z"))
+    correct = [i for i, t in enumerate(tags) if t in ("flip180_x", "flip180_z")]
+    assert correct, "Setup: flip180_x/z muss als Hypothese existieren"
+
+    common = dict(verts_mm=verts, t_world_m=t_world, table_origin_m=table_origin,
+                  R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw,
+                  target_mask=sil_true, image_edge_mask=ie)
+    s_full, _ = RC.cpu_edge_score(hyps, visib_mask=None, **common)
+    s_vis, _ = RC.cpu_edge_score(hyps, visib_mask=visib, **common)
+
+    coarse = 0
+    margin_full = float(max(s_full[i] for i in correct) - s_full[coarse])
+    margin_vis = float(max(s_vis[i] for i in correct) - s_vis[coarse])
+    # vis-aware soll die korrekte Hypothese mindestens so gut von der geflippten
+    # Coarse trennen wie der Voll-Crop-Scorer (typ. deutlich besser).
+    assert margin_vis >= margin_full - 1e-9, (
+        f"vis-aware Margin {margin_vis:.4f} schlechter als voll-Crop {margin_full:.4f}")
+
+
+def test_refine_detection_visaware_end_to_end():
+    """refine_detection mit visib_mask + ausreichender visib_fract korrigiert den
+    Flip; mit zu geringer visib_fract bleibt die Coarse (Gate greift)."""
+    verts = anker_like_verts_mm()
+    K, R_w2c, t_w2c, hw = topdown_cam()
+    table_origin = np.zeros(3); t_world = np.zeros(3)
+    R_true = _world_lay_flat(yaw_deg=18.0)
+    R_flip = R_true @ A.axis_angle_matrix([1.0, 0, 0], np.pi)
+    sil_true = RC.render_silhouette(verts, R_true, t_world, table_origin,
+                                    R_w2c, t_w2c, K, hw)
+    visib = _occluder_visib_mask(verts, R_true, t_world, table_origin,
+                                 R_w2c, t_w2c, K, hw, keep_head=True)
+    img = np.zeros((hw[0], hw[1], 3), np.uint8); img[sil_true] = 200
+    ie = RC.image_edges(img)
+    common = dict(verts_mm=verts, t_world_m=t_world, table_origin_m=table_origin,
+                  R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=hw, target_mask=sil_true,
+                  image_edge_mask=ie, visib_mask=visib, n_fold=None, tilt_degs=(),
+                  scorer="cpu_edge", min_margin=0.0)
+    # genug Sichtbarkeit -> Gate offen -> Flip korrigiert.
+    R_ok, info_ok = RC.refine_detection(R_flip, visib_fract=0.6,
+                                        min_visib_fract=0.25, **common)
+    assert info_ok["visib_aware"] is True
+    assert RC._rot_geodesic_deg(R_ok, R_true) < 30.0
+    # zu wenig Sichtbarkeit -> Gate zu -> Coarse (geflippt) bleibt.
+    R_keep, info_keep = RC.refine_detection(R_flip, visib_fract=0.05,
+                                            min_visib_fract=0.25, **common)
+    assert info_keep["switched"] is False
+    assert RC._rot_geodesic_deg(R_keep, R_flip) < 0.01     # Coarse unverändert
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
