@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T13:34:21Z",
+  "updated": "2026-06-02T14:10:48Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 97,
+  "next_id": 98,
   "tickets": [
     {
       "id": "T-001",
@@ -5563,6 +5563,51 @@
       "completed_at": null,
       "comments": [],
       "logs": []
+    },
+    {
+      "id": "T-097",
+      "title": "T-097: groundClamp — GT (raw, snap=False) schwebt waehrend Pred sitzt; auf lokale Flaeche setzen ohne Regression",
+      "description": "Lena: nach T-095 sitzt Pred (backend-gesnappt) sauber, aber GT (raw) schwebt. Diagnose: Guard(0.6m)/no-hit/over-lift auf benachbarte hoehere Struktur? Fix: jedes Teil (auch raw GT) auf seine lokale Auflageflaeche setzen, robust. KEINE Regression auf die 8/8.",
+      "column": "in_review",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-tune",
+        "viewer"
+      ],
+      "session": "2026-06-02-pose-tune",
+      "created": "2026-06-02T14:02:53Z",
+      "updated": "2026-06-02T14:10:48Z",
+      "started_at": "2026-06-02T14:02:53Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-02T14:02:53Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T14:09:57Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "86a6344, Wurzel=(a) harter 0.6m-Sanity-Guard wies raw GT ab (dz=-0.69>0.6 -> return -> schwebt @1.88, Pred dz=-0.01 sass). Fix: Guard begrenzt nicht mehr Sprungweite sondern prueft 'klare durchgehende Auflageflaeche unterm Footprint?' (5x5-Footprint, Center-Anker-Vorrang, ±5cm-Konsistenz, Median). Konsistent->seat egal wie weit raw-Z weg; inkonsistent/keine Flaeche->lassen (Teleport-Schutz intakt). GT seatet jetzt, 8/8 Regression gruen (Playwright 11/11 echte cell.glb)."
+        },
+        {
+          "ts": "2026-06-02T14:09:57Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-02T14:10:48Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
+        }
+      ]
     }
   ]
 }
