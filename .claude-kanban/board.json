@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T14:44:44Z",
+  "updated": "2026-06-02T20:23:33Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 99,
+  "next_id": 102,
   "tickets": [
     {
       "id": "T-001",
@@ -5666,6 +5666,134 @@
           "msg": "moved: in_progress → done"
         }
       ]
+    },
+    {
+      "id": "T-099",
+      "title": "T-099: Teile sitzen komisch auf cell_hi (4M tris) — groundClamp gegen dichte Visual-Geometrie bricht; Collision-Proxy entkoppeln",
+      "description": "Lena: nach cell_hi-Switch (94MB/4M tris) liegen GT+Pred komisch im Raum. Ursache vermutl. groundClamp raycastet dichte cell_hi (vs grobe cell_web getestet) -> falsche Flaechenwahl/Perf. Fix: Visual cell_hi vom Collision-Raycast entkoppeln (grober Proxy cell_web/cell fuer groundClamp) ODER density-robust machen. Gegen ECHTES cell_hi.glb testen.",
+      "column": "done",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-tune",
+        "viewer"
+      ],
+      "session": "2026-06-02-pose-tune",
+      "created": "2026-06-02T14:55:06Z",
+      "updated": "2026-06-02T20:23:32Z",
+      "started_at": "2026-06-02T14:55:07Z",
+      "completed_at": "2026-06-02T17:44:57Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-02T14:55:07Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T14:57:04Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "Start T-099. Kontext gelesen: scene.js groundClamp raycastet gegen cellGroup (sichtbar geladene Mesh). kip.js lädt jetzt cell_hi.glb (4M tris) statt cell_web -> groundClamp raycastet dichte Geometrie. Verdacht: feine Maschinenteile/Streben/Overhangs in cell_hi liefern andere Footprint-Treffer als die grobe cell.glb gegen die T-095/097 getestet wurden (8/8 bzw 11/11). cell.glb (8MB, im repo getrackt, liegt auf Box) = bewährter Collision-Proxy. Plan: Visual=cell_hi entkoppeln von Collision=cell.glb-Proxy."
+        },
+        {
+          "ts": "2026-06-02T15:03:40Z",
+          "agent": "lena-frontend",
+          "level": "success",
+          "msg": "Diagnose fertig. Wurzel=dichte/abweichende Geometrie+Perf (NICHT align). Probe: cell_hi 6058ms vs cell 237ms für 54 raycasts (26x), 15/54 XY-Stellen >5mm abweichend (cell_hi trifft Empore/feine Strukturen die in grober cell.glb fehlen). Fix=Collision-Proxy entkoppeln (visual cell_hi, collision cell.glb)."
+        },
+        {
+          "ts": "2026-06-02T15:36:20Z",
+          "agent": "queen",
+          "level": "warn",
+          "msg": "PAUSE/RESUME (Compact): Lena Diagnose FERTIG (Wurzel=dichte Geometrie+Perf, cell_hi 26x langsamer + 15/54 XY-Abweichung; NICHT align). Impl NICHT begonnen (rate-limited). RESUME: Lena re-spawnen -> Entkopplung Visual=cell_hi / Collision-Proxy. KORREKTUR: Proxy = cell_web.glb (59-mesh, HAT Empore, 1.1M tris), NICHT cell.glb (4-mesh, Empore fehlt -> wuerde Teile falsch snappen). cell_web liegt auf Box. Playwright gegen cell_hi-visual + cell_web-collision + 11 seat-Regression. Dann Sam surgical-deploy (scene.js + sicherstellen cell_web als raycast-target ladbar). Branch team/2026-06-02-cellhi-clamp."
+        },
+        {
+          "ts": "2026-06-02T15:36:20Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "moved: in_progress → in_progress"
+        },
+        {
+          "ts": "2026-06-02T15:47:01Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "CORRECTION nach Compact-Resume: meine fruehere 'Proxy=cell_web statt cell.glb'-Notiz ist SUPERSEDED. Lenas seat_harness-Probe zeigt empirisch: die cell_hi-Empore (z=1.336) + halbhohe Struktur (z=0.479) sind TRAPS (kein echtes Auflager) — genau die feine Geometrie die das Snap-up ('an der Decke') verursacht. cell.glb (grob, nur echte Auflager: Boden 0.018 / Plateau 1.19) ist der RICHTIGE Collision-Proxy. Decouple IST lokal implementiert (scene.js loadCollisionProxy + kip.js:32 cell.glb), uncommitted. Verifiziere jetzt headless via seat_harness gegen ECHTES cell_hi-Visual + cell.glb-Collision: erwarte plateau-ctrl->1.19, empore/halfhi-traps bleiben low, perf schnell. Dann commit + Sam surgical-deploy."
+        },
+        {
+          "ts": "2026-06-02T15:52:12Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "PAUSE (WLAN weg) 2026-06-02. STAND: Decouple-Fix IST lokal implementiert (uncommitted) — scene.js loadCollisionProxy/collisionGroup/clampTarget + kip.js:32 loadCollisionProxy(cell.glb). Proxy=cell.glb ist KORREKT (Lenas seat_harness-Probe: cell_hi-Empore 1.336 + halbhoch 0.479 sind TRAPS, cell.glb hat nur echte Auflager) — fruehere cell_web-Notiz SUPERSEDED. cell.glb liegt schon auf Box (8.2M) -> Deploy = nur 2 JS-Files. BOX-DRIFT: Box-scene.js hat Loader-UI-Hotfix (94MB-Progressbar, #cell-loader) + Box-kip.html hat #cell-loader-DOM, beides NICHT im Repo -> Deploy MUSS T-099-Decouple + Loader-UI mergen, Box-kip.html unangetastet lassen. RESUME-SCHRITTE: (1) Headless seat_harness war am Laufen (node /tmp/run_seat.mjs gegen echtes cell_hi, proxy=1=Fix vs proxy=0=Bug) — Monitor timeout/WLAN weg -> Output /private/tmp/.../tasks/bi6mjcsu5.output lesen ODER neu fahren (static server :8848 in project/frontend), erwarte plateau-ctrl->1.19, empore/halfhi-traps bleiben low, perf<300ms mit Proxy. (2) reconcile scene.js = lokal(T-099)+Box(loader-UI in loadCell). (3) surgical scp scene.js+kip.js -> /mnt/data/kip_pose/project/frontend/src/, Box-kip.html lassen. (4) Live-Playwright-Verify parts auf Tisch + Loader-UI ok. (5) commit branch team/2026-06-02-cellhi-clamp + Drift-Note Brain."
+        },
+        {
+          "ts": "2026-06-02T16:23:40Z",
+          "agent": "queen",
+          "level": "success",
+          "msg": "VERIFY headless gegen ECHTES cell_hi (playwright/cellhi_probe): cell.glb-Proxy liefert NUR echte Auflager [Boden 0.01-0.02, Plateau 1.19]; cell_hi-Visual hat zusaetzlich Trap-Ebenen [0.48 halbhoch, 1.34-1.36 Empore] — (0.85,0.22): cell.glb=0.011 vs cell_hi=1.336(26 hits)=DECKE-BUG; (0.425,0): 0.017 vs 0.479. Kontrollen 1.19 auf beiden (aligned). Perf cell.glb 4.2ms/raycast vs cell_hi 88ms (21x). Decouple-Fix bestaetigt. -> reconcile scene.js (T-099 + Box-loader-UI) + surgical deploy."
+        },
+        {
+          "ts": "2026-06-02T17:44:57Z",
+          "agent": "queen",
+          "level": "success",
+          "msg": "DEPLOYED + VERIFIED + MERGED. Fix=cell.glb-Collision-Proxy (scene.js loadCollisionProxy/clampTarget) entkoppelt von cell_hi-Visual. Live-Verify gegen echte Sim-Szenen ueber kip_server (SSH-Tunnel): 4 Szenen / 18 Teile (Anker_Kurz+Lang+Zahnrad) ALLE auf Tisch ~1.11-1.19, mm-deckungsgleich mit cell_hi-Visual, 0 Decke-Overshoot, 0 am Boden. Drift-Closure: cell-loader-Hotfix (#cell-loader DOM + .kip-cell-loader CSS) ins Repo nachgezogen. Deployed scene.js+kip.js zur Box (md5 f599968a/26419ec9), live serviert. Commit 2c41204, merge c12cdbe -> main. Box cell.glb-Proxy lag schon -> kein Asset-Upload."
+        },
+        {
+          "ts": "2026-06-02T17:44:57Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-06-02T20:23:32Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "FOLLOW-UP (Max): groundClamp-Höhen-Eingriff DEAKTIVIERT + CELL_Z_ALIGN zurück auf 0.0 (das -1.18 war ein nicht-nachhaltiger Hack). Befund: rohe Pose-Posen liegen schon bei z≈0 (≤10cm über Null) — der Clamp war die Ursache (zog Teile auf Tray 1.19). Deployed (box+live md5 cc53760e). Teile rendern jetzt auf roher Höhe = unterer Zellen-Ebene (Zell-Tray bei 1.19 = Frame-Versatz). Nachhaltiger Fix = Frame an Quelle reconcilen (Sim/Export/table_origin), neues Ticket T-101."
+        }
+      ]
+    },
+    {
+      "id": "T-100",
+      "title": "T-100: Seltener Edge-Case — langes Anker_Lang an Plateau-Kante bleibt am Boden (groundClamp-Cap blockt inkonsistenten 1.2m-Lift)",
+      "description": "1/19 Teile (eine fruehe Szene): Anker_Lang, dessen Footprint eine Plateau-Kante quert -> <50% Samples konsistent -> 0.6m-Cap verweigert den legitimen Lift -> Teil bleibt am Boden statt auf dem Tisch. 18/18 spaetere Teile (inkl. Anker_Lang) seateten korrekt -> seltener Geometrie-Edge-Case, kein Muster. Fix-Idee: Center-Anker-Treffer staerker gewichten ODER Konsistenz-Schwelle fuer lange duenne Teile lockern. NICHT dringend, NICHT die breit funktionierende Logik riskieren.",
+      "column": "backlog",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P3",
+      "tags": [
+        "pose-tune",
+        "viewer"
+      ],
+      "session": "",
+      "created": "2026-06-02T17:44:57Z",
+      "updated": "2026-06-02T17:44:57Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-101",
+      "title": "T-101: Frame-Reconciliation an der Quelle — Teile pose-Z≈0 vs Zell-GLB-Tray ~1.18m",
+      "description": "Wurzel des Höhen-Themas: die Teile-Posen (GT/Pred) liegen im pose-frame bei z≈0 (≤10cm über Null, korrekt), aber die Zell-GLBs (cell.glb/cell_web/cell_hi) haben ihre Tray-Arbeitsfläche bei z≈1.18 (Boden bei 0). Frame-Versatz ~1.18m. Viewer-Höhen-Hacks (groundClamp-Lift, CELL_Z_ALIGN) sind Symptom-Pflaster und wurden entfernt. NACHHALTIG: den Versatz an der Quelle beheben — entweder cell-GLB-Export mit korrektem Origin (Tray auf 0), ODER table_origin/Welt-Transform so dass Zelle+Teile EINEN konsistenten Frame teilen. Dann sitzen Teile ohne jeden Viewer-Eingriff sichtbar in der Schale.",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "pose-tune",
+        "viewer",
+        "frame"
+      ],
+      "session": "",
+      "created": "2026-06-02T20:23:33Z",
+      "updated": "2026-06-02T20:23:33Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
     }
   ]
 }
