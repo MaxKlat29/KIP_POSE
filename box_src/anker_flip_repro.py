@@ -290,6 +290,29 @@ def main():
     ap.add_argument("--include-zahnrad", action="store_true",
                     help="also load Zahnrad (obj 6) preds — for the PART-AGNOSTIC "
                          "proof (same free-space term runs, no crash, plausible).")
+    ap.add_argument("--proxy-mask", choices=["gt", "sam"], default="gt",
+                    help="visib_mask source for visaware-compare. 'gt' = BOP "
+                         "mask_visib (T-085 upper bound). 'sam' = POSE-INDEPENDENT "
+                         "SAM segment of the detector bbox (live proxy, T-089). "
+                         "With 'sam' visib_fract for the gate is the PROXY "
+                         "(SAM-area/box-area), not the GT visib_fract.")
+    ap.add_argument("--before-coarse", action="store_true",
+                    help="BEFORE = raw GDRNPP coarse (= TODAY's live behaviour, no "
+                         "rotation refine, refine_rc flag-off). The honest "
+                         "live-deployment baseline for the SCHARF/NICHT-SCHARF "
+                         "decision. Without it, BEFORE = full-mask refine (T-085 "
+                         "separability framing).")
+    ap.add_argument("--use-schedule", action="store_true",
+                    help="AFTER uses the SHIPPED visibility-staggered margin "
+                         "schedule (refine_rc.DEFAULT_MARGIN_SCHEDULE) instead of a "
+                         "flat min_margin. THIS is what ships (T-085 v2). With "
+                         "--proxy-mask=sam the schedule reads the PROXY visib_fract "
+                         "= the exact live behaviour.")
+    ap.add_argument("--proxy-gate-vf", choices=["gt", "proxy"], default="proxy",
+                    help="Which visib_fract feeds the gate when --proxy-mask=sam: "
+                         "'proxy' = derived from SAM mask (honest live signal, "
+                         "default), 'gt' = GT visib_fract (ablation: isolate the "
+                         "MASK-quality effect from the GATE-input effect).")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
@@ -430,17 +453,21 @@ def main():
             "\n  --- visibility-aware refine_rc: BEFORE vs AFTER (real GDRNPP coarse) ---\n")
         sys.stderr.write(
             f"  gate: min_margin={vc['params']['min_margin']} "
-            f"min_visib_fract={vc['params']['min_visib_fract']}\n")
+            f"min_visib_fract={vc['params']['min_visib_fract']}  "
+            f"MASK={vc['params'].get('proxy_mask','gt')} "
+            f"gate_vf={vc['params'].get('proxy_gate_vf','gt')}\n")
         for grp in ("partial", "full"):
             b = vc.get(grp, {})
             if not b.get("n"):
                 continue
+            iou = b.get("proxy_iou_median")
+            iou_s = f"  proxyIoU(med)={iou:.3f}" if iou is not None else ""
             sys.stderr.write(
                 f"  {grp:8s} n={b['n']:4d}  "
                 f"flip_rate BEFORE={b['flip_rate_before']:.4f} ({b['n_flip_before']})  "
                 f"AFTER={b['flip_rate_after']:.4f} ({b['n_flip_after']})  "
                 f"fixed={b['n_fixed']}  broke={b['n_broke']}  "
-                f"switched={b['n_switched_after']}\n")
+                f"switched={b['n_switched_after']}{iou_s}\n")
     if "visaware_sweep" in result:
         sw = result["visaware_sweep"]
         sys.stderr.write(
@@ -593,6 +620,35 @@ def rc_probe(per_inst, args, syms):
     return {"full": probe(flipped_full), "partial": probe(flipped_part)}
 
 
+# ── SAM proxy visible-mask (T-089) ───────────────────────────────────────────
+_SAM_CACHE = {}      # (sid,im,inst) -> (proxy_mask, proxy_vf)  [memoise per run]
+
+
+def _proxy_visib(args, rgb, full_mask, sid, im, inst):
+    """POSE-INDEPENDENT live-proxy for (visib_mask, visib_fract).
+
+    The SAM prompt is the DETECTOR box = AABB of the full silhouette (this is
+    what the 2D OBB-detector produces; it carries NO pose/visibility info). SAM
+    segments the visible object in that box -> proxy for mask_visib. The proxy
+    visib_fract is SAM-area / box-area (live-available, NOT the GT occlusion).
+    Returns (mask(H,W bool) or None, proxy_vf float or None)."""
+    key = (sid, im, inst)
+    if key in _SAM_CACHE:
+        return _SAM_CACHE[key]
+    import sam_proxy_mask as SP
+    bbox = RR.mask_bbox(full_mask)          # detector-box analogue (pose-free)
+    if rgb is None or bbox is None:
+        _SAM_CACHE[key] = (None, None)
+        return None, None
+    x0, y0, x1, y1 = bbox
+    m = SP.sam_visible_mask(rgb, [x0, y0, x1, y1])
+    if m is not None and m.shape != full_mask.shape:
+        m = None                            # shape guard
+    pvf = SP.proxy_visib_fract(m, [x0, y0, x1, y1]) if m is not None else None
+    _SAM_CACHE[key] = (m, pvf)
+    return m, pvf
+
+
 def visaware_compare(per_inst, args, syms):
     """THE S-003/T-085 measurement: run refine_rc on the REAL GDRNPP coarse pose,
     BEFORE (today: scorer over the full crop, visib_mask=None) vs AFTER (ADR-020:
@@ -627,14 +683,22 @@ def visaware_compare(per_inst, args, syms):
             R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
             t_w2c = np.array(cam["cam_t_w2c"], float)
             K = np.array(cam["cam_K"], float).reshape(3, 3)
-            visib = RR.load_mask(args.bop_root, sid, im, inst)        # mask_visib
+            gt_visib = RR.load_mask(args.bop_root, sid, im, inst)     # mask_visib
             full = RR.load_full_mask(args.bop_root, sid, im, inst)    # full mask/
-            if visib is None:
+            if gt_visib is None:
                 continue
             if full is None:
-                full = visib
+                full = gt_visib
             _, R_gt, t_gt = gt_inst[(sid, im, inst)]
             rgb = RR.load_rgb(args.bop_root, sid, im)
+            # ── visib_mask source: GT (T-085) or POSE-INDEPENDENT SAM proxy (T-089)
+            proxy_vf = None
+            if args.proxy_mask == "sam":
+                visib, proxy_vf = _proxy_visib(args, rgb, full, sid, im, inst)
+                if visib is None:           # SAM failed -> can't test proxy here
+                    continue
+            else:
+                visib = gt_visib
             # image edges from the FULL-mask bbox (the real crop the pipeline sees).
             bbox = RR.mask_bbox(full)
             ie = None
@@ -646,6 +710,17 @@ def visaware_compare(per_inst, args, syms):
                                                    RR.TABLE_ORIGIN)
             verts_mm = np.asarray(meshes[oid].vertices, float)
             vf = float(d["visib_fract"])
+            # GT-scale proxy visib_fract = SAM-px / rendered-coarse-silhouette-px.
+            # The coarse silhouette is the live-available full-silhouette analogue
+            # (it IS rendered inside refine_rc anyway). Pose enters only the GATE
+            # SCALING here, never the proxy MASK (which stays pose-independent).
+            if args.proxy_mask == "sam" and visib is not None:
+                coarse_sil = RC.render_silhouette(
+                    verts_mm, R_world, t_world, RR.TABLE_ORIGIN,
+                    R_w2c, t_w2c, K, full.shape)
+                csum = int(np.asarray(coarse_sil, bool).sum())
+                if csum > 0:
+                    proxy_vf = float(int(np.asarray(visib, bool).sum())) / csum
             common = dict(
                 verts_mm=verts_mm, t_world_m=t_world, table_origin_m=RR.TABLE_ORIGIN,
                 R_w2c=R_w2c, t_w2c_mm=t_w2c, K=K, hw=full.shape, image_edge_mask=ie,
@@ -654,14 +729,30 @@ def visaware_compare(per_inst, args, syms):
             # BEFORE: today's path — full mask as target, no visibility restriction.
             R_before, info_b = RC.refine_detection(
                 R_world, target_mask=full, visib_mask=None, **common)
-            # AFTER: visibility-aware — target=mask_visib, score clipped to visible.
+            # AFTER: visibility-aware — target=visib_mask (GT mask_visib OR SAM
+            # proxy), score clipped to the visible region. The GATE input
+            # (visib_fract) is the live PROXY when --proxy-mask=sam (honest),
+            # unless --proxy-gate-vf=gt (ablation isolating mask-quality alone).
+            if args.proxy_mask == "sam" and args.proxy_gate_vf == "proxy":
+                gate_vf = proxy_vf if proxy_vf is not None else vf
+            else:
+                gate_vf = vf
+            # SHIPPED config = staggered margin schedule (T-085 v2). With proxy,
+            # the schedule reads the PROXY visib_fract = exact live behaviour.
+            sched = RC.DEFAULT_MARGIN_SCHEDULE if args.use_schedule else None
             R_after, info_a = RC.refine_detection(
-                R_world, target_mask=visib, visib_mask=visib, visib_fract=vf,
-                min_visib_fract=args.visaware_min_vf, **common)
+                R_world, target_mask=visib, visib_mask=visib, visib_fract=gate_vf,
+                min_visib_fract=args.visaware_min_vf, margin_schedule=sched,
+                **common)
 
             rs_coarse = rot_err_sym_contY(R_w2c @ R_world, R_gt, syms)
-            rs_before = rot_err_sym_contY(R_w2c @ R_before, R_gt, syms)
+            rs_refined_full = rot_err_sym_contY(R_w2c @ R_before, R_gt, syms)
             rs_after = rot_err_sym_contY(R_w2c @ R_after, R_gt, syms)
+            # BEFORE baseline: --before-coarse = the RAW GDRNPP coarse (what ships
+            # TODAY, since the live path does NO rotation refine and refine_rc is
+            # flag-off) — this is the honest live-deployment baseline. Default
+            # (full-mask refine) keeps the original T-085 separability framing.
+            rs_before = rs_coarse if args.before_coarse else rs_refined_full
             flip_before = rs_before > args.flip_thr_deg
             flip_after = rs_after > args.flip_thr_deg
             n += 1
@@ -673,10 +764,21 @@ def visaware_compare(per_inst, args, syms):
                 nbroke += 1
             if info_a.get("switched"):
                 nsw_after += 1
+            # proxy-quality (honesty): IoU(SAM proxy, GT mask_visib) — how well
+            # does the pose-free proxy recover the true visible region?
+            proxy_iou = None
+            if args.proxy_mask == "sam":
+                inter = int(np.logical_and(visib, gt_visib).sum())
+                union = int(np.logical_or(visib, gt_visib).sum())
+                proxy_iou = round(inter / union, 3) if union else 0.0
             details.append({
                 "scene": sid, "im": im, "inst": inst, "obj": oid,
                 "visib": round(vf, 3),
+                "gate_vf": round(float(gate_vf), 3) if gate_vf is not None else None,
+                "proxy_vf": round(proxy_vf, 3) if proxy_vf is not None else None,
+                "proxy_iou_vs_gt": proxy_iou,
                 "rs_coarse": round(rs_coarse, 1),
+                "rs_refined_full": round(rs_refined_full, 1),
                 "rs_before": round(rs_before, 1), "rs_after": round(rs_after, 1),
                 "flip_before": bool(flip_before), "flip_after": bool(flip_after),
                 "best_before": info_b.get("best_tag"),
@@ -684,12 +786,16 @@ def visaware_compare(per_inst, args, syms):
                 "switched_after": bool(info_a.get("switched")),
                 "visib_gated_out_after": bool(info_a.get("visib_gated_out", False)),
             })
+        ious = [d["proxy_iou_vs_gt"] for d in details
+                if d.get("proxy_iou_vs_gt") is not None]
         out = {
             "n": n,
             "n_flip_before": n_before, "n_flip_after": n_after,
             "flip_rate_before": round(n_before / n, 4) if n else 0.0,
             "flip_rate_after": round(n_after / n, 4) if n else 0.0,
             "n_fixed": nfix, "n_broke": nbroke, "n_switched_after": nsw_after,
+            "proxy_iou_mean": round(float(np.mean(ious)), 3) if ious else None,
+            "proxy_iou_median": round(float(np.median(ious)), 3) if ious else None,
             "details": details,
         }
         return out
@@ -699,6 +805,10 @@ def visaware_compare(per_inst, args, syms):
                    "min_visib_fract": args.visaware_min_vf,
                    "partial_band": [args.partial_lo, args.partial_hi],
                    "full_thr": args.full_thr,
+                   "proxy_mask": args.proxy_mask,
+                   "proxy_gate_vf": args.proxy_gate_vf,
+                   "use_schedule": bool(args.use_schedule),
+                   "before_coarse": bool(args.before_coarse),
                    "all": bool(args.visaware_all)},
         "partial": run_group(stratum_insts(args.partial_lo, args.partial_hi)),
         "full": run_group(full_insts()),
@@ -1080,12 +1190,12 @@ def _cache_visaware_hyps(per_inst, args, syms, n_cap):
         R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
         t_w2c = np.array(cam["cam_t_w2c"], float)
         K = np.array(cam["cam_K"], float).reshape(3, 3)
-        visib = RR.load_mask(args.bop_root, sid, im, inst)
+        gt_visib = RR.load_mask(args.bop_root, sid, im, inst)
         full = RR.load_full_mask(args.bop_root, sid, im, inst)
-        if visib is None:
+        if gt_visib is None:
             continue
         if full is None:
-            full = visib
+            full = gt_visib
         _, R_gt, t_gt = gt_inst[(sid, im, inst)]
         rgb = RR.load_rgb(args.bop_root, sid, im)
         bbox = RR.mask_bbox(full)
@@ -1096,9 +1206,30 @@ def _cache_visaware_hyps(per_inst, args, syms, n_cap):
         R_world, t_world = A.bop_pose_to_world(d["R_est"], t_gt, R_w2c, t_w2c,
                                                RR.TABLE_ORIGIN)
         verts_mm = np.asarray(meshes[oid].vertices, float)
+        # ── visib_mask source + GT-scale proxy visib_fract (T-089) ──
+        gt_vf = float(d["visib_fract"])
+        proxy_iou = None
+        gate_vf = gt_vf
+        if args.proxy_mask == "sam":
+            visib, _pvf_box = _proxy_visib(args, rgb, full, sid, im, inst)
+            if visib is None:
+                continue
+            inter = int(np.logical_and(visib, gt_visib).sum())
+            union = int(np.logical_or(visib, gt_visib).sum())
+            proxy_iou = round(inter / union, 3) if union else 0.0
+            # GT-scale proxy_vf = SAM-px / rendered-coarse-silhouette-px.
+            coarse_sil = RC.render_silhouette(
+                verts_mm, R_world, t_world, RR.TABLE_ORIGIN,
+                R_w2c, t_w2c, K, full.shape)
+            csum = int(np.asarray(coarse_sil, bool).sum())
+            pvf = (int(np.asarray(visib, bool).sum()) / csum) if csum > 0 else None
+            if args.proxy_gate_vf == "proxy" and pvf is not None:
+                gate_vf = float(pvf)
+        else:
+            visib = gt_visib
         n_fold = None
         stable = downs[oid]
-        # generate hypotheses + vis-aware scores ONCE.
+        # generate hypotheses + vis-aware scores ONCE (on chosen visib_mask).
         hyps, tags = RC.generate_hypotheses(
             R_world, sym_axis=tuple(SYM_AXIS), n_fold=n_fold, stable_downs=stable)
         scores, _detail = RC.cpu_edge_score(
@@ -1111,7 +1242,9 @@ def _cache_visaware_hyps(per_inst, args, syms, n_cap):
                   for h in hyps]
         cached.append({
             "scene_id": sid, "im_id": im, "inst": inst, "obj_id": oid,
-            "visib_fract": float(d["visib_fract"]),
+            "visib_fract": gt_vf,            # GT band membership (stratification)
+            "gate_vf": float(gate_vf),       # value fed to the gate (proxy if sam)
+            "proxy_iou": proxy_iou,
             "scores": [float(s) for s in scores],
             "tags": list(tags),
             "hyp_rs": [float(x) for x in hyp_rs],
@@ -1124,13 +1257,16 @@ def _eval_schedule(cached, schedule, min_margin, min_vf, flip_thr, lo, hi):
     """Evaluate ONE staggered schedule on cached instances within [lo,hi).
     Pure-analytic: re-run select_best_hypothesis with the schedule, then read the
     selected hypothesis' cached rot_sym. Returns flip-rate before(coarse)/after."""
+    # Stratify on GT visib_fract (band membership), but feed the GATE the gate_vf
+    # (= proxy visib_fract when --proxy-mask=sam, else GT). This keeps the bands
+    # comparable to the GT baseline while testing the honest live gate input.
     grp = [c for c in cached if lo <= c["visib_fract"] < hi]
     n = nf_before = nf_after = nfix = nbroke = nsw = 0
     for c in grp:
         scores = np.asarray(c["scores"], float)
         best_idx, sel = RC.select_best_hypothesis(
             scores, scores, coarse_idx=0, min_margin=min_margin,
-            visib_fract=c["visib_fract"], min_visib_fract=min_vf,
+            visib_fract=c.get("gate_vf", c["visib_fract"]), min_visib_fract=min_vf,
             margin_schedule=schedule)
         # NOTE: select_best_hypothesis takes (hyps, scores); hyps unused for gate.
         rs_after = c["hyp_rs"][best_idx]

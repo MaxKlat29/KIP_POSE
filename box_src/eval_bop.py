@@ -125,10 +125,13 @@ def load_models(dataset_dir, n_points=0):
     return models, models_dir
 
 
-def load_scene_data(dataset_dir, split, max_images=0):
+def load_scene_data(dataset_dir, split, max_images=0, visib_band=None):
     """Load per-scene GT + camera for the requested split.
 
     max_images > 0 keeps only the first max_images image-ids per scene (fast smoke).
+    visib_band = (lo, hi): keep only GT instances with lo <= visib_fract < hi (read
+    from scene_gt_info.json). This restricts the AR denom+numerator to a visibility
+    stratum (e.g. the partial-vis subset where the flip-fix concentrates, T-089).
 
     Returns dict: scene_id -> {gt: {im_id: [insts]}, cam: {im_id: cam}}
     """
@@ -143,6 +146,19 @@ def load_scene_data(dataset_dir, split, max_images=0):
         scene_id = int(name)
         gt = inout.load_scene_gt(gt_path)       # {im_id: [ {obj_id, cam_R_m2c, cam_t_m2c} ]}
         cam = inout.load_scene_camera(cam_path)  # {im_id: {cam_K, depth_scale, ...}}
+        if visib_band is not None:
+            lo, hi = visib_band
+            info_path = os.path.join(scene_path, "scene_gt_info.json")
+            info = json.load(open(info_path)) if os.path.isfile(info_path) else {}
+            gt2 = {}
+            for im_id, insts in gt.items():
+                vinfo = info.get(str(im_id)) or info.get(im_id) or []
+                kept = [inst for i, inst in enumerate(insts)
+                        if i < len(vinfo)
+                        and lo <= float(vinfo[i].get("visib_fract", -1.0)) < hi]
+                if kept:
+                    gt2[im_id] = kept
+            gt = gt2
         if max_images:
             keep = sorted(gt.keys())[:max_images]
             gt = {k: gt[k] for k in keep}
@@ -709,8 +725,17 @@ def main():
                          "(0 = full mesh; default 2000 keeps MSSD/MSPD tractable)")
     ap.add_argument("--max-images", type=int, default=0,
                     help="cap images per scene (0 = all; for fast smoke runs)")
+    ap.add_argument("--visib-band", default="",
+                    help="lo,hi : restrict AR to GT instances with "
+                         "lo<=visib_fract<hi (e.g. 0.20,0.50 = partial-vis subset, "
+                         "T-089). Reads scene_gt_info.json. Empty = full set.")
     ap.add_argument("--out", help="output dir for report.json + report.txt")
     args = ap.parse_args()
+
+    visib_band = None
+    if args.visib_band:
+        lo, hi = (float(x) for x in args.visib_band.split(","))
+        visib_band = (lo, hi)
 
     if not args.self_test and not args.preds:
         ap.error("provide --preds <csv> or --self-test")
@@ -726,10 +751,13 @@ def main():
     nsyms = ", ".join("{}:{}".format(o, models[o]["n_syms"]) for o in sorted(models))
     sys.stderr.write(f"[eval_bop] loaded {len(models)} models; "
                      f"symmetric: {sym_ids}; n_syms: {{{nsyms}}}\n")
-    scenes = load_scene_data(args.dataset_dir, args.split, max_images=args.max_images)
+    scenes = load_scene_data(args.dataset_dir, args.split,
+                             max_images=args.max_images, visib_band=visib_band)
     n_imgs = sum(len(sc['gt']) for sc in scenes.values())
+    n_gt = sum(len(insts) for sc in scenes.values() for insts in sc['gt'].values())
+    band_s = f" visib_band={visib_band}" if visib_band else ""
     sys.stderr.write(f"[eval_bop] split '{args.split}': {len(scenes)} scenes, "
-                     f"{n_imgs} images\n")
+                     f"{n_imgs} images, {n_gt} GT instances{band_s}\n")
 
     report_txt, report_json = "", {}
 
