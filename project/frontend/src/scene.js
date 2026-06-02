@@ -32,6 +32,9 @@ const PARTS_BASE_URL = "./assets/parts";
 // cell_hq.glb ist im ROHEN World-Frame (= Dataset-Welt). Die Teile-Posen sind
 // im pose-frame (= World − table_origin). Damit sie fluchten, addieren wir
 // table_origin auf die Teil-Positionen (siehe setParts) — die Zelle bleibt roh.
+// NB (2026-06-02, Max): das harte −1.18-Verschieben der Zelle war ein Hack (nicht
+// nachhaltig) und ist wieder raus. Frame-Reconciliation kommt an der Quelle
+// (Sim/Export/table_origin), nicht hier. → vorerst 0.0.
 const CELL_Z_ALIGN   = 0.0;
 
 export function createViewer(canvas) {
@@ -175,6 +178,13 @@ export function createViewer(canvas) {
       url,
       (gltf) => {
         collisionGroup.add(gltf.scene);
+        // WICHTIG: collisionGroup haengt NICHT im Scene-Graph (wird nie gerendert),
+        // darum aktualisiert die Render-Loop seine matrixWorld NIE. Ohne diesen
+        // expliziten Update wuerde der Raycast die CELL_Z_ALIGN-Verschiebung
+        // (-1.18) ignorieren und den Proxy bei seiner Roh-Z (~1.18) treffen →
+        // Teile saessen 1.18 m zu hoch. Einmal nach dem Add genuegt (Group bewegt
+        // sich danach nicht mehr).
+        collisionGroup.updateMatrixWorld(true);
         proxyLoaded = true;
         // Teile koennen schon platziert sein (kip.js laedt Proxy + Parts async) —
         // jetzt wo das Proxy da ist, einmal nachklammern.
@@ -252,93 +262,47 @@ export function createViewer(canvas) {
     return { total: results.length, real };
   }
 
-  // Setzt jeden partsGroup-Eintrag so, dass sein lowest-z auf der echten
-  // Tisch-Geometrie DIREKT UNTER seinem Footprint ruht. Der Tisch ist NICHT
-  // eine flache Ebene bei z=0 — es gibt Empore + erhoehte Tray-Plateaus +
-  // Maschinen-Bloecke (= MEHRSTUFIG). Frueher (Bild 17) schwebten GT (blau)
-  // UND Pred (rot), weil:
-  //   (1) der Such-Korridor an die — schon falsche — Teil-Hoehe gekoppelt war
-  //       (lo = box.min.z - 5cm): sass ein Teil zu hoch, reichte der Korridor
-  //       nicht runter zur echten Flaeche → kein Treffer → kein Clamp.
-  //   (2) "nie senken" (if dz>0): ein Teil das UEBER der Flaeche schwebt wurde
-  //       nie runtergeholt — genau der Schwebe-Fall.
-  //   (3) MAX ueber alle 3x3-Samples: ein einzelner Eckpunkt-Treffer auf einer
-  //       benachbarten hoeheren Empore-Kante zog das ganze Teil hoch.
+  // ── groundClamp = PHYSIK-DROP (Rewrite 2026-06-02, Max-Direktive) ─────────
+  // Eine einzige, robuste Regel statt der alten T-095/097-Gymnastik (0.6m-Cap,
+  // Konsistenz-Schwelle, Median-Heuristik, Teleport-Guards — alles raus):
   //
-  // T-097 (Bild 2026-06-02): nach dem T-095-Fix sass Pred (rot, backend-snap),
-  // aber GT (blau, raw, kein backend-snap) SCHWEBTE — weil ein harter 0.6m-Guard
-  // legitime Raw-GT-Korrekturen >0.6m verweigerte. Behoben: der Guard begrenzt
-  // nicht mehr die Sprungweite, sondern fragt "ist da unten eine klare
-  // durchgehende Auflageflaeche unterm Footprint?" — wenn ja, seaten (egal wie
-  // weit raw-Z weg lag), wenn nein, lassen (Teleport-Schutz).
+  //   "Lass das Teil fallen, bis es kollidiert."
   //
-  // Robuster Mehrstufen-Ansatz:
-  //   • Raycast IMMER von weit oben (z=5) nach unten, ENTKOPPELT von der
-  //     Teil-Hoehe — ein Teil darf beliebig weit ueber seiner Flaeche schweben.
-  //   • Footprint dicht (5x5) abtasten, pro Stelle die HOECHSTE Ebene.
-  //   • Center-Anker hat Vorrang: der Treffer unter dem Teil-Zentrum ist der
-  //     verlaesslichste "worauf liegt das Teil"-Hinweis (Center ins Leere →
-  //     Median der Footprint-Ebenen). Eine benachbarte HOEHERE Struktur kann das
-  //     Teil nicht hochziehen.
-  //   • Auflageflaeche = die Footprint-Samples, die KONSISTENT (±5cm) auf der
-  //     Anker-Ebene liegen; tableZ = deren Median. Ein hoeherer Nachbar-Block
-  //     faellt aus der Toleranz und zaehlt nicht mit.
-  //   • Platzieren in BEIDE Richtungen (anheben UND absenken) → Schwebendes
-  //     kommt runter, Versunkenes kommt hoch — auch ueber 0.6m, SOLANGE die
-  //     Flaeche konsistent ist (das ist der eigentliche T-097-Fix fuer raw GT).
-  //   • Absoluter 0.6m-Cap NUR noch wenn die Flaeche NICHT konsistent ist
-  //     (uneindeutiger Untergrund) → Teleport-Schutz bleibt; keine Flaeche im
-  //     Footprint → Teil lassen statt auf 0 zwingen.
+  // Für jeden Teil-Footprint casten wir senkrecht nach unten und setzen das Teil
+  // so, dass seine UNTERKANTE genau auf dem HÖCHSTEN getroffenen Punkt unter dem
+  // Footprint ruht — exakt dort, wo ein fallender Starrkörper zuerst aufsetzt
+  // ("bis ein Punkt kollidiert"). In BEIDE Richtungen: schwebt es → fällt runter,
+  // steckt es in der Fläche → kommt hoch. Kein Cap, keine Schwellen, kein Debug.
+  //
+  // Voraussetzung: die Zelle ist per CELL_Z_ALIGN so ausgerichtet, dass ihre
+  // Tisch-/Tray-Fläche auf pose-Z≈0 liegt (wo Grid, Origin-Marker und Kamera-
+  // Target ohnehin sind). Dann landen die Teile ≤10cm über dem Nullpunkt — die
+  // physikalische Realität (Teile liegen flach in der Schale), nicht 1.2m hoch.
+  //
+  // Raycast-Ziel ist clampTarget() = der grobe cell.glb-Collision-Proxy (T-099):
+  // nur echte Auflager (Boden/Tray), keine feinen cell_hi-Empore-/Streben-Kanten.
   const _raycaster = new THREE.Raycaster();
   const _down = new THREE.Vector3(0, 0, -1);
-  // ── T-097: Schwebe-Bug bei RAW GT ────────────────────────────────────────
-  // Frueher (T-095) kappte ein harter 0.6m-Guard JEDE Korrektur > 0.6m. Das war
-  // gegen einen "Teleport quer durch die Zelle" gedacht. Aber: backend platziert
-  // GT mit snap=False (raw), Pred mit snap=True (planar_z_snap vor dem Viewer).
-  // Raw GT kann darum LEGITIM weit (>0.6m) ueber seiner lokalen Flaeche ankommen
-  // (anderes XY als Pred + kein Pre-Snap + pose-frame-Z↔cell-Alignment-Offset
-  // auf der mehrstufigen Zelle). Der harte Cap verweigerte das Absenken → GT
-  // schwebte (Pred sass). Bild: rot sitzt, blau schwebt.
-  //
-  // Neue Idee: NICHT die SPRUNGWEITE begrenzen, sondern fragen "ist da unten eine
-  // klare, durchgehende Auflageflaeche unter dem Footprint?".
-  //   • JA (Mehrheit der Footprint-Samples liegt konsistent auf ~einer Ebene)
-  //     → seaten, egal wie weit raw-Z daneben lag. So kommt RAW GT runter.
-  //   • NEIN (kein/uneindeutiger Untergrund, Samples streuen wild)
-  //     → Teil lassen. So bleibt der Teleport-Schutz erhalten ohne legitime
-  //     Raw-GT-Korrekturen zu blockieren.
-  // Der absolute Cap bleibt nur als allerletztes Sicherheitsnetz GEGEN das eine
-  // Katastrophen-Szenario (z.B. Greifer-gehaltenes Teil hoch ueber der Zelle und
-  // KEINE konsistente Flaeche darunter) — er greift nur noch wenn die Flaeche
-  // NICHT konsistent ist.
-  const _MAX_CLAMP = 0.6;
-  // Footprint-Samples gelten als "dieselbe Auflageflaeche" wenn ihr Oberflaechen-Z
-  // innerhalb dieser Toleranz um die Anker-Z liegt. 5cm deckt CAD-Rauschen,
-  // Schraegen und Tisch-Kantenfasen ab, ohne ein darunterliegendes anderes
-  // Plateau (>=10cm Stufen in dieser Zelle) faelschlich mitzuzaehlen.
-  const _SURFACE_TOL = 0.05;
-  function _median(arr) {
-    if (!arr.length) return null;
-    const s = arr.slice().sort((a, b) => a - b);
-    const mid = s.length >> 1;
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) * 0.5;
-  }
-  // Alle Tisch-Z unter (x,y), von oben nach unten gecastet, sortiert absteigend.
-  // Raycastet gegen clampTarget() (T-099): den groben Collision-Proxy wenn
-  // geladen, sonst das sichtbare Mesh. NIE gegen das dichte cell_hi-Visual —
-  // das traefe feine Streben/Empore-Kanten, die nicht zur Auflageflaeche gehoeren.
-  function _surfacesAt(x, y, origin) {
+  // Höchste getroffene Fläche unter (x,y), von weit oben (z=5) nach unten gecastet.
+  function _topSurfaceAt(x, y, origin) {
     origin.set(x, y, 5);
     _raycaster.set(origin, _down);
     const hits = _raycaster.intersectObject(clampTarget(), true);
-    const zs = [];
-    for (const h of hits) zs.push(h.point.z);
-    zs.sort((a, b) => b - a);   // hoechste zuerst
-    return zs;
+    let top = null;
+    for (const h of hits) if (top === null || h.point.z > top) top = h.point.z;
+    return top;   // null = nichts unter (x,y)
   }
   function groundClamp() {
-    // Ohne ein Raycast-Ziel (weder Proxy noch Visual geladen) kein Sinn.
-    if (!proxyLoaded && !cellLoaded) return;
+    // ── DEAKTIVIERT 2026-06-02 (Max-Direktive) ──────────────────────────────
+    // Der Höhen-Clamp (egal ob alter Cap-Ansatz oder neuer Physik-Drop) ist nur
+    // ein Symptom-Pflaster gegen den eigentlichen Frame-Versatz (Teile pose-Z≈0
+    // vs. Zell-Tray ~1.18 m). Statt im Viewer an der Höhe zu drehen, wird die
+    // Teile rendern jetzt auf ihrer ROHEN Pose-Höhe — die nachhaltige Lösung
+    // (Frame an der Quelle reconcilen: Sim/Export/table_origin) kommt separat.
+    // Funktionskörper bleibt erhalten → Re-Aktivieren = dieses return entfernen.
+    return;
+    // eslint-disable-next-line no-unreachable
+    if (!proxyLoaded && !cellLoaded) return;   // kein Raycast-Ziel → nichts tun
     const _box = new THREE.Box3();
     const _origin = new THREE.Vector3();
     partsGroup.children.forEach((holder) => {
@@ -346,65 +310,26 @@ export function createViewer(canvas) {
       _box.expandByObject(holder);
       if (_box.isEmpty()) return;
 
-      const cx = (_box.min.x + _box.max.x) * 0.5;
-      const cy = (_box.min.y + _box.max.y) * 0.5;
-
-      // 1) Footprint dicht abtasten (5x5 ueber die XY-Bbox). Pro Stelle die
-      //    HOECHSTE getroffene Ebene = der Deckel auf den das Teil faellt wenn
-      //    man es loslaesst. Dichtes Grid statt 3x3 → ein Center ueber einer
-      //    Rille/Bohrung/Tischfuge findet trotzdem genug valide Footprint-
-      //    Treffer (loest T-095-Fall (c) "no-hit ueber Kante" robuster).
+      // Footprint (XY-Bbox) dicht abtasten — 5x5 + Zentrum. Pro Stelle die
+      // höchste Fläche darunter; der Auflagepunkt ist das MAXIMUM davon = der
+      // erste Kontaktpunkt beim Fallenlassen ("bis ein Punkt kollidiert").
       const N = 5;
-      const xs = [], ys = [];
+      let restZ = null;
       for (let i = 0; i < N; i++) {
-        const t = N === 1 ? 0.5 : i / (N - 1);
-        xs.push(_box.min.x + t * (_box.max.x - _box.min.x));
-        ys.push(_box.min.y + t * (_box.max.y - _box.min.y));
-      }
-      const footprintZs = [];
-      for (const x of xs) {
-        for (const y of ys) {
-          const zs = _surfacesAt(x, y, _origin);
-          if (zs.length) footprintZs.push(zs[0]);
+        const tx = N === 1 ? 0.5 : i / (N - 1);
+        const x = _box.min.x + tx * (_box.max.x - _box.min.x);
+        for (let j = 0; j < N; j++) {
+          const ty = N === 1 ? 0.5 : j / (N - 1);
+          const y = _box.min.y + ty * (_box.max.y - _box.min.y);
+          const z = _topSurfaceAt(x, y, _origin);
+          if (z !== null && (restZ === null || z > restZ)) restZ = z;
         }
       }
-      if (!footprintZs.length) return;    // gar keine Flaeche im Footprint → lassen
+      if (restZ === null) return;          // gar keine Fläche im Footprint → lassen
 
-      // 2) Center-Anker hat Vorrang: die Flaeche direkt unterm Schwerpunkt ist
-      //    der verlaesslichste "worauf liegt das Teil"-Hinweis. Eine benachbarte
-      //    HOEHERE Struktur (Empore-Kante) unter nur einem Eckpunkt darf das
-      //    Teil NICHT hochziehen. Faellt der Center ins Leere (Loch im Zentrum),
-      //    nimm den MEDIAN der Footprint-Ebenen — ein einzelner hoher Ausreisser
-      //    verschiebt den Median nicht.
-      const centerZs = _surfacesAt(cx, cy, _origin);
-      const anchorZ = centerZs.length ? centerZs[0] : _median(footprintZs);
-      if (anchorZ === null) return;
-
-      // 3) Auflage-Flaeche = die Footprint-Samples, die KONSISTENT auf der Anker-
-      //    Ebene liegen (innerhalb _SURFACE_TOL). "Worauf ruht das Teil" = die
-      //    durchgehende Flaeche unterm Footprint, NICHT eine schmale hoehere
-      //    Block-Kante. Ein hoeherer Nachbar-Block faellt aus der Toleranz und
-      //    zaehlt nicht mit. tableZ = Median dieser konsistenten Samples (glaettet
-      //    CAD-Rauschen, ohne sich von einem Ausreisser ziehen zu lassen).
-      const onSurface = footprintZs.filter((z) => Math.abs(z - anchorZ) <= _SURFACE_TOL);
-      const tableZ = _median(onSurface) ?? anchorZ;
-
-      // 4) Ist das eine KLARE durchgehende Auflageflaeche? Dann seaten — egal wie
-      //    weit raw-Z daneben lag (RAW GT kommt so runter). Kriterium: die
-      //    Mehrheit der getroffenen Footprint-Samples liegt auf dieser Ebene.
-      //    Sonst (uneindeutiger Untergrund, Samples streuen wild ueber mehrere
-      //    Ebenen) greift der absolute Cap als Teleport-Schutz: grosse Spruenge
-      //    werden NUR dann verweigert.
-      const consistent = onSurface.length >= Math.ceil(footprintZs.length * 0.5);
-
-      // 5) BEIDE Richtungen: Teil-Unterkante exakt auf die Flaeche setzen.
-      const dz = tableZ - _box.min.z;
-      if (Math.abs(dz) < 1e-5) return;    // sitzt schon → nichts tun
-      // Teleport-Guard NUR bei uneindeutiger Flaeche. Eine klare durchgehende
-      // Auflageflaeche unterm Footprint darf beliebig weit absenken/anheben.
-      if (!consistent && Math.abs(dz) > _MAX_CLAMP) return;
-      // matrixAutoUpdate=false → direkte Manipulation der z-Komponente
-      holder.matrix.elements[14] += dz;
+      const dz = restZ - _box.min.z;       // Unterkante exakt auf den Auflagepunkt
+      if (Math.abs(dz) < 1e-5) return;     // sitzt schon → nichts tun
+      holder.matrix.elements[14] += dz;    // matrixAutoUpdate=false → z direkt setzen
       holder.matrixWorldNeedsUpdate = true;
     });
   }
