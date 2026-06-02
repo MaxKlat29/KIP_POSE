@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T14:37:17Z",
+  "updated": "2026-06-02T14:44:44Z",
   "columns": [
     {
       "id": "backlog",
@@ -5631,7 +5631,7 @@
       "id": "T-098",
       "title": "T-098: Höher-aufgelöstes Zellen-3D-Modell (>80MB, mehr Polygone, unkomprimiert) exportieren + als Viewer-Default deployen",
       "description": "Sam: export_cell_glb.py mit hoeherem --max-total-tris (~3.5-4M tris -> >80MB, cell_web=1.1M=27MB) -> cell_hi.glb, UNKOMPRIMIERT (kein meshopt, verzerrt). loadCell-Default auf cell_hi.glb + Fallback cell_web->cell. Deploy + live verify. cell-loader-Progress traegt den groesseren Download.",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "sam-devops",
       "instance": "",
       "priority": "P1",
@@ -5642,9 +5642,9 @@
       ],
       "session": "2026-06-02-pose-tune",
       "created": "2026-06-02T14:37:17Z",
-      "updated": "2026-06-02T14:37:17Z",
+      "updated": "2026-06-02T14:44:44Z",
       "started_at": "2026-06-02T14:37:17Z",
-      "completed_at": null,
+      "completed_at": "2026-06-02T14:44:44Z",
       "comments": [],
       "logs": [
         {
@@ -5652,6 +5652,18 @@
           "agent": "sam-devops",
           "level": "info",
           "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T14:44:44Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "cell_hi.glb 93.9MB / 4.01M tris (--max-total-tris 4000000, ~24.5 B/tri, 1. Versuch), loadCell default cell_hi + Fallback-Kette cell_hi->cell_web->cell, deployed+live 9e65505. Box-kip.js war clean==pre-main -> ganze Datei scp (.bak-cellhi). Static -> kein Restart. Public+box-local grün (glb 200/98433104 bytes, kip.js cell_hi=3, markers=3, health ok). CF-Ladezeit 94MB ~40s. Box AN, Jetson TABU."
+        },
+        {
+          "ts": "2026-06-02T14:44:44Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     }
