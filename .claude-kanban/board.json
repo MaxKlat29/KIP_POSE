@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-01T21:12:40Z",
+  "updated": "2026-06-02T08:51:25Z",
   "columns": [
     {
       "id": "backlog",
@@ -5059,7 +5059,7 @@
       "id": "T-089",
       "title": "FU: refine_rc_visaware in deployter Pipeline aktivieren (braucht Live-mask_visib-Quelle)",
       "description": "Enablement-Entscheidung Max/Viktor. OBB-Detektor liefert keine mask_visib -> Proxy-Visibility-Quelle noetig (Detektor-Maske/Segmentierung). Erst dann greift der Flip-Fix LIVE (aktuell nur Eval/flag).",
-      "column": "backlog",
+      "column": "done",
       "assignee": "viktor-lead",
       "instance": "",
       "priority": "P1",
@@ -5070,11 +5070,108 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T16:26:23Z",
-      "updated": "2026-06-01T16:26:23Z",
-      "started_at": null,
-      "completed_at": null,
+      "updated": "2026-06-02T08:51:25Z",
+      "started_at": "2026-06-02T03:10:13Z",
+      "completed_at": "2026-06-02T08:51:25Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-02T03:10:13Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T03:10:13Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Max: scharf schalten WENN's was bringt, KEIN Retrain. Kai: pose-unabh. Live-visib-Proxy (SAM-Seg der Detektor-Box bevorzugt) -> Fix mit PROXY-Maske evaluieren (Flip-Rate+AR) -> nur bei echtem Gewinn live in _bop_pose_to_result wiren. Box wecken."
+        },
+        {
+          "ts": "2026-06-02T03:15:28Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Box WoL-geweckt (RTX3090 frei). SAM ViT-H present -> Proxy-Kandidat (a) verfuegbar, pose-unabhaengig, kein Retrain. Eval-Plan: SAM-bbox-seg als visib_mask-Ersatz in visaware_compare, before/after-Flip-Rate mit Proxy."
+        },
+        {
+          "ts": "2026-06-02T04:44:06Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "moved: in_progress → backlog"
+        },
+        {
+          "ts": "2026-06-02T04:48:49Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T05:03:10Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "BASELINE AR (coarse, val, sym-aware, n_points2000): FULL set Anker_Kurz 0.870(n1306) / Anker_Lang 0.907(n1253) / Zahnrad 0.838(n1484). PARTIAL-VIS [0.20,0.50): Anker_Kurz 0.609(n696) / Anker_Lang 0.318(n117) / Zahnrad 0.387(n124) — DA sitzt der Schaden (rot 44-70deg, trans 89-176mm). Built refine_preds-Pfad: rc_refine_eval.py +--proxy-mask{gt,sam} +--use-schedule(shipped staggered), eval_bop.py +--visib-band. Refine-GT laeuft."
+        },
+        {
+          "ts": "2026-06-02T05:28:11Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "ENTSCHEIDENDER AR-BEFUND (fair, identische Pipeline=z-snap): GT-mask-Fix (upper bound, shipped staggered schedule) bewegt AR NICHT. FULL: Anker_Kurz 0.801->0.801, Anker_Lang 0.846->0.847, Zahnrad 0.645=0.645. PARTIAL[0.20,0.50): 0.566->0.565, 0.304->0.303, 0.360=0.360. Grund: shipped schedule (margin_well0.15/occ0.02) ist regressionssicher kalibriert -> auf voller val-Population nur 2 von 1409 Anker-Rotationen geaendert. T-085s -70% Flip-Rate war auf flip-ANGEREICHERTEM Subset; AR ist sym-aware + von well-vis-Mehrheit dominiert -> Flip-Rate-Hebel verduennt sich in AR auf ~0. SAM-proxy laeuft (kann den GT-Upper-Bound nicht uebertreffen)."
+        },
+        {
+          "ts": "2026-06-02T05:53:56Z",
+          "agent": "queen",
+          "level": "warn",
+          "msg": "PAUSED (Max WLAN weg). Resume-State: team/_shared/sessions/2026-06-01-anker-flip-fix/state.md. Korrektur: NUR Val-Set (kein neues Sim), AR nur EINMAL am Ende. Kein Retrain. Box AN lassen."
+        },
+        {
+          "ts": "2026-06-02T06:52:19Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_progress"
+        },
+        {
+          "ts": "2026-06-02T07:40:07Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "INERTNESS-URSACHE GEFUNDEN (1404 Anker im GT-vf-Band): proxy_vf_csil=SAM-px/coarse-sil-px hat MEDIAN 1.29 (>1!), NICHT unter 0.20 wie vermutet. SAM segmentiert mehr als die gerenderte Coarse-Silhouette -> gate_vf landet im well-vis-Band (>=0.50) -> kriegt konservativen shipped margin 0.15 -> aggressives [0.20,0.50)-Band wird NIE erreicht. Nur 3.9% landen in [0.20,0.50) vs 57.9% bei GT. SAM-Maske selbst GUT (IoU vs GT-vis median 0.88) -> reines SKALA-Problem, kein Masken-Problem. Fallback GDRNPP-mask NICHT noetig."
+        },
+        {
+          "ts": "2026-06-02T07:41:08Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "KALIBRIERUNG: ALLE Live-Proxies korrelieren NICHT mit GT visib_fract (Spearman: csil=0.11, box=0.19, clip=0.22, coarseCover=-0.10). Linear-Remap-Slope=-0.0006 ~ Null-Information. Kein Band/Rescaling reproduziert das GT-occluded-Set: beste F1=0.70 nur durch Selektion von 96% aller Instanzen (keine Diskrimination). Grund-Verdacht: GT-vf-Verteilung extrem eng um 0.49 geclustert (p25=0.46,p75=0.51) -> kaum echte Occlusion-Varianz im Val-Set. Pruefe jetzt Korrelation auf voller gt_vf-Range."
+        },
+        {
+          "ts": "2026-06-02T08:07:22Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "FLIP-VERIFY (813 Anker, GT-vf-Band [0.20,0.50), rc_anker_occ=staggered+free-space): gt_upperbound=3 switched(0.37%), sam_raw_today=4(0.49%), sam_calibrated(scale0.384,clip)=3(0.37%). ENTSCHEIDEND: Kalibrierung bringt KEINE zusaetzlichen Flips - sie landet jetzt korrekt im occ-Band, aber es ist NICHTS mehr zum Flippen da. Selbst GT-Upperbound nur 3/813. URSACHE NICHT Proxy-Skala sondern FREE-SPACE-REFUTATION (refuted ~1020-1155) disqualifiziert die Flip-Hypothesen VOR dem Gate. T-085 -70% galt OHNE free-space; T-092-free-space macht die Disambiguierung jetzt strukturell -> gate-Flip redundant."
+        },
+        {
+          "ts": "2026-06-02T08:30:55Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "VOLLSTAENDIGE EVIDENZMATRIX (813 Anker [0.20,0.50)): T-085-config(staggered,KEIN free-space): gt_ub=4, sam_raw=8, sam_calib=7 switched. Shipped-config(+free-space): gt_ub=3, sam_raw=4, sam_calib=3. VERDIKT: (1) Proxy-Kalibrierung FUNKTIONIERT (scale 0.384 landet korrekt im occ-Band) ABER (2) recovered KEINE sinnvollen Flips - selbst GT-Upperbound nur 3-4/813. T-085 -70% war auf flip-angereichertem Synth-Subset, nicht der realen Val-Occlusion. (3) SAM triggert MEHR Flips als GT (8 vs 4) = falsch-positive (SAM-Maske lockerer/groesser -> Score verrauschter), NICHT die disambiguierenden. (4) Free-space-refutation(T-092) macht die Disambiguierung strukturell. ENTSCHEIDUNG: KEIN scharf-schalten - waere No-op bzw. SAM-FP-Schaden. NICHT live gewired."
+        },
+        {
+          "ts": "2026-06-02T08:33:48Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Proxy-Gate kalibriert: SAM-Flip-Rate vorher(scale=1)->nachher(scale=0.384,clip) auf 813 Anker [0.20,0.50): shipped-cfg 4->3 switched, T-085-cfg 8->7 switched. Live gewired=NEIN (ehrlicher No-op/Schaden-Verdikt: selbst GT-Upperbound nur 3-4/813, SAM addiert false-positives, T-092-free-space disambiguiert schon). Branch team/2026-06-02-anker-flip-live commit e3cf08c (Diagnose+Kalibrierungs-Tooling, Live-Pfad _bop_pose_to_result UNANGETASTET). Empfehlung: T-089 als ehrliches Negativ schliessen, KEIN scharf-schalten."
+        },
+        {
+          "ts": "2026-06-02T08:51:25Z",
+          "agent": "queen",
+          "level": "success",
+          "msg": "EHRLICH GESCHLOSSEN (Max-Entscheidung). Live-Flip-Fix bringt auf echten Daten nichts: selbst GT-Upper-Bound fixt nur 3-4/813 im occ-Band; SAM-Proxy gut (IoU 0.88) aber redundant zu T-092-free-space + erzeugt FPs. Single-View an der Decke. KEIN Deploy (kein No-op/Schaden). Live unangetastet. Echte Hebel = Multi-View / Retrain-DR (T-090, gevetot). Diagnose-Tooling auf Branch e3cf08c (nicht nach main)."
+        },
+        {
+          "ts": "2026-06-02T08:51:25Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
     },
     {
       "id": "T-090",
