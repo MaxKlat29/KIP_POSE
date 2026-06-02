@@ -12,13 +12,16 @@ const canvas = document.getElementById("scene");
 const viewer = createViewer(canvas);
 window.__KIP_VIEWER__ = viewer;
 
-// Cell + Nullpunkt einmal laden. cell_web.glb (27 MB, 1.1 M tris, unkomprimiert)
-// ist der beste Kompromiss aus Detail und Praktikabilitaet — das unkomprimierte
-// 189-MB-Original braucht ueber den CF-Tunnel ~10 min Download, und die
-// EXT_meshopt-Variante verzerrt Geometrie sichtbar (gltfpack -cc ist verlustig
-// fuer Normalen/UVs trotz lossless tris). Fallback: alte cell.glb (8 MB).
-viewer.loadCell("./assets/cell_web.glb", (ok) => {
-  if (!ok) viewer.loadCell("./assets/cell.glb", () => {});
+// Cell + Nullpunkt einmal laden. cell_hi.glb (94 MB, 4.0 M tris, UNKOMPRIMIERT)
+// ist der Mittelweg: deutlich mehr Polygone als cell_web (27 MB / 1.1 M tris) bei
+// noch akzeptabler Ladezeit ueber den CF-Tunnel. Das volle 189-MB-Original
+// (cell_hq, ~8 M tris) laedt zu lahm; EXT_meshopt wurde verworfen, weil gltfpack
+// -cc Geometrie/Normalen sichtbar verzerrt (verlustig trotz lossless tris).
+// Fallback-Kette: cell_hi -> cell_web (27 MB) -> cell (8 MB).
+viewer.loadCell("./assets/cell_hi.glb", (ok) => {
+  if (!ok) viewer.loadCell("./assets/cell_web.glb", (ok2) => {
+    if (!ok2) viewer.loadCell("./assets/cell.glb", () => {});
+  });
 });
 createOriginMarker(viewer, [0, 0, 0]);
 
