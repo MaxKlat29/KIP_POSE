@@ -168,17 +168,58 @@ export function createViewer(canvas) {
     return { total: results.length, real };
   }
 
-  // Hebt jeden partsGroup-Eintrag so an, dass sein lowest-z auf der echten
-  // Tisch-Geometrie unter ihm ruht. Der Tisch ist NICHT eine flache Ebene
-  // bei z=0 — es gibt erhoehte Tray-Plateaus + Maschinen-Bloecke. Wir
-  // raycasten daher pro Teil downward auf cellGroup an mehreren Sample-
-  // Punkten (Center + 4 XY-Eckpunkten der Teile-AABB) und nehmen das MAX
-  // der getroffenen Tisch-Z. Wenn die Teile-AABB.min.z unter diesem
-  // Maximum liegt, heben wir den Holder so weit an, dass beide
-  // uebereinstimmen ("min(z-tisch(x,y))"-Garantie aus Max-Spec).
-  // Nie senken — schwebende Teile (Held in Greifer) bleiben oben.
+  // Setzt jeden partsGroup-Eintrag so, dass sein lowest-z auf der echten
+  // Tisch-Geometrie DIREKT UNTER seinem Footprint ruht. Der Tisch ist NICHT
+  // eine flache Ebene bei z=0 — es gibt Empore + erhoehte Tray-Plateaus +
+  // Maschinen-Bloecke (= MEHRSTUFIG). Frueher (Bild 17) schwebten GT (blau)
+  // UND Pred (rot), weil:
+  //   (1) der Such-Korridor an die — schon falsche — Teil-Hoehe gekoppelt war
+  //       (lo = box.min.z - 5cm): sass ein Teil zu hoch, reichte der Korridor
+  //       nicht runter zur echten Flaeche → kein Treffer → kein Clamp.
+  //   (2) "nie senken" (if dz>0): ein Teil das UEBER der Flaeche schwebt wurde
+  //       nie runtergeholt — genau der Schwebe-Fall.
+  //   (3) MAX ueber alle 3x3-Samples: ein einzelner Eckpunkt-Treffer auf einer
+  //       benachbarten hoeheren Empore-Kante zog das ganze Teil hoch.
+  //
+  // Robuster Mehrstufen-Ansatz:
+  //   • Raycast IMMER von weit oben (z=5) nach unten, ENTKOPPELT von der
+  //     Teil-Hoehe — ein Teil darf beliebig weit ueber seiner Flaeche schweben.
+  //   • Pro Sample ALLE cellGroup-Treffer einsammeln (nicht nur erster).
+  //   • Center-Anker zuerst: der Treffer unter dem Teil-Zentrum ist der
+  //     verlaesslichste "worauf liegt das Teil"-Hinweis.
+  //   • Robuste Flaechenwahl = MEDIAN der pro-Sample-Oberflaechen-Z (statt MAX),
+  //     gewichtet um den Center-Anker: eine Empore-Kante die nur unter einem
+  //     Eckpunkt liegt verschiebt den Median nicht → zieht das Teil nicht hoch.
+  //   • Platzieren in BEIDE Richtungen (anheben UND absenken) → Schwebendes
+  //     kommt runter, Versunkenes kommt hoch.
+  //   • Sanity-Guard: keine katastrophalen Spruenge (Bewegung gekappt); wenn
+  //     gar keine plausible Flaeche im Footprint → Teil lassen statt auf 0
+  //     zwingen.
   const _raycaster = new THREE.Raycaster();
   const _down = new THREE.Vector3(0, 0, -1);
+  // Maximale Korrektur in einem Schritt. Ein schwebendes Teil darf ruhig 30-40cm
+  // ueber seiner Flaeche stehen (schlechte Inferenz) — das ist KEIN Fehl-Match,
+  // die Center-Anker-Flaeche liegt ja exakt unterm Schwerpunkt. Der Guard faengt
+  // nur den echten Katastrophen-Fall: ein Teleport quer durch die ~1.4m hohe
+  // Zelle auf einen voellig fremden Block. 0.6m deckt jeden realistischen
+  // Schwebe-/Versink-Fall ab und rejecten bleibt nur der Teleport.
+  const _MAX_CLAMP = 0.6;
+  function _median(arr) {
+    if (!arr.length) return null;
+    const s = arr.slice().sort((a, b) => a - b);
+    const mid = s.length >> 1;
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) * 0.5;
+  }
+  // Alle Tisch-Z unter (x,y), von oben nach unten gecastet, sortiert absteigend.
+  function _surfacesAt(x, y, origin) {
+    origin.set(x, y, 5);
+    _raycaster.set(origin, _down);
+    const hits = _raycaster.intersectObject(cellGroup, true);
+    const zs = [];
+    for (const h of hits) zs.push(h.point.z);
+    zs.sort((a, b) => b - a);   // hoechste zuerst
+    return zs;
+  }
   function groundClamp() {
     if (!cellLoaded) return;            // ohne Tisch-Geometrie kein Sinn
     const _box = new THREE.Box3();
@@ -188,45 +229,46 @@ export function createViewer(canvas) {
       _box.expandByObject(holder);
       if (_box.isEmpty()) return;
 
-      // 3x3 Sample-Grid ueber die XY-Bbox des Teils. Dichteres Sampling als
-      // nur Eckpunkte deckt Teile ab, die ueber eine Plateau-Kante haengen
-      // (Bild 17: Anker_Lang halb auf Tray-Rand, halb in der Luft).
-      const xs = [_box.min.x, (_box.min.x + _box.max.x) * 0.5, _box.max.x];
-      const ys = [_box.min.y, (_box.min.y + _box.max.y) * 0.5, _box.max.y];
-      const samples = [];
-      for (const x of xs) for (const y of ys) samples.push([x, y]);
+      const cx = (_box.min.x + _box.max.x) * 0.5;
+      const cy = (_box.min.y + _box.max.y) * 0.5;
 
-      // Hits filtern in [box.min.z - 5cm, box.max.z + 1cm]: deckt sowohl
-      // "Teil clippt knapp ins Plateau" als auch "Teil sitzt sauber drauf"
-      // ab, aber schliesst weit unter (Tisch-Boden unter dem Plateau) und
-      // weit drueber (Maschinen-Block hoeher als Teil) aus.
-      const lo = _box.min.z - 0.05;
-      const hi = _box.max.z + 0.01;
-      let tableZ = -Infinity;
-      let hitCount = 0;
-      for (const [sx, sy] of samples) {
-        _origin.set(sx, sy, 5);
-        _raycaster.set(_origin, _down);
-        const hits = _raycaster.intersectObject(cellGroup, true);
-        for (const h of hits) {
-          if (h.point.z >= lo && h.point.z <= hi) {
-            hitCount++;
-            if (h.point.z > tableZ) tableZ = h.point.z;
+      // 1) Center-Anker: die Flaeche direkt unterm Schwerpunkt. Das ist der
+      //    Boden auf dem das Teil mehrheitlich aufliegt. Hoechster Treffer
+      //    unter dem Center = die relevante Auflage-Ebene (Plateau-Deckel,
+      //    nicht der Tisch-Boden darunter). Der Anker hat Vorrang: das Teil
+      //    ruht primaer auf seiner Center-Flaeche, eine benachbarte hoehere
+      //    Empore-Kante kann es nicht hochziehen.
+      const centerZs = _surfacesAt(cx, cy, _origin);
+      let tableZ = centerZs.length ? centerZs[0] : null;
+
+      // 2) Fallback nur wenn der Center ins Leere traf (Teil mit Loch im
+      //    Zentrum, z.B. Ringmagnet ueber einer Bohrung): 3x3 Sample-Grid ueber
+      //    die XY-Bbox, je Spalte die HOECHSTE Ebene, dann MEDIAN statt MAX —
+      //    eine einzelne hoehere Empore-Kante unter einem Eckpunkt verschiebt
+      //    den Median nicht → zieht das Teil nicht hoch.
+      if (tableZ === null) {
+        const xs = [_box.min.x, cx, _box.max.x];
+        const ys = [_box.min.y, cy, _box.max.y];
+        const surfaceZs = [];
+        for (const x of xs) {
+          for (const y of ys) {
+            const zs = _surfacesAt(x, y, _origin);
+            if (zs.length) surfaceZs.push(zs[0]);
           }
         }
+        tableZ = _median(surfaceZs);
+        if (tableZ === null) return;      // gar keine Flaeche im Footprint → lassen
       }
-      // Kein Tisch unter dem Teil im Such-Korridor → Teil schwebt echt in
-      // der Luft (z.B. Hand-im-Greifer-Szenario, hier nicht real, aber als
-      // Defensive). KEIN Lift erzwingen — Standard-Boden 0 nur wenn Teil
-      // ohnehin DRUNTER ist (Anker im Schwarz-Loch-Tray).
-      if (tableZ === -Infinity) tableZ = _box.min.z < 0 ? 0 : _box.min.z;
 
+      // 4) BEIDE Richtungen: Teil-Unterkante exakt auf die Flaeche setzen.
       const dz = tableZ - _box.min.z;
-      if (dz > 0) {
-        // matrixAutoUpdate=false → direkte Manipulation der z-Komponente
-        holder.matrix.elements[14] += dz;
-        holder.matrixWorldNeedsUpdate = true;
-      }
+      // Sanity-Guard: katastrophale Spruenge sind fast sicher Fehl-Matches
+      // (Maschinen-Block, falsche Ebene) → nicht anfassen.
+      if (Math.abs(dz) > _MAX_CLAMP) return;
+      if (Math.abs(dz) < 1e-5) return;    // sitzt schon → nichts tun
+      // matrixAutoUpdate=false → direkte Manipulation der z-Komponente
+      holder.matrix.elements[14] += dz;
+      holder.matrixWorldNeedsUpdate = true;
     });
   }
 
