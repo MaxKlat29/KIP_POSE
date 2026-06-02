@@ -70,9 +70,11 @@ project/models/*.metrics.json
 project/models/_train_summary.json
 # Lokale GDRNPP-Checkpoints (4.8GB, via setup.ipynb von der Workstation pullbar).
 project/models/gdrnpp/
-# HQ-Variante der Maschinen-Zelle (197MB). Frontend nutzt cell_web.glb (27MB);
-# cell_hq ist nur fuer Offline-Render mit voller Geometrie.
+# HQ-Variante der Maschinen-Zelle (197MB). cell_hi.glb (94MB, 4.0M tris) ist die
+# Live-Variante des Viewers; cell_hq ist das volle Offline-Render. Beide gross ->
+# nicht in git (auf der Box via box_src/export_cell_glb.py erzeugbar).
 project/frontend/assets/cell_hq.glb
+project/frontend/assets/cell_hi.glb
 # Detektor-Trainings-Artefakte (Kurven-Plot + CSV; via setup.ipynb erzeugbar).
 project/models/detector.curves.png
 project/models/*.results.csv
