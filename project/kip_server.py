@@ -285,13 +285,20 @@ def _zivid_cam():
 def _run_detector(img_path, out_json):
     """YOLOv8-OBB-Detektor (train-venv subprocess) -> det-json im load_detections-
     Format: dict {scene_im_id: [{obj_id, bbox_est(xywh), score, time}]}.
-    Filtert auf trainierte Objekte (anker_kurz=1, anker_lang=2, zahnrad=6)."""
+    Filtert auf trainierte Objekte (anker_kurz=1, anker_lang=2, zahnrad=6).
+
+    conf=0.1 (T-094-Sweep, val 4043 GT): senkt die Detektor-Confidence von 0.3
+    -> 0.1 fuer hoeheren Recall unter Occlusion (rec_occ 0.971 -> 0.979) bei
+    nur -0.5pp Precision (0.920 -> 0.915, kein Einbruch). imgsz/NMS-iou bleiben
+    (1280 / ult-default 0.7) — die waren bereits optimal. Detektor ist NICHT der
+    Pipeline-Cap (GDRNPP-Pose-AR ~0.87 ist es); dies ist eine kleine, risikoarme
+    Recall-Verbesserung, kein Retrain."""
     trained_csv = ",".join(str(_OID[s]) for s in _discover_trained() if s in _OID) or "1"
     code = (
         "import sys,json; sys.path.insert(0,'%s')\n"
         "from obb_to_aabb_dets import run_detector_to_bop\n"
         "trained={%s}\n"
-        "d=run_detector_to_bop('%s',['%s'],[(0,0)],conf=0.3,imgsz=1280,device=0)\n"
+        "d=run_detector_to_bop('%s',['%s'],[(0,0)],conf=0.1,imgsz=1280,device=0)\n"
         "d=[x for x in d if x.get('category_id') in trained]\n"
         "out={}\n"
         "for x in d:\n"
