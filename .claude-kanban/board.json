@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T08:51:25Z",
+  "updated": "2026-06-02T13:28:00Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 93,
+  "next_id": 97,
   "tickets": [
     {
       "id": "T-001",
@@ -4993,7 +4993,7 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T14:54:52Z",
-      "updated": "2026-06-01T21:08:38Z",
+      "updated": "2026-06-02T13:28:00Z",
       "started_at": "2026-06-01T16:22:34Z",
       "completed_at": "2026-06-01T21:08:38Z",
       "comments": [],
@@ -5033,6 +5033,12 @@
           "agent": "sam-devops",
           "level": "info",
           "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-06-02T13:28:00Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "moved: done → done"
         }
       ]
     },
@@ -5354,6 +5360,173 @@
           "msg": "Deployed to box (max@100.85.216.95, /mnt/data/kip_pose). Null Live-Verhaltensaenderung: alle 3 Target-Files (refine_rc.py, box_src/anker_flip_repro.py, box_src/rc_refine_eval.py) bereits byte-identisch mit main(7a77151) -> KEIN scp/Clobber noetig. e2e_infer.py fehlt auf Box + nicht im Live-Pfad -> skip. kip-server.service restartet (PID 39658): is-active=active, /api/health=ok, /api/live/status=503-graceful, FE-guard count=3 (tab-live+cell-loader intakt), journal sauber. Kein FE/kip_server.py angefasst."
         }
       ]
+    },
+    {
+      "id": "T-093",
+      "title": "T-093: Echte AR verifizieren — README (0.87/0.91/0.84) vs Team-Messung (0.80/0.85/0.65) reconcilen",
+      "description": "Kai: autoritative per-Teil-AR des LIVE-Modells (preds_best/model_best) auf Val ermitteln + Diskrepanz erklaeren (Subset/test_targets/Eval-Config/Checkpoint?). Kein Retrain, kein neues Sim.",
+      "column": "done",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-tune",
+        "eval"
+      ],
+      "session": "2026-06-02-pose-tune",
+      "created": "2026-06-02T13:02:04Z",
+      "updated": "2026-06-02T13:20:41Z",
+      "started_at": "2026-06-02T13:02:05Z",
+      "completed_at": "2026-06-02T13:14:53Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-02T13:02:05Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T13:14:53Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Autoritative AR (LIVE preds_best.csv, full val 4043 GT, eval_bop sym-aware ohne vsd): AK/AL/ZR = 0.870/0.907/0.838 (Oe 0.872) = README EXAKT + select_best.json identisch. Ursache Diskrepanz: die 0.801/0.847/0.645 waren NICHT das Live-Modell sondern refine_raw/preds_raw.csv = RE-INFERIERTE anker-flip-Refine-Variante (T-089/T-092, alle 2187 Posen leicht verschoben, trans 4.7->7.9mm, drueckt Zahnrad). Live=README, kein Ueberoptimismus."
+        },
+        {
+          "ts": "2026-06-02T13:14:53Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-06-02T13:20:41Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: done → done"
+        }
+      ]
+    },
+    {
+      "id": "T-094",
+      "title": "T-094: Detektor-Schwellen tunen (conf/NMS/imgsz/OBB-AABB Sweep, kein Retrain)",
+      "description": "Kai: YOLOv8-OBB Inferenz-Schwellen sweepen auf Val-Detection-Set -> Recall/Precision/mAP, v.a. Recall unter Occlusion (deckelt Pipeline + Flip-Faelle). Bessere Schwellen empfehlen (kip_server _run_detector conf=0.3/imgsz=1280). Kein Retrain.",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-tune",
+        "detector"
+      ],
+      "session": "2026-06-02-pose-tune",
+      "created": "2026-06-02T13:02:04Z",
+      "updated": "2026-06-02T13:28:00Z",
+      "started_at": "2026-06-02T13:02:05Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-02T13:02:05Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T13:14:53Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Detektor-Sweep (inference-only, kein Retrain, 3 imgsz x 8 conf x 3 NMS-iou, val 4043 GT): Detektor near-saturiert. best conf/iou/imgsz = conf0.10/iou0.7/imgsz1280. Recall@occ 0.971->0.979 (overall recall 0.986->0.987), Precision 0.920->0.915 (kein Tank), misses 60->53. Empfehlung committed in kip_server._run_detector (0d3aeeb). Detektor NICHT der Cap - GDRNPP-Pose-AR 0.87 ist es."
+        },
+        {
+          "ts": "2026-06-02T13:14:53Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-02T13:26:55Z",
+          "agent": "ravi-qs",
+          "level": "success",
+          "msg": "GATE PASS (APPROVED). Diff IST nur conf 0.3->0.1 in _run_detector (1 Wert + Docstring), imgsz/NMS unveraendert, kein Kollateral. 3 Callsites alle via dieselbe fn -> conf einheitlich. Downstream KEIN >=0.3-Threshold (score nur Anzeige-Label+Passthrough an Worker) -> real-infer-Pfad bricht nicht. Risikoarm. Security->Bruno: kein Auth/Input/Dep beruehrt, kein Review noetig. Deploy: Backend-Restart. Bleibt in_review fuer Sam-Merge."
+        },
+        {
+          "ts": "2026-06-02T13:28:00Z",
+          "agent": "ravi-qs",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-095",
+      "title": "T-095: groundClamp Mehrstufen-Fix — Teile sauber auf LOKALER Zellen-Fläche platzieren (Empore/Plateaus), GT+Pred schweben nicht mehr",
+      "description": "Lena: scene.js groundClamp - Korridor reicht nicht runter (an falsche Teil-Hoehe gekoppelt) + 'nie senken' laesst schwebende oben + MAX-ueber-3x3 zieht an Plateau-Kanten hoch. Fix: lokale Flaeche unterm Teil-Footprint robust finden + drauf setzen (beide Richtungen, mit Sanity-Guard). Visuell testen (Empore vs Haupttisch).",
+      "column": "in_review",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose-tune",
+        "viewer"
+      ],
+      "session": "2026-06-02-pose-tune",
+      "created": "2026-06-02T13:09:17Z",
+      "updated": "2026-06-02T13:26:55Z",
+      "started_at": "2026-06-02T13:09:17Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-02T13:09:17Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-02T13:19:23Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "b07662e, groundClamp Mehrstufen-fix (Center-Anker statt MAX, Korridor von z=5 entkoppelt, beide Richtungen + 0.6m Sanity-Guard), GT+Pred sitzen lokal auf Empore/Plateau/main/floor, Playwright 8/8 seat"
+        },
+        {
+          "ts": "2026-06-02T13:19:23Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-02T13:20:41Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
+        },
+        {
+          "ts": "2026-06-02T13:26:55Z",
+          "agent": "ravi-qs",
+          "level": "success",
+          "msg": "GATE PASS (APPROVED). Selbst nachgelaufen: Ravi-Playwright-Harness (echtes createViewer/setParts->groundClamp, echtes cell.glb, Surface-Z -0.006..1.2157=mehrstufig) 8/8 PASS + Multi-Part PASS. KERN: gut-platziertes Teil bleibt seated drift=0.0000m (keine Regression durch beide-Richtungen-Snap). Idempotenz dz=0. Schwebe25cm->runter, Versunken10cm->hoch, Sanity>0.6m->kein-Teleport, Kein-Treffer->Teil bleibt(nicht 0). Center-Anker-Logik korrekt (Vorrang vor Empore-Kante), Median nur bei Center-Loch. Security->Bruno: reiner FE-Geometrie-Code, kein Review noetig. Deploy: static FE, kein Restart. Bleibt in_review fuer Sam-Merge."
+        }
+      ]
+    },
+    {
+      "id": "T-096",
+      "title": "T-096 (FU): Backend Mehrstufen-Höhe — single table_z in bop_adapter/kip_server fuer Greifplanung ungenuegend (Lena-Befund)",
+      "description": "Falls Posen je fuer Roboter-Greifplanung: Backend braucht dieselbe lokale Mehrstufen-Flaeche/Hoehenkarte statt single table_z (Empore/Plateaus). Fuer Viewer-Display fix via groundClamp (T-095) bereits ok.",
+      "column": "backlog",
+      "assignee": "jonas-backend",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "pose-tune",
+        "followup"
+      ],
+      "session": "2026-06-02-pose-tune",
+      "created": "2026-06-02T13:20:41Z",
+      "updated": "2026-06-02T13:20:41Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
     }
   ]
 }
