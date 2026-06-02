@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T14:15:35Z",
+  "updated": "2026-06-02T14:37:17Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 98,
+  "next_id": 99,
   "tickets": [
     {
       "id": "T-001",
@@ -5624,6 +5624,34 @@
           "agent": "sam-devops",
           "level": "success",
           "msg": "Live verify GRUEN: box-local /api/health=200 (frontend_present=true), FE tab-live+cell-loader=3, served scene.js _SURFACE_TOL=3+groundClamp+cellGroup-wiring=11. PUBLIC max-utils.com/KIP: scene.js 200 mit _SURFACE_TOL=3+consistent-guard=1 (T-097 live ausgeliefert), index-markers=3, health=200. Keine Regression, kein Rollback. Box AN gelassen, Jetson nicht angefasst."
+        }
+      ]
+    },
+    {
+      "id": "T-098",
+      "title": "T-098: Höher-aufgelöstes Zellen-3D-Modell (>80MB, mehr Polygone, unkomprimiert) exportieren + als Viewer-Default deployen",
+      "description": "Sam: export_cell_glb.py mit hoeherem --max-total-tris (~3.5-4M tris -> >80MB, cell_web=1.1M=27MB) -> cell_hi.glb, UNKOMPRIMIERT (kein meshopt, verzerrt). loadCell-Default auf cell_hi.glb + Fallback cell_web->cell. Deploy + live verify. cell-loader-Progress traegt den groesseren Download.",
+      "column": "in_progress",
+      "assignee": "sam-devops",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-tune",
+        "viewer",
+        "asset"
+      ],
+      "session": "2026-06-02-pose-tune",
+      "created": "2026-06-02T14:37:17Z",
+      "updated": "2026-06-02T14:37:17Z",
+      "started_at": "2026-06-02T14:37:17Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-02T14:37:17Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
         }
       ]
     }
