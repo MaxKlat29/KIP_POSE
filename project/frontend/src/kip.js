@@ -17,12 +17,19 @@ window.__KIP_VIEWER__ = viewer;
 // noch akzeptabler Ladezeit ueber den CF-Tunnel. Das volle 189-MB-Original
 // (cell_hq, ~8 M tris) laedt zu lahm; EXT_meshopt wurde verworfen, weil gltfpack
 // -cc Geometrie/Normalen sichtbar verzerrt (verlustig trotz lossless tris).
-// Fallback-Kette: cell_hi -> cell_web (27 MB) -> cell (8 MB).
+// Fallback-Kette (SICHTBARES Mesh): cell_hi -> cell_web (27 MB) -> cell (8 MB).
 viewer.loadCell("./assets/cell_hi.glb", (ok) => {
   if (!ok) viewer.loadCell("./assets/cell_web.glb", (ok2) => {
     if (!ok2) viewer.loadCell("./assets/cell.glb", () => {});
   });
 });
+// COLLISION-PROXY (T-099): der groundClamp raycastet NICHT gegen das dichte
+// cell_hi-Visual (4 M tris → 26× langsamer + trifft feine Streben/Empore-Kanten,
+// die nicht zur Auflageflaeche gehoeren), sondern gegen ein grobes, UNSICHTBARES
+// Proxy-Mesh. Das ist IMMER cell.glb (8 MB, 4 Meshes, 439 k tris) — exakt die
+// Geometrie auf der die Teile bei T-095/097 sauber sassen. So ist das Seating
+// von der Visual-Dichte entkoppelt und schnell, egal welche Visual-Variante laedt.
+viewer.loadCollisionProxy("./assets/cell.glb", () => {});
 createOriginMarker(viewer, [0, 0, 0]);
 
 // ── Health-Poll: Workstation-/GPU-Status in der Top-Bar ──

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>cell probe</title>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+}}
+</script></head>
+<body>
+<canvas id="c" width="640" height="480"></canvas>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+
+// Which cell to load comes from ?url=
+const params = new URLSearchParams(location.search);
+const url = params.get("url") || "/frontend/assets/cell.glb";
+
+const scene = new THREE.Scene();
+const cellGroup = new THREE.Group();
+cellGroup.position.z = 0.0;   // CELL_Z_ALIGN like scene.js
+scene.add(cellGroup);
+
+const ray = new THREE.Raycaster();
+const down = new THREE.Vector3(0, 0, -1);
+const o = new THREE.Vector3();
+
+// surfacesAt: highest-first list of z hits under (x,y), exactly like scene.js _surfacesAt
+function surfacesAt(x, y) {
+  o.set(x, y, 5);
+  ray.set(o, down);
+  const hits = ray.intersectObject(cellGroup, true);
+  const zs = hits.map(h => h.point.z);
+  zs.sort((a, b) => b - a);
+  return zs;
+}
+
+const loader = new GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
+const t0 = performance.now();
+loader.load(url, (gltf) => {
+  cellGroup.add(gltf.scene);
+  const loadMs = (performance.now() - t0).toFixed(0);
+
+  // Probe a coarse XY grid over the table region (pose-frame area where parts sit)
+  // plus the specific known seat XY from T-095 tests.
+  const probes = [];
+  // table region grid 0.0..0.85 x, 0.0..0.55 y
+  for (let gx = 0; gx <= 8; gx++) {
+    for (let gy = 0; gy <= 5; gy++) {
+      const x = gx / 8 * 0.85;
+      const y = gy / 5 * 0.55;
+      probes.push([+x.toFixed(3), +y.toFixed(3)]);
+    }
+  }
+  // Time many raycasts to gauge perf vs density
+  const tRayStart = performance.now();
+  const result = [];
+  let layers = new Set();
+  for (const [x, y] of probes) {
+    const zs = surfacesAt(x, y);
+    if (zs.length) {
+      result.push({ x, y, top: +zs[0].toFixed(4), nHits: zs.length, all: zs.slice(0, 4).map(z => +z.toFixed(3)) });
+      layers.add(+zs[0].toFixed(2));
+    } else {
+      result.push({ x, y, top: null, nHits: 0, all: [] });
+    }
+  }
+  const rayMs = (performance.now() - tRayStart).toFixed(1);
+
+  window.__PROBE__ = {
+    url, loadMs: +loadMs, rayMs: +rayMs, nProbes: probes.length,
+    distinctTopLayers: [...layers].sort((a, b) => a - b),
+    result,
+  };
+  window.__DONE__ = true;
+}, undefined, (err) => {
+  window.__PROBE__ = { url, error: String(err?.message || err) };
+  window.__DONE__ = true;
+});
+</script>
+</body></html>
