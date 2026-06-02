@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T14:10:48Z",
+  "updated": "2026-06-02T14:15:35Z",
   "columns": [
     {
       "id": "backlog",
@@ -5568,7 +5568,7 @@
       "id": "T-097",
       "title": "T-097: groundClamp — GT (raw, snap=False) schwebt waehrend Pred sitzt; auf lokale Flaeche setzen ohne Regression",
       "description": "Lena: nach T-095 sitzt Pred (backend-gesnappt) sauber, aber GT (raw) schwebt. Diagnose: Guard(0.6m)/no-hit/over-lift auf benachbarte hoehere Struktur? Fix: jedes Teil (auch raw GT) auf seine lokale Auflageflaeche setzen, robust. KEINE Regression auf die 8/8.",
-      "column": "in_review",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P0",
@@ -5578,9 +5578,9 @@
       ],
       "session": "2026-06-02-pose-tune",
       "created": "2026-06-02T14:02:53Z",
-      "updated": "2026-06-02T14:10:48Z",
+      "updated": "2026-06-02T14:15:35Z",
       "started_at": "2026-06-02T14:02:53Z",
-      "completed_at": null,
+      "completed_at": "2026-06-02T14:15:34Z",
       "comments": [],
       "logs": [
         {
@@ -5606,6 +5606,24 @@
           "agent": "lena-frontend",
           "level": "info",
           "msg": "moved: in_review → in_review"
+        },
+        {
+          "ts": "2026-06-02T14:15:34Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-06-02T14:15:35Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged+deployed d65aebc (--no-ff, push a1836d8..d65aebc origin/main FF). scene.js surgical: NUR groundClamp()-Block ersetzt (T-097 Footprint-Konsistenz + _SURFACE_TOL neu), cell-loader ERHALTEN (head 1-201 + tail byte-identisch zur Box, nur 1 alte Kommentarzeile fiel mit dem ersetzten Block weg). Box static -> kein Restart. Backup .bak-gt."
+        },
+        {
+          "ts": "2026-06-02T14:15:35Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Live verify GRUEN: box-local /api/health=200 (frontend_present=true), FE tab-live+cell-loader=3, served scene.js _SURFACE_TOL=3+groundClamp+cellGroup-wiring=11. PUBLIC max-utils.com/KIP: scene.js 200 mit _SURFACE_TOL=3+consistent-guard=1 (T-097 live ausgeliefert), index-markers=3, health=200. Keine Regression, kein Rollback. Box AN gelassen, Jetson nicht angefasst."
         }
       ]
     }
