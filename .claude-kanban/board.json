@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T13:28:00Z",
+  "updated": "2026-06-02T13:34:21Z",
   "columns": [
     {
       "id": "backlog",
@@ -5410,7 +5410,7 @@
       "id": "T-094",
       "title": "T-094: Detektor-Schwellen tunen (conf/NMS/imgsz/OBB-AABB Sweep, kein Retrain)",
       "description": "Kai: YOLOv8-OBB Inferenz-Schwellen sweepen auf Val-Detection-Set -> Recall/Precision/mAP, v.a. Recall unter Occlusion (deckelt Pipeline + Flip-Faelle). Bessere Schwellen empfehlen (kip_server _run_detector conf=0.3/imgsz=1280). Kein Retrain.",
-      "column": "in_review",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -5420,9 +5420,9 @@
       ],
       "session": "2026-06-02-pose-tune",
       "created": "2026-06-02T13:02:04Z",
-      "updated": "2026-06-02T13:28:00Z",
+      "updated": "2026-06-02T13:34:21Z",
       "started_at": "2026-06-02T13:02:05Z",
-      "completed_at": null,
+      "completed_at": "2026-06-02T13:34:21Z",
       "comments": [],
       "logs": [
         {
@@ -5454,6 +5454,24 @@
           "agent": "ravi-qs",
           "level": "info",
           "msg": "moved: in_review → in_review"
+        },
+        {
+          "ts": "2026-06-02T13:34:21Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-06-02T13:34:21Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged -> main as ae206e8 (--no-ff). Pushed ccdbe55..475b82a."
+        },
+        {
+          "ts": "2026-06-02T13:34:21Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Deployed to box (100.85.216.95): kip_server.py = full main HEAD (box war ==ccdbe55, kein Box-Hotfix, scp clean). conf=0.1 effektiv in _run_detector. kip-server.service restarted, is-active=active, /api/health=ok. Backup .bak-tune."
         }
       ]
     },
@@ -5461,7 +5479,7 @@
       "id": "T-095",
       "title": "T-095: groundClamp Mehrstufen-Fix — Teile sauber auf LOKALER Zellen-Fläche platzieren (Empore/Plateaus), GT+Pred schweben nicht mehr",
       "description": "Lena: scene.js groundClamp - Korridor reicht nicht runter (an falsche Teil-Hoehe gekoppelt) + 'nie senken' laesst schwebende oben + MAX-ueber-3x3 zieht an Plateau-Kanten hoch. Fix: lokale Flaeche unterm Teil-Footprint robust finden + drauf setzen (beide Richtungen, mit Sanity-Guard). Visuell testen (Empore vs Haupttisch).",
-      "column": "in_review",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P0",
@@ -5471,9 +5489,9 @@
       ],
       "session": "2026-06-02-pose-tune",
       "created": "2026-06-02T13:09:17Z",
-      "updated": "2026-06-02T13:26:55Z",
+      "updated": "2026-06-02T13:34:21Z",
       "started_at": "2026-06-02T13:09:17Z",
-      "completed_at": null,
+      "completed_at": "2026-06-02T13:34:21Z",
       "comments": [],
       "logs": [
         {
@@ -5505,6 +5523,24 @@
           "agent": "ravi-qs",
           "level": "success",
           "msg": "GATE PASS (APPROVED). Selbst nachgelaufen: Ravi-Playwright-Harness (echtes createViewer/setParts->groundClamp, echtes cell.glb, Surface-Z -0.006..1.2157=mehrstufig) 8/8 PASS + Multi-Part PASS. KERN: gut-platziertes Teil bleibt seated drift=0.0000m (keine Regression durch beide-Richtungen-Snap). Idempotenz dz=0. Schwebe25cm->runter, Versunken10cm->hoch, Sanity>0.6m->kein-Teleport, Kein-Treffer->Teil bleibt(nicht 0). Center-Anker-Logik korrekt (Vorrang vor Empore-Kante), Median nur bei Center-Loch. Security->Bruno: reiner FE-Geometrie-Code, kein Review noetig. Deploy: static FE, kein Restart. Bleibt in_review fuer Sam-Merge."
+        },
+        {
+          "ts": "2026-06-02T13:34:21Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        },
+        {
+          "ts": "2026-06-02T13:34:21Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Merged -> main as 475b82a (--no-ff). Pushed ccdbe55..475b82a."
+        },
+        {
+          "ts": "2026-06-02T13:34:21Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "Deployed CHIRURGISCH to box: scene.js Box hatte cell-loader-Drift (6 hits) + eigenen groundClamp-Vorgaenger NICHT im Repo. Nur groundClamp-Block ersetzt durch Lenas neue Version (+_MAX_CLAMP/_median/_surfacesAt); cell-loader 6/6 + alles andere erhalten. node --check OK, served scene.js groundClamp+loadCell+_MAX_CLAMP live. Static-FE kein Restart. Backup .bak-tune."
         }
       ]
     },
