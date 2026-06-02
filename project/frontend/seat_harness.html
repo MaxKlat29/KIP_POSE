@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>seat harness</title>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+}}
+</script></head>
+<body>
+<canvas id="scene" width="640" height="480"></canvas>
+<script type="module">
+import * as THREE from "three";
+import { createViewer } from "./src/scene.js";
+
+const params = new URLSearchParams(location.search);
+const useProxy = params.get("proxy") !== "0";          // default: proxy on
+const visual = params.get("visual") || "./assets/cell_hi.glb";
+
+const canvas = document.getElementById("scene");
+const viewer = createViewer(canvas);
+
+// ── helper: inject a part (box) at given XY with given raw Z, return holder ──
+// We inject simple unit boxes (8cm) as "parts" via setParts() with a synthetic
+// result. R = identity, t = [x,y,rawZ]. Then groundClamp runs inside setParts.
+function mkResults(specs) {
+  return specs.map((s, i) => ({
+    part: "__test_box__",
+    R_world: [[1,0,0],[0,1,0],[0,0,1]],
+    t_world: [s.x, s.y, s.rawZ],
+    color: s.color || "gt",
+    upright: false,
+    _id: i,
+  }));
+}
+
+// Patch the part-mesh path: __test_box__ is unknown → makeBoxFallback (8cm box
+// from sizeForPart default). That's fine: we only test the clamp on min.z.
+async function run() {
+  // Load visual mesh
+  await new Promise((res) => viewer.loadCell(visual, () => res()));
+  // Load (or skip) collision proxy
+  if (useProxy) {
+    await new Promise((res) => viewer.loadCollisionProxy("./assets/cell.glb", () => res()));
+  }
+
+  // Critical XY from the probe: where cell_hi and cell.glb diverge.
+  //  - (0.531,0.44): true plateau 1.19 (consistent on both) — control "should seat"
+  //  - (0.85,0.22): cell.glb=Boden 0.015, cell_hi=Empore 1.336 — must NOT lift to empore
+  //  - (0.425,0):   cell.glb=Boden 0.017, cell_hi=halbhoch 0.479 — must NOT lift
+  //  - (0.212,0.22):plateau ~1.19 on both — control
+  //  - floor (0.30,0.0): boden ~0.018
+  const specs = [
+    { name: "plateau-ctrl",  x: 0.531, y: 0.44, rawZ: 2.0, expectProxyZ: 1.19 },
+    { name: "empore-trap",   x: 0.85,  y: 0.22, rawZ: 2.0, expectProxyZ: 0.01 },
+    { name: "halfhi-trap",   x: 0.425, y: 0.0,  rawZ: 2.0, expectProxyZ: 0.017 },
+    { name: "plateau2-ctrl", x: 0.212, y: 0.22, rawZ: 2.0, expectProxyZ: 1.185 },
+    { name: "floor-ctrl",    x: 0.30,  y: 0.0,  rawZ: 1.5, expectProxyZ: 0.018 },
+  ];
+
+  // Run each part individually so we can read its post-clamp min.z cleanly.
+  const out = [];
+  for (const s of specs) {
+    const tClampStart = performance.now();
+    await viewer.setParts(mkResults([s]));
+    const clampMs = performance.now() - tClampStart;
+    // measure resulting world-min.z of the single holder.
+    // holders use matrixAutoUpdate=false → force world-matrix sync before reading.
+    viewer.partsGroup.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    box.expandByObject(viewer.partsGroup);
+    out.push({
+      name: s.name, x: s.x, y: s.y, rawZ: s.rawZ,
+      seatedMinZ: box.isEmpty() ? null : +box.min.z.toFixed(4),
+      expectProxyZ: s.expectProxyZ,
+      clampMs: +clampMs.toFixed(1),
+    });
+  }
+
+  // Perf: clamp 9 parts at once
+  const many = [];
+  for (let i = 0; i < 9; i++) many.push({ x: 0.1 + i*0.08, y: 0.2 + (i%3)*0.1, rawZ: 1.8, color: i%2?"pred":"gt" });
+  const tMany = performance.now();
+  await viewer.setParts(mkResults(many));
+  const manyMs = performance.now() - tMany;
+
+  window.__SEAT__ = {
+    useProxy, visual,
+    proxyLoaded: viewer.isProxyLoaded(),
+    cellLoaded: viewer.isCellLoaded(),
+    results: out,
+    nineParts_setPartsMs: +manyMs.toFixed(1),
+  };
+  window.__DONE__ = true;
+}
+run().catch((e) => { window.__SEAT__ = { error: String(e?.stack || e) }; window.__DONE__ = true; });
+</script>
+</body></html>

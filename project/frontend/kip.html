@@ -111,6 +111,13 @@
         </figcaption>
       </figure>
 
+      <!-- Cell-Loader (unten rechts, über PiP): zeigt Download-Fortschritt
+           der grossen Anlagen-Geometrie (cell_hi.glb ~94 MB ueber CF). -->
+      <div id="cell-loader" class="kip-cell-loader" hidden>
+        <div class="kip-cell-loader__txt"><span id="cell-loader-label">3D-Modell laedt</span> <span id="cell-loader-pct">0 %</span></div>
+        <div class="kip-bar" hidden="false"><div class="kip-bar__fill"></div></div>
+      </div>
+
       <!-- Legende (unten links): Bedeutung der Farben in der Simulationsansicht -->
       <aside id="legend" class="legend" aria-label="Legende" hidden>
         <span class="legend__item"><i class="legend__swatch" style="background:#2878ff"></i>Ground-Truth (echte Lage)</span>

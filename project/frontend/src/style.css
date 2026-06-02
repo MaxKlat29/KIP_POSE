@@ -321,3 +321,28 @@ html, body {
 .pip--big .pip__btn { font-size: 13px; padding: 5px 12px; }
 /* Reine Icon-Buttons (Fullscreen-Toggle) bekommen ein quadratisches Format. */
 #pip-zoom { font-size: 14px; line-height: 1; padding: 3px 7px; }
+
+/* ── Cell-Loader (Initial Download der Anlagen-Geometrie) ──────────── */
+.kip-cell-loader {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: min(30vw, 380px);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(16, 18, 22, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  z-index: 50;
+  color: #e7ecf3;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.kip-cell-loader__txt {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; margin-bottom: 6px;
+}
+.kip-cell-loader__txt #cell-loader-pct {
+  color: rgb(140, 230, 170); font-family: var(--mono); font-weight: 600;
+}
+.kip-cell-loader .kip-bar { display: block; }

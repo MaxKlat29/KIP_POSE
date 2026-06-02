@@ -72,16 +72,60 @@ export function createViewer(canvas) {
   scene.add(grid);
 
   // ── Cell CAD ─────────────────────────────────────────────────
+  // VISUAL ≠ COLLISION (T-099): das sichtbare Mesh (cellGroup) und das
+  // Raycast-Ziel des groundClamp (collisionGroup) sind ENTKOPPELT.
+  //
+  // Hintergrund: seit der Viewer cell_hi.glb (94 MB / 4.0 M tris) als sichtbare
+  // Zelle laedt, lag das Seating der Teile (GT blau + Pred rot) schief. Zwei
+  // bewiesene Ursachen (Raycast-Probe gegen die echten GLBs):
+  //   (1) DICHTE/ABWEICHENDE GEOMETRIE: cell_hi (= 59 Meshes, feine Streben,
+  //       Empore-Gelaender, Overhangs) trifft beim Footprint-Raycast Flaechen,
+  //       die in der groben cell.glb (4 Meshes, 439 k tris) GARNICHT existieren —
+  //       z.B. eine Empore-Ebene (z≈1.34) wo grob nur Boden (z≈0.0) ist, oder
+  //       eine feine Struktur halbhoch (z≈0.48). Mein groundClamp wurde gegen die
+  //       GROBE cell.glb verifiziert (T-095 8/8, T-097 11/11) → gegen cell_hi
+  //       zieht es Teile auf diese feinen/hoeheren Flaechen hoch.
+  //   (2) PERF: 54 Raycasts kosten gegen cell.glb 237 ms, gegen cell_hi 6058 ms
+  //       (26×). groundClamp macht ~26 Raycasts/Teil → bei vielen Teilen
+  //       sekundenlanger Stall (4 M tris, kein BVH).
+  //
+  // Standard-Pattern (visual mesh ≠ collision mesh): die schoene hochpoly-Zelle
+  // RENDERN, aber den groundClamp gegen einen GROBEN, UNSICHTBAREN Collision-
+  // Proxy (cell.glb — exakt die Geometrie auf der die Teile bei T-095/097 sauber
+  // sassen) raycasten. Seating wird unabhaengig von der Visual-Dichte UND schnell.
   const cellGroup = new THREE.Group();
   cellGroup.position.z = CELL_Z_ALIGN;  // Tischfläche auf pose-Z=0 heben
   scene.add(cellGroup);
   let cellLoaded = false;
+
+  // Unsichtbarer Collision-Proxy. NICHT in die Szene gehaengt → wird nie
+  // gerendert. Raycaster.intersectObject ignoriert die Szene-Hierarchie und
+  // .visible NICHT (es testet das uebergebene Objekt direkt), darum reicht eine
+  // freistehende Group als Raycast-Ziel — sie liegt im SELBEN Frame wie
+  // cellGroup (gleiche CELL_Z_ALIGN-Verschiebung), damit die Auflage-Z stimmen.
+  const collisionGroup = new THREE.Group();
+  collisionGroup.position.z = CELL_Z_ALIGN;
+  collisionGroup.visible = false;
+  let proxyLoaded = false;
+  // Das Objekt, gegen das groundClamp raycastet: der Proxy wenn geladen, sonst
+  // (Fallback) das sichtbare Mesh. So bleibt der Clamp robust, falls der Proxy
+  // mal fehlt — dann eben gegen das Visual, wie vor T-099.
+  function clampTarget() { return proxyLoaded ? collisionGroup : cellGroup; }
 
   function loadCell(url = "./assets/cell.glb", onDone) {
     // EXT_meshopt_compression Decoder fuer cell_hq_meshopt.glb (17 MB vs 189 MB
     // bei unkomprimiertem cell_hq.glb, ohne Detail-Verlust).
     const loader = new GLTFLoader();
     loader.setMeshoptDecoder(MeshoptDecoder);
+    // Loader-UI sofort sichtbar machen, sonst sieht der Nutzer bei langsamer
+    // Verbindung minutenlang nichts (cell_hi = 94 MB). Wir zeigen Datei + Prozent.
+    // Vollstaendig if(ui)-guarded → harmlos wenn das #cell-loader-DOM fehlt.
+    const ui = document.getElementById("cell-loader");
+    const pctEl = document.getElementById("cell-loader-pct");
+    const lblEl = document.getElementById("cell-loader-label");
+    const fill = ui?.querySelector(".kip-bar__fill");
+    if (ui) { ui.hidden = false; if (fill) fill.style.width = "0%"; if (pctEl) pctEl.textContent = "Verbinde…"; }
+    if (lblEl) lblEl.textContent = `3D-Modell laedt (${url.split('/').pop()})`;
     loader.load(
       url,
       (gltf) => {
@@ -94,11 +138,51 @@ export function createViewer(canvas) {
         });
         cellGroup.add(gltf.scene);
         cellLoaded = true;
+        // Erfolg: Bar voll, dann ausblenden.
+        if (fill) fill.style.width = "100%";
+        if (lblEl) lblEl.textContent = "3D-Modell geladen";
+        setTimeout(() => { if (ui) ui.hidden = true; }, 800);
         fitView();
         onDone?.(true);
       },
+      // onProgress: ECHTE Bytes vom XMLHttpRequest (xhr.total=0 wenn kein
+      // Content-Length → nur MB-Counter ohne Balken).
+      (xhr) => {
+        if (!ui) return;
+        const mbL = xhr.loaded / (1024 * 1024);
+        if (xhr.total && xhr.total > 0) {
+          const mbT = xhr.total / (1024 * 1024);
+          const p = Math.min(100, (xhr.loaded / xhr.total) * 100);
+          if (fill) fill.style.width = p.toFixed(1) + "%";
+          if (pctEl) pctEl.textContent = `${mbL.toFixed(1)} / ${mbT.toFixed(1)} MB · ${p.toFixed(0)} %`;
+        } else {
+          if (fill) fill.style.width = "0%";
+          if (pctEl) pctEl.textContent = `${mbL.toFixed(1)} MB geladen`;
+        }
+      },
+      (err) => { console.warn("[cell] nicht geladen:", err?.message ?? err); if (ui) ui.hidden = true; onDone?.(false); }
+    );
+  }
+
+  // Laedt das GROBE Collision-Proxy-Mesh (cell.glb) als unsichtbares Raycast-Ziel
+  // fuer groundClamp. Entkoppelt vom Visual (loadCell). Materialien koennen roh
+  // bleiben (wird nie gerendert) — nur die Geometrie zaehlt fuer den Raycast.
+  // Schlaegt der Proxy-Load fehl, faellt clampTarget() auf das Visual zurueck.
+  function loadCollisionProxy(url = "./assets/cell.glb", onDone) {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    loader.load(
+      url,
+      (gltf) => {
+        collisionGroup.add(gltf.scene);
+        proxyLoaded = true;
+        // Teile koennen schon platziert sein (kip.js laedt Proxy + Parts async) —
+        // jetzt wo das Proxy da ist, einmal nachklammern.
+        if (partsGroup.children.length) groundClamp();
+        onDone?.(true);
+      },
       undefined,
-      (err) => { console.warn("[cell] nicht geladen:", err?.message ?? err); onDone?.(false); }
+      (err) => { console.warn("[cell-proxy] nicht geladen:", err?.message ?? err); onDone?.(false); }
     );
   }
 
@@ -240,17 +324,21 @@ export function createViewer(canvas) {
     return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) * 0.5;
   }
   // Alle Tisch-Z unter (x,y), von oben nach unten gecastet, sortiert absteigend.
+  // Raycastet gegen clampTarget() (T-099): den groben Collision-Proxy wenn
+  // geladen, sonst das sichtbare Mesh. NIE gegen das dichte cell_hi-Visual —
+  // das traefe feine Streben/Empore-Kanten, die nicht zur Auflageflaeche gehoeren.
   function _surfacesAt(x, y, origin) {
     origin.set(x, y, 5);
     _raycaster.set(origin, _down);
-    const hits = _raycaster.intersectObject(cellGroup, true);
+    const hits = _raycaster.intersectObject(clampTarget(), true);
     const zs = [];
     for (const h of hits) zs.push(h.point.z);
     zs.sort((a, b) => b - a);   // hoechste zuerst
     return zs;
   }
   function groundClamp() {
-    if (!cellLoaded) return;            // ohne Tisch-Geometrie kein Sinn
+    // Ohne ein Raycast-Ziel (weder Proxy noch Visual geladen) kein Sinn.
+    if (!proxyLoaded && !cellLoaded) return;
     const _box = new THREE.Box3();
     const _origin = new THREE.Vector3();
     partsGroup.children.forEach((holder) => {
@@ -446,9 +534,10 @@ export function createViewer(canvas) {
 
   return {
     scene, camera, renderer, controls,
-    partsGroup, cellGroup, pickables,
-    loadCell, setParts, setPartOffset, fitView, resetView, resize,
+    partsGroup, cellGroup, collisionGroup, pickables,
+    loadCell, loadCollisionProxy, setParts, setPartOffset, fitView, resetView, resize,
     isCellLoaded: () => cellLoaded,
+    isProxyLoaded: () => proxyLoaded,
     // legacy no-op fields some callers expect
     tableGroup: cellGroup, tableMesh: null,
   };
