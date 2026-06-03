@@ -62,6 +62,11 @@ import numpy as np
 # bop_toolkit_lib is installed editable in the bop-venv on the box.
 try:
     from bop_toolkit_lib import inout, misc, pose_error
+    # pose_matching + score implement the OFFICIAL BOP19 / IC-BIN localisation
+    # matching + recall aggregation. Imported lazily-but-here so the --icbin mode
+    # uses the exact same code path as scripts/eval_bop19_pose.py (the bin-picking
+    # protocol: per-threshold error-based greedy matching + inst_count denominator).
+    from bop_toolkit_lib import pose_matching, score
 except Exception as exc:  # pragma: no cover - only on a mis-set-up box
     sys.stderr.write(
         "FATAL: cannot import bop_toolkit_lib. Run me with the bop-venv python:\n"
@@ -521,6 +526,310 @@ def _median(x):
 
 
 # ---------------------------------------------------------------------------
+# IC-BIN / official BOP19 localisation protocol (bin-picking)
+# ---------------------------------------------------------------------------
+# Unlike evaluate() above (which matches estimates to GT by raw translation once
+# and reuses those pairs for every threshold), this path reproduces the OFFICIAL
+# BOP19 localisation protocol used for bin-picking datasets like IC-BIN:
+#
+#   * matching is RE-DONE per error type AND per correctness threshold, greedily
+#     by score, using the error metric itself (MSSD/MSPD/VSD) as the match cost
+#     (bop_toolkit_lib.pose_matching.match_poses);
+#   * the recall denominator = number of VALID GT instances per image
+#     (visib_fract >= visib_gt_min, BOP19 = 0.1), taken from scene_gt_info.json
+#     and the inst_count targets file (this is the multi-instance / bin-picking
+#     part: several instances of the same object per image are each a target);
+#   * AR_<err> = mean over thresholds of the over-objects mean recall
+#     (bop_toolkit_lib.score.calc_localization_scores), AR = mean(AR_VSD,AR_MSSD,
+#     AR_MSPD) (without --vsd: mean(AR_MSSD, AR_MSPD)).
+#
+# We call the official match/score functions directly, so this is byte-for-byte
+# the same logic as scripts/eval_bop19_pose.py -- we only build the inputs from
+# our (non-registered) pose_isaac dataset instead of via dataset_params.
+VISIB_GT_MIN = 0.1                                # BOP19 default
+N_TOP = -1                                        # BOP19: all estimates considered
+
+
+def load_scene_gt_info(dataset_dir, split, scene_ids):
+    """Load scene_gt_info.json (visib_fract per GT instance) per scene."""
+    info = {}
+    for sid in scene_ids:
+        path = os.path.join(dataset_dir, split, f"{sid:06d}", "scene_gt_info.json")
+        if os.path.isfile(path):
+            info[sid] = inout.load_json(path, keys_to_int=True)
+    return info
+
+
+def load_targets(path):
+    """Load BOP targets file -> {(scene_id, im_id): {obj_id: inst_count}} or None."""
+    if not path or not os.path.isfile(path):
+        return None
+    raw = inout.load_json(path)
+    targets = defaultdict(dict)
+    for t in raw:
+        targets[(t["scene_id"], t["im_id"])][t["obj_id"]] = t["inst_count"]
+    return targets
+
+
+def evaluate_icbin(scenes, models, preds_by_img, scene_gt_info, targets,
+                   use_vsd=False, obj_names=None):
+    """Official BOP19/IC-BIN localisation AR via bop_toolkit pose_matching+score.
+
+    Returns the same shape as evaluate() so reporting is shared, but the AR /
+    AR_MSSD / AR_MSPD / AR_VSD numbers are the multi-instance, per-threshold,
+    error-based-matching, inst_count-denominator protocol.
+    """
+    renderer = None
+    if use_vsd:
+        renderer = _make_renderer(scenes, models)
+
+    err_types = ["mssd", "mspd"] + (["vsd"] if use_vsd else [])
+    # Per error type: list of correctness thresholds (BOP19).
+    th_lists = {
+        "mssd": list(MSSD_THS),                   # x diameter (per-object)
+        "mspd": list(MSPD_THS),                   # px (already image-scaled below)
+        "vsd": list(VSD_THS),                     # one match per (tau, theta) pair
+    }
+
+    obj_ids = sorted(models.keys())
+    scene_ids = sorted(scenes.keys())
+
+    # --- 1) compute per (im, obj) the errors of every est vs every GT ----------
+    # scene_errs[err_type] : list of dicts compatible with pose_matching.match_poses
+    #   {im_id, obj_id, est_id, score, errors:{gt_id:[err]}, gt_visib_fracts:{gt_id:f}}
+    # scene_gt[err_type-agnostic] : {im_id: [{obj_id}, ...]} (GT order = gt_id)
+    # scene_gt_valid : {im_id: [bool,...]}  (visib + targets gate)
+    per_scene = {}  # scene_id -> dict(scene_gt, scene_gt_info, scene_gt_valid, errs{type})
+    n_gt_total = defaultdict(int)
+    n_matched_dbg = defaultdict(int)
+
+    for sid in scene_ids:
+        sc = scenes[sid]
+        gi_scene = scene_gt_info.get(sid, {})
+        sgt, sgt_valid, sgt_info = {}, {}, {}
+        errs = {et: [] for et in err_types}
+
+        for im_id, gt_insts in sc["gt"].items():
+            cam = sc["cam"][im_id]
+            K = np.array(cam["cam_K"], dtype=np.float64).reshape(3, 3)
+            width = _img_width(K)
+            mspd_scale = MSPD_REF_WIDTH / width if width else 1.0
+
+            depth_test = _load_depth(sc, im_id, cam) if use_vsd else None
+
+            # GT list in stable gt_id order
+            gt_list = [{"obj_id": g["obj_id"]} for g in gt_insts]
+            gt_R = [np.array(g["cam_R_m2c"], dtype=np.float64).reshape(3, 3) for g in gt_insts]
+            gt_t = [np.array(g["cam_t_m2c"], dtype=np.float64).reshape(3, 1) for g in gt_insts]
+
+            info_list = gi_scene.get(im_id, [{} for _ in gt_insts])
+            visib = [float(info_list[j].get("visib_fract", 1.0)) if j < len(info_list)
+                     else 1.0 for j in range(len(gt_insts))]
+            info_norm = [{"visib_fract": visib[j]} for j in range(len(gt_insts))]
+
+            # valid GT = visible enough AND (if targets given) within inst_count
+            tgt = targets.get((sid, im_id)) if targets else None
+            valid = []
+            obj_seen = defaultdict(int)
+            for j, g in enumerate(gt_insts):
+                ok = visib[j] >= VISIB_GT_MIN
+                if ok and tgt is not None:
+                    oid = g["obj_id"]
+                    obj_seen[oid] += 1
+                    if oid not in tgt or obj_seen[oid] > tgt[oid]:
+                        ok = False
+                valid.append(bool(ok))
+                if ok:
+                    n_gt_total[g["obj_id"]] += 1
+
+            sgt[im_id] = gt_list
+            sgt_valid[im_id] = valid
+            sgt_info[im_id] = info_norm
+
+            # estimates for this image
+            ests = preds_by_img.get((sid, im_id), [])
+            # group GT indices by obj for fast per-obj error dict
+            gt_idx_by_obj = defaultdict(list)
+            for j, g in enumerate(gt_insts):
+                gt_idx_by_obj[g["obj_id"]].append(j)
+
+            for est_id, e in enumerate(ests):
+                oid = e["obj_id"]
+                if oid not in gt_idx_by_obj:
+                    continue  # est of an object with no GT in this image -> ignored (FP)
+                model = models.get(oid)
+                if model is None:
+                    continue
+                model["obj_id"] = oid
+                R_e, t_e = e["R"], e["t"]
+                err_per_type = {et: {} for et in err_types}
+                visib_per_gt = {}
+                for gj in gt_idx_by_obj[oid]:
+                    R_g, t_g = gt_R[gj], gt_t[gj]
+                    visib_per_gt[gj] = visib[gj]
+                    if "mssd" in err_types:
+                        err_per_type["mssd"][gj] = [
+                            float(pose_error.mssd(R_e, t_e, R_g, t_g,
+                                                  model["pts"], model["syms"]))
+                        ]
+                    if "mspd" in err_types:
+                        err_per_type["mspd"][gj] = [
+                            float(pose_error.mspd(R_e, t_e, R_g, t_g, K,
+                                                  model["pts"], model["syms"])) * mspd_scale
+                        ]
+                    if "vsd" in err_types and depth_test is not None:
+                        vs = pose_error.vsd(
+                            R_e, t_e, R_g, t_g, depth_test, K, VSD_DELTA,
+                            VSD_TAUS, True, model["diameter"], renderer, oid)
+                        err_per_type["vsd"][gj] = [float(v) for v in vs]
+                for et in err_types:
+                    if not err_per_type[et]:
+                        continue
+                    errs[et].append({
+                        "im_id": im_id, "obj_id": oid, "est_id": est_id,
+                        "score": float(e["score"]),
+                        "errors": err_per_type[et],
+                        "gt_visib_fracts": visib_per_gt,
+                    })
+
+        per_scene[sid] = {"scene_gt": sgt, "scene_gt_valid": sgt_valid,
+                          "scene_gt_info": sgt_info, "errs": errs}
+
+    # --- 2) per error type: match per threshold, aggregate recall --------------
+    # AR_<et> = mean over thresholds of mean_obj_recall; also keep per-object.
+    ar_per_type = {}                              # et -> overall AR
+    ar_per_type_obj = {et: defaultdict(list) for et in err_types}  # et -> obj -> [recall_per_th]
+    for et in err_types:
+        if et == "vsd":
+            # VSD: matching uses (theta) thresholds; one error vector per tau.
+            # Reproduce eval_bop19: for each tau index, build a 1-elem error and
+            # sweep theta thresholds. We average over taus x thetas.
+            ths_iter = [("vsd", ti, th) for ti in range(len(VSD_TAUS)) for th in VSD_THS]
+        else:
+            ths_iter = [(et, None, th) for th in th_lists[et]]
+
+        recalls_overall = []
+        for (_, tau_i, th) in ths_iter:
+            all_matches = []
+            for sid in scene_ids:
+                ps = per_scene[sid]
+                # per-object correctness threshold (MSSD scales by diameter)
+                errs_th = []
+                for e in ps["errs"][et]:
+                    if et == "mssd":
+                        diam = models[e["obj_id"]]["diameter"]
+                        corr = [th * diam]
+                        ee = e
+                    elif et == "mspd":
+                        corr = [th]
+                        ee = e
+                    else:  # vsd: pick the tau slice
+                        corr = [th]
+                        ee = {**e, "errors": {g: [v[tau_i]] for g, v in e["errors"].items()}}
+                    errs_th.append((ee, corr))
+                # match_poses_scene wants ONE correct_th per object class; MSSD's
+                # per-object diameter scaling means we match per object class.
+                ms = _match_scene_icbin(sid, ps, errs_th, et)
+                all_matches += ms
+            sc_res = score.calc_localization_scores(
+                scene_ids, obj_ids, all_matches, N_TOP, do_print=False)
+            recalls_overall.append(sc_res["mean_obj_recall"])
+            for oid in obj_ids:
+                ar_per_type_obj[et][oid].append(sc_res["obj_recalls"].get(oid, 0.0))
+        ar_per_type[et] = float(np.mean(recalls_overall)) if recalls_overall else 0.0
+
+    # --- 3) assemble report in the evaluate() shape ----------------------------
+    per_obj = {}
+    ar_list, vsd_list, mssd_list, mspd_list = [], [], [], []
+    for oid in obj_ids:
+        ar_mssd = float(np.mean(ar_per_type_obj["mssd"][oid])) if "mssd" in err_types else 0.0
+        ar_mspd = float(np.mean(ar_per_type_obj["mspd"][oid])) if "mspd" in err_types else 0.0
+        ar_vsd = (float(np.mean(ar_per_type_obj["vsd"][oid]))
+                  if "vsd" in err_types else None)
+        components = [ar_mssd, ar_mspd] + ([ar_vsd] if ar_vsd is not None else [])
+        ar = float(np.mean(components)) if components else 0.0
+        per_obj[oid] = {
+            "name": (obj_names or {}).get(oid, str(oid)),
+            "symmetric": models[oid]["is_symmetric"],
+            "n_sym_transforms": models[oid]["n_syms"],
+            "diameter_mm": models[oid]["diameter"],
+            "n_gt": n_gt_total[oid],
+            "n_matched": None,
+            "AR": ar, "AR_VSD": ar_vsd, "AR_MSSD": ar_mssd, "AR_MSPD": ar_mspd,
+            "ADD_mean_mm": None, "ADI_mean_mm": None, "ADD_or_ADI_mean_mm": None,
+            "trans_err_mean_mm": None, "trans_err_median_mm": None,
+            "rot_err_mean_deg": None, "rot_err_median_deg": None,
+            "rot_err_naive_mean_deg": None,
+        }
+        ar_list.append(ar)
+        mssd_list.append(ar_mssd)
+        mspd_list.append(ar_mspd)
+        if ar_vsd is not None:
+            vsd_list.append(ar_vsd)
+
+    overall = {
+        "AR": float(np.mean(ar_list)) if ar_list else 0.0,
+        "AR_VSD": float(np.mean(vsd_list)) if vsd_list else None,
+        "AR_MSSD": float(np.mean(mssd_list)) if mssd_list else 0.0,
+        "AR_MSPD": float(np.mean(mspd_list)) if mspd_list else 0.0,
+        "n_gt": sum(n_gt_total.values()),
+        "n_matched": None,
+        "vsd_enabled": use_vsd,
+        "protocol": "ic_bin_bop19_localisation",
+        "visib_gt_min": VISIB_GT_MIN,
+        "n_top": N_TOP,
+        "targets_used": targets is not None,
+    }
+    return {"per_object": per_obj, "overall": overall}
+
+
+def _match_scene_icbin(scene_id, ps, errs_th, et):
+    """Run the official per-image greedy match for one threshold.
+
+    errs_th : list of (err_dict, [correct_th]) tuples. MSSD's correct_th is per
+    object (diameter-scaled), so we group by obj and call match_poses per
+    (im, obj) exactly like match_poses_scene does internally.
+    """
+    sgt = ps["scene_gt"]
+    sgt_valid = ps["scene_gt_valid"]
+    sgt_info = ps["scene_gt_info"]
+
+    # seed matches: every GT instance, est_id=-1 (unmatched) — same as official.
+    im_matches = {}
+    for im_id, im_gts in sgt.items():
+        im_matches[im_id] = [
+            {"scene_id": scene_id, "im_id": im_id, "obj_id": g["obj_id"],
+             "gt_id": gid, "est_id": -1, "score": -1, "error": -1, "error_norm": -1,
+             "valid": sgt_valid[im_id][gid],
+             "gt_visib_fract": sgt_info[im_id][gid]["visib_fract"]}
+            for gid, g in enumerate(im_gts)
+        ]
+
+    # organise estimate errors by (im, obj)
+    by_im_obj = defaultdict(list)
+    th_by_im_obj = {}
+    for e, corr in errs_th:
+        by_im_obj[(e["im_id"], e["obj_id"])].append(e)
+        th_by_im_obj[(e["im_id"], e["obj_id"])] = corr
+
+    for (im_id, obj_id), e_list in by_im_obj.items():
+        corr = th_by_im_obj[(im_id, obj_id)]
+        ms = pose_matching.match_poses(e_list, corr, N_TOP if N_TOP > 0 else 0,
+                                       sgt_valid[im_id])
+        for m in ms:
+            g = im_matches[im_id][m["gt_id"]]
+            g["est_id"] = m["est_id"]
+            g["score"] = m["score"]
+            g["error"] = m["error"]
+            g["error_norm"] = m["error_norm"]
+
+    out = []
+    for im_id in im_matches:
+        out += im_matches[im_id]
+    return out
+
+
+# ---------------------------------------------------------------------------
 # VSD support (renderer + depth)
 # ---------------------------------------------------------------------------
 def _img_width(K):
@@ -704,6 +1013,15 @@ def main():
                     help="synthesise predictions from GT (no GDRNPP needed)")
     ap.add_argument("--vsd", action="store_true",
                     help="also compute VSD (needs vispy/EGL renderer + depth maps)")
+    ap.add_argument("--icbin", action="store_true",
+                    help="use the OFFICIAL BOP19/IC-BIN localisation protocol "
+                         "(per-threshold error-based greedy match via "
+                         "bop_toolkit pose_matching + inst_count denominator). "
+                         "This is the multi-instance bin-picking AR.")
+    ap.add_argument("--targets",
+                    help="BOP targets file (inst_count per scene/im/obj). "
+                         "Default for --icbin: "
+                         "<dataset-dir>/test_targets_<dataset>_<split>.json if present.")
     ap.add_argument("--n-points", type=int, default=2000,
                     help="subsample mesh to N points for point metrics "
                          "(0 = full mesh; default 2000 keeps MSSD/MSPD tractable)")
@@ -742,9 +1060,32 @@ def main():
         preds = preds_from_csv(args.preds)
         n_preds = sum(len(v) for v in preds.values())
         sys.stderr.write(f"[eval_bop] loaded {n_preds} predictions from {args.preds}\n")
-        results = evaluate(scenes, models, preds, args.vsd, obj_names)
-        report_txt = render_table(results, f"BOP eval - split={args.split} preds={args.preds}")
-        report_json = {"mode": "eval", "split": args.split,
+        if args.icbin:
+            # locate the targets file (inst_count) for the multi-instance denominator
+            targets_path = args.targets
+            if not targets_path:
+                ds_name = os.path.basename(os.path.normpath(args.dataset_dir))
+                cand = os.path.join(args.dataset_dir,
+                                    f"test_targets_{ds_name}_{args.split}.json")
+                targets_path = cand if os.path.isfile(cand) else None
+            targets = load_targets(targets_path)
+            sys.stderr.write(
+                f"[eval_bop] IC-BIN protocol: targets="
+                f"{targets_path if targets else 'NONE (denominator = all visible GT)'}"
+                f" visib_gt_min={VISIB_GT_MIN} n_top={N_TOP}\n")
+            scene_gt_info = load_scene_gt_info(args.dataset_dir, args.split,
+                                               sorted(scenes.keys()))
+            results = evaluate_icbin(scenes, models, preds, scene_gt_info, targets,
+                                     args.vsd, obj_names)
+            title = (f"BOP IC-BIN eval (official localisation) - split={args.split} "
+                     f"preds={args.preds}")
+        else:
+            results = evaluate(scenes, models, preds, args.vsd, obj_names)
+            title = f"BOP eval - split={args.split} preds={args.preds}"
+        report_txt = render_table(results, title)
+        report_json = {"mode": "eval",
+                       "protocol": "ic_bin" if args.icbin else "translation_match",
+                       "split": args.split,
                        "preds": args.preds, "results": results}
         print(report_txt)
         ov = results["overall"]

@@ -2,10 +2,10 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Live-max--utils.com%2FKIP-34d399?style=for-the-badge" alt="Live"/>
-  <img src="https://img.shields.io/badge/AR%20Anker__Kurz-0.870-2878ff?style=for-the-badge" alt="AR Anker Kurz"/>
-  <img src="https://img.shields.io/badge/AR%20Anker__Lang-0.907-2878ff?style=for-the-badge" alt="AR Anker Lang"/>
-  <img src="https://img.shields.io/badge/AR%20Zahnrad-0.838-2878ff?style=for-the-badge" alt="AR Zahnrad"/>
-  <img src="https://img.shields.io/badge/AR%20%C3%98-0.872-ff2d2d?style=for-the-badge" alt="AR Mittel"/>
+  <img src="https://img.shields.io/badge/AR%20IC--BIN%20Anker__Kurz-0.871-2878ff?style=for-the-badge" alt="AR IC-BIN Anker Kurz"/>
+  <img src="https://img.shields.io/badge/AR%20IC--BIN%20Anker__Lang-0.907-2878ff?style=for-the-badge" alt="AR IC-BIN Anker Lang"/>
+  <img src="https://img.shields.io/badge/AR%20IC--BIN%20Zahnrad-0.838-2878ff?style=for-the-badge" alt="AR IC-BIN Zahnrad"/>
+  <img src="https://img.shields.io/badge/AR%20IC--BIN%20%C3%98-0.872-ff2d2d?style=for-the-badge" alt="AR IC-BIN Mittel"/>
 </p>
 
 <p align="center">
@@ -22,8 +22,8 @@
 | **Live-Demo** | <https://max-utils.com/KIP/> |
 | **Stack** | Isaac-Sim 5.1 (synthetisch) + YOLOv8-OBB (Detektor) + **GDRNPP** (6D-Pose) + Three.js (3D-Viewer) |
 | **3 trainierte Teile** | Anker_Kurz · Anker_Lang · Zahnrad |
-| **Metrik** | BOP `AR = mean(AR_MSSD, AR_MSPD)`, symmetrie-bewusst |
-| **Final-AR (best-by-val)** | **0.872** (Ø über 3 Teile) |
+| **Metrik** | **AR (BOP-IC-BIN-Protokoll)** — Bin-Picking-Localisation, Multi-Instanz-Matching, symmetrie-bewusst (`mean(AR_MSSD, AR_MSPD)` via offizielle `bop_toolkit` pose_matching+score) |
+| **Final-AR IC-BIN (best-by-val)** | **0.872** (Ø über 3 Teile) |
 | **Latenz Real-Foto** | ~4 s end-to-end (Detektor + Worker + Snap + Render) |
 | **Latenz Sim-Live** | ~80 s (Isaac-Boot + Render + BOP + Detektor + GDRNPP) |
 
@@ -174,7 +174,7 @@
 ### Health + Metadaten
 ```
 GET  /api/health                  → {status, gpu_training_active, trained_objects, ts}
-GET  /api/metrics                 → {objects: {slug: {best_full_ar, best_ckpt, status}}}
+GET  /api/metrics                 → {metric:"ar_ic_bin", objects:{slug:{ar, ic_bin_ar, best_full_ar, best_ckpt, status}}}
 ```
 
 ### Real-Foto-Inferenz
@@ -349,16 +349,29 @@ POSE/
 
 ---
 
-## 9 · Final-AR (best-by-val, BOP-Toolkit)
+## 9 · Final-AR IC-BIN (best-by-val, BOP-Toolkit)
 
-| Objekt | Final AR | Final Checkpoint | n_ckpts evaluiert |
+Maßgebliche Metrik = **AR nach dem BOP-IC-BIN-Protokoll** (offizielle 6D-Localisation
+für Bin-Picking-Datensätze: mehrere gleiche Instanzen pro Bild, greedy nach Score
+gematcht, `inst_count`-Denominator). KIP ist selbst Bin-Picking (mehrere identische
+Teile pro Tray), daher ist IC-BIN das passende Protokoll. Berechnet mit den offiziellen
+`bop_toolkit_lib.pose_matching` + `.score`-Funktionen (= identisch zu
+`scripts/eval_bop19_pose.py`), siehe `box_src/eval_bop.py --icbin`.
+
+| Objekt | Final AR (IC-BIN) | Final Checkpoint | n_ckpts evaluiert |
 |---|---:|---|---:|
-| Anker_Kurz | **0.870** | `model_0112949.pth` (ep ~150) | 17 |
+| Anker_Kurz | **0.871** | `model_0112949.pth` (ep ~150) | 17 |
 | Anker_Lang | **0.907** | `model_0120959.pth` (ep ~160) | 17 |
 | Zahnrad | **0.838** | `model_0130399.pth` (~ep 165) | 17 |
 | **Mittel** | **0.872** | — | — |
 
 `AR = mean(AR_MSSD, AR_MSPD)`, symmetrie-bewusst (Zahnrad C_7, Anker rotationssym. um Y).
+
+> **Hinweis (T-109):** Die vorherige Eval matchte Predictions per Translations-Abstand;
+> das IC-BIN-Protokoll matcht per Fehlermetrik/Threshold. Auf dem val-Split sind beide
+> praktisch deckungsgleich (Δ ≤ 0.001 pro Teil) — weil unser Eval das Multi-Instanz-Matching
+> bereits machte und die GDRNPP-Posen klar getrennt sind. Die Umstellung schärft das Protokoll
+> (offizielle `bop_toolkit`-Funktionen) und das Label, nicht die Zahlen.
 
 ---
 

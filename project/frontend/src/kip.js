@@ -309,7 +309,11 @@ async function loadMetrics() {
     const m = await (await fetch(`${API}/metrics`)).json();
     for (const [slug, info] of Object.entries(m.objects || {})) {
       const row = document.createElement("div"); row.className = "kip-metric";
-      const ar = info.best_full_ar != null ? `AR ${info.best_full_ar.toFixed(3)}` : "trainiert noch";
+      // Maßgeblicher Wert = AR nach dem BOP-IC-BIN-Protokoll (Multi-Instanz /
+      // Bin-Picking). Fällt auf best_full_ar zurück, falls IC-BIN (noch) fehlt.
+      const arVal = info.ic_bin_ar != null ? info.ic_bin_ar
+                  : (info.ar != null ? info.ar : info.best_full_ar);
+      const ar = arVal != null ? `AR IC-BIN ${arVal.toFixed(3)}` : "trainiert noch";
       const pending = info.status !== "trained";
       row.innerHTML = `<span class="kip-metric__name">${NAMES[slug] || slug}</span>
         <span class="kip-metric__val${pending ? " kip-metric__val--pending" : ""}">${ar}</span>`;
