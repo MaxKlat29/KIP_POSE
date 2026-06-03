@@ -12,15 +12,21 @@ const canvas = document.getElementById("scene");
 const viewer = createViewer(canvas);
 window.__KIP_VIEWER__ = viewer;
 
-// Cell + Nullpunkt einmal laden. cell_hi.glb (94 MB, 4.0 M tris, UNKOMPRIMIERT)
-// ist der Mittelweg: deutlich mehr Polygone als cell_web (27 MB / 1.1 M tris) bei
-// noch akzeptabler Ladezeit ueber den CF-Tunnel. Das volle 189-MB-Original
-// (cell_hq, ~8 M tris) laedt zu lahm; EXT_meshopt wurde verworfen, weil gltfpack
-// -cc Geometrie/Normalen sichtbar verzerrt (verlustig trotz lossless tris).
-// Fallback-Kette (SICHTBARES Mesh): cell_hi -> cell_web (27 MB) -> cell (8 MB).
-viewer.loadCell("./assets/cell_hi.glb", (ok) => {
-  if (!ok) viewer.loadCell("./assets/cell_web.glb", (ok2) => {
-    if (!ok2) viewer.loadCell("./assets/cell.glb", () => {});
+// Cell + Nullpunkt einmal laden. cell_decals.glb (67 MB, 2.7 M tris, T-106):
+// das Bulk ist auf 2.5 M tris dezimiert, ABER die feinen Label-/Logo-Meshes
+// (wbk-/KIT-Logo, Warn-/Instruktions-Schilder auf den Tueren) sind voll
+// tesselliert GESCHUETZT — sie rendern scharf statt als jagged tuerkise Polygon-
+// Fragmente (so passierte es bei der uniformen Dezimierung von cell_hi). 67 MB
+// ist SOGAR kleiner als das alte cell_hi (94 MB) bei scharfen Decals; das volle
+// cell_hq (~197 MB / 8 M tris) waere fuer scharfe Decals nicht noetig und laedt
+// zu lahm. EXT_meshopt verworfen (gltfpack -cc verzerrt Geometrie/Normalen).
+// Die laengere Ladezeit faengt die #cell-loader-Progressbar ab (echte Bytes).
+// Fallback-Kette (SICHTBARES Mesh): cell_decals -> cell_hi -> cell_web -> cell.
+viewer.loadCell("./assets/cell_decals.glb", (ok) => {
+  if (!ok) viewer.loadCell("./assets/cell_hi.glb", (ok2) => {
+    if (!ok2) viewer.loadCell("./assets/cell_web.glb", (ok3) => {
+      if (!ok3) viewer.loadCell("./assets/cell.glb", () => {});
+    });
   });
 });
 // COLLISION-PROXY (T-099): der groundClamp raycastet NICHT gegen das dichte
@@ -329,8 +335,17 @@ async function inferLiveSim() {
     await renderSim(m);
     setPip(`./api/sim/live_rgb/${job}`, `./api/sim/live_boxes/${job}`);
     simBar.done("Live generiert");
-    simStat.className = "kip-status kip-status--ok";
-    simStat.textContent = `Live Isaac-Szene (seed ${final.seed}, ${final.n_obj} Teile gespawnt): ${final.n_gt}× Ground-Truth, ${final.n_pred}× inferiert`;
+    // Szenen-Info: Seed + Teile-pro-Typ (sauber, statt dem grünen Monospace-Block).
+    const sceneGt = (m.results || []).filter((r) => r.color === "gt");
+    const partCnt = {};
+    for (const r of sceneGt) partCnt[r.part] = (partCnt[r.part] || 0) + 1;
+    const breakdown = Object.entries(partCnt)
+      .map(([p, n]) => `${n}× ${NAMES[p] || p}`)
+      .join(" · ") || "keine sichtbaren Teile";
+    simStat.className = "kip-scene";
+    simStat.innerHTML =
+      `<span class="kip-scene__seed">Seed ${final.seed}</span> · ${final.n_obj} Teile gespawnt` +
+      `<br>im Bild: <span class="kip-scene__parts">${breakdown}</span>`;
   } catch (e) {
     simBar.hide();
     simStat.className = "kip-status kip-status--err";
