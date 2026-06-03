@@ -6,7 +6,13 @@
 // liegen — die Kamera findet die Szene IMMER. Kein manuelles Kamera-Tuning mehr.
 //
 // World = Z-up (Contract). cell.glb wird +Z-aligned so dass seine Tischfläche
-// mit pose-frame Z=0 fluchtet (wo die Teile nach planar-Z-snap ruhen).
+// mit pose-frame Z=0 fluchtet.
+//
+// SEATING (T-101, 2026-06-03): die Arbeits-Tischfläche ist NICHT planar — sie
+// variiert (Tray-Boden/-Kanten/-Plateaus). groundClamp baut darum EINMALIG eine
+// dichte HÖHENKARTE der Arbeitsfläche (XY-Grid-Raycast gegen den Collision-Proxy,
+// Cart-Aufbau/Empore/Arm über OVERHANG_Z ausgeschlossen) und droppt jedes Teil
+// per bilinearem Karten-Lookup sauber auf die lokale Tischhöhe. Siehe groundClamp.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -186,8 +192,13 @@ export function createViewer(canvas) {
         // sich danach nicht mehr).
         collisionGroup.updateMatrixWorld(true);
         proxyLoaded = true;
+        // Der Proxy ist das bevorzugte Raycast-Ziel (clampTarget). Falls die
+        // Höhenkarte schon gegen einen früher geladenen Visual-Cell gebaut wurde,
+        // jetzt gegen den Proxy NEU bauen — er ist die Geometrie, auf der das
+        // Seating bei T-095/097 verifiziert wurde.
+        buildHeightMap(true);
         // Teile koennen schon platziert sein (kip.js laedt Proxy + Parts async) —
-        // jetzt wo das Proxy da ist, einmal nachklammern.
+        // jetzt wo Proxy + Karte da sind, einmal nachklammern.
         if (partsGroup.children.length) groundClamp();
         onDone?.(true);
       },
@@ -262,74 +273,169 @@ export function createViewer(canvas) {
     return { total: results.length, real };
   }
 
-  // ── groundClamp = PHYSIK-DROP (Rewrite 2026-06-02, Max-Direktive) ─────────
-  // Eine einzige, robuste Regel statt der alten T-095/097-Gymnastik (0.6m-Cap,
-  // Konsistenz-Schwelle, Median-Heuristik, Teleport-Guards — alles raus):
+  // ── groundClamp = HÖHENKARTEN-DROP (Rewrite 2026-06-03, T-101 / Max-Direktive) ──
   //
-  //   "Lass das Teil fallen, bis es kollidiert."
+  // PROBLEM mit allen Vorgängern: die Arbeits-Tischfläche der Zelle ist NICHT
+  // planar bei z=0. Sie variiert (Tray-Boden, Tray-Kanten/Plateaus, leichte
+  // Welligkeit). Bei flachem z=0 versinken kleine Teile (Zahnrad) in der unebenen
+  // Fläche und werden unsichtbar. Beim alten Per-Teil-Raycast-Drop traf der
+  // raycast-down ZUERST den oberen Cart-Aufbau (Empore z≈1.1–1.35, Zwischenebenen
+  // 0.47/0.55, LARA5-Arm) und hob die Teile dorthin (= der kaputte T-099-Clamp).
   //
-  // Für jeden Teil-Footprint casten wir senkrecht nach unten und setzen das Teil
-  // so, dass seine UNTERKANTE genau auf dem HÖCHSTEN getroffenen Punkt unter dem
-  // Footprint ruht — exakt dort, wo ein fallender Starrkörper zuerst aufsetzt
-  // ("bis ein Punkt kollidiert"). In BEIDE Richtungen: schwebt es → fällt runter,
-  // steckt es in der Fläche → kommt hoch. Kein Cap, keine Schwellen, kein Debug.
+  // LÖSUNG (Max): eine DICHTE HÖHENKARTE der Arbeits-Tischfläche. Wir raycasten
+  // EINMALIG ein dichtes XY-Grid über das Spawn-Fenster nach unten und nehmen pro
+  // XY die HÖCHSTE getroffene Fläche UNTERHALB einer Overhang-Schwelle — das
+  // schließt Empore/Arm/Zwischenebenen (alles z > OVERHANG_Z) systematisch aus und
+  // liefert genau die Arbeitsfläche, auf der die Teile physikalisch settlen
+  // (USD-gemessen z≈-0.05..+0.15). groundClamp schlägt pro Teil-XY die lokale
+  // Tischhöhe bilinear in dieser Karte nach und setzt die Teil-Unterkante exakt
+  // drauf — in BEIDE Richtungen (schwebt → fällt, steckt → kommt hoch).
   //
-  // Voraussetzung: die Zelle ist per CELL_Z_ALIGN so ausgerichtet, dass ihre
-  // Tisch-/Tray-Fläche auf pose-Z≈0 liegt (wo Grid, Origin-Marker und Kamera-
-  // Target ohnehin sind). Dann landen die Teile ≤10cm über dem Nullpunkt — die
-  // physikalische Realität (Teile liegen flach in der Schale), nicht 1.2m hoch.
+  // KEINE 0.6m-Cap / Konsistenz-Heuristik mehr nötig: die Karte schließt den
+  // Overhang bereits aus, also IST der Top-unter-Schwelle der korrekte Auflage-
+  // punkt. Raycast-Ziel ist clampTarget() = cell.glb-Collision-Proxy (grob/schnell,
+  // T-099), im selben Frame wie die Teile (CELL_Z_ALIGN auf collisionGroup).
   //
-  // Raycast-Ziel ist clampTarget() = der grobe cell.glb-Collision-Proxy (T-099):
-  // nur echte Auflager (Boden/Tray), keine feinen cell_hi-Empore-/Streben-Kanten.
+  // ── Höhenkarten-Parameter ──────────────────────────────────────────────────
+  // Spawn-Fenster (aus box_src/gen_sdg_arm_visible.py --spawn-x/--spawn-y), leicht
+  // gepuffert, damit auch Teile am Rand eine gültige Nachbarschaft haben.
+  const HM_X_MIN = 0.02, HM_X_MAX = 0.82;
+  const HM_Y_MIN = 0.00, HM_Y_MAX = 0.58;
+  // Auflösung des Stützpunkt-Grids. 49×37 ≈ 1813 Raycasts (gegen die GROBE
+  // cell.glb ~33ms/100 Casts → unter ~0.6s, einmalig beim Proxy-Load). Schrittweite
+  // ~17mm in beiden Achsen — fein genug für Tray-Kanten/Plateaus.
+  const HM_NX = 49, HM_NY = 37;
+  // Overhang-Schwelle: alles ÜBER dieser Welt-Z ist Cart-Eigengeometrie und wird
+  // beim Map-Bau ausgeschlossen (Empore 1.1–1.35, Zwischenebenen 0.47/0.55, Arm,
+  // SOWIE ein Strukturcluster bei z≈0.20–0.30 — Strebe/Steuerbox, KEINE Auflage).
+  // Live-Probe gegen cell.glb: die echte Arbeitsfläche ist das dichte Cluster bei
+  // z≈-0.05..+0.05 (~1370 Stützpunkte) plus reale Tray-Kanten bis ~0.15; dazwischen
+  // (0.15–0.18) eine Lücke, dann das Struktur-Cluster ab ~0.20. 0.18 trennt sauber:
+  // behält Tray-Boden+Kanten, schneidet die Cart-Struktur ab. (T-101)
+  const OVERHANG_Z = 0.18;
+  // Cast-Start klar über dem höchsten erwarteten Auflager, aber UNTER dem Overhang
+  // wäre falsch (wir wollen ja Hits oberhalb verwerfen, nicht den Cast begrenzen) —
+  // wir casten von ganz oben und filtern per OVERHANG_Z.
+  const HM_CAST_TOP = 5;
+
   const _raycaster = new THREE.Raycaster();
   const _down = new THREE.Vector3(0, 0, -1);
-  // Höchste getroffene Fläche unter (x,y), von weit oben (z=5) nach unten gecastet.
-  function _topSurfaceAt(x, y, origin) {
-    origin.set(x, y, 5);
-    _raycaster.set(origin, _down);
+  const _hmOrigin = new THREE.Vector3();
+
+  // Die gecachte Höhenkarte: Float-Array HM_NX*HM_NY, row-major (iy*HM_NX + ix).
+  // NaN = an dieser Stelle keine Fläche unter der Schwelle getroffen.
+  let _heightMap = null;
+  let _hmFallbackZ = 0;   // Median der gültigen Map-Werte → Fallback für NaN-Lookups
+
+  // Höchste getroffene Fläche unter (x,y) UNTERHALB OVERHANG_Z. null = kein Hit.
+  function _topSurfaceBelow(x, y, maxZ) {
+    _hmOrigin.set(x, y, HM_CAST_TOP);
+    _raycaster.set(_hmOrigin, _down);
     const hits = _raycaster.intersectObject(clampTarget(), true);
     let top = null;
-    for (const h of hits) if (top === null || h.point.z > top) top = h.point.z;
-    return top;   // null = nichts unter (x,y)
+    for (const h of hits) {
+      const z = h.point.z;
+      if (z > maxZ) continue;                       // Empore/Arm/Zwischenebene → raus
+      if (top === null || z > top) top = z;         // höchste Arbeitsfläche darunter
+    }
+    return top;
   }
+
+  // Baut die Höhenkarte EINMALIG. Cached in _heightMap. Idempotent: rebuild()=true
+  // erzwingt Neubau (z.B. wenn der Visual-Cell als Fallback-Target geladen wurde).
+  function buildHeightMap(rebuild = false) {
+    if (_heightMap && !rebuild) return;
+    if (!proxyLoaded && !cellLoaded) return;        // kein Raycast-Ziel
+    const map = new Float32Array(HM_NX * HM_NY);
+    const valid = [];
+    let zMin = Infinity, zMax = -Infinity;
+    for (let iy = 0; iy < HM_NY; iy++) {
+      const y = HM_Y_MIN + (HM_NY === 1 ? 0 : iy / (HM_NY - 1)) * (HM_Y_MAX - HM_Y_MIN);
+      for (let ix = 0; ix < HM_NX; ix++) {
+        const x = HM_X_MIN + (HM_NX === 1 ? 0 : ix / (HM_NX - 1)) * (HM_X_MAX - HM_X_MIN);
+        const z = _topSurfaceBelow(x, y, OVERHANG_Z);
+        if (z === null) { map[iy * HM_NX + ix] = NaN; continue; }
+        map[iy * HM_NX + ix] = z;
+        valid.push(z);
+        if (z < zMin) zMin = z;
+        if (z > zMax) zMax = z;
+      }
+    }
+    // Median der gültigen Höhen → robuster Fallback für Löcher (NaN) in der Karte.
+    if (valid.length) {
+      valid.sort((a, b) => a - b);
+      _hmFallbackZ = valid[Math.floor(valid.length / 2)];
+    } else {
+      _hmFallbackZ = 0;
+    }
+    _heightMap = map;
+    if (typeof console !== "undefined") {
+      console.info(`[heightmap] ${HM_NX}×${HM_NY} (${valid.length}/${map.length} valid), ` +
+        `z-band [${Number.isFinite(zMin) ? zMin.toFixed(3) : "—"}, ` +
+        `${Number.isFinite(zMax) ? zMax.toFixed(3) : "—"}], median ${_hmFallbackZ.toFixed(3)} ` +
+        `(overhang>${OVERHANG_Z} excluded)`);
+    }
+  }
+
+  // Lokale Tischhöhe an (x,y) — bilineare Interpolation über die 4 Grid-Nachbarn.
+  // NaN-Zellen (Löcher) werden durch den Map-Median ersetzt, damit ein Teil über
+  // einem unbedeckten Fleck nicht ins Bodenlose fällt. XY außerhalb der Karte wird
+  // auf den Rand geklemmt.
+  function sampleHeightMap(x, y) {
+    if (!_heightMap) return null;
+    const fx = (HM_NX - 1) * (x - HM_X_MIN) / (HM_X_MAX - HM_X_MIN);
+    const fy = (HM_NY - 1) * (y - HM_Y_MIN) / (HM_Y_MAX - HM_Y_MIN);
+    const cx = Math.max(0, Math.min(HM_NX - 1, fx));
+    const cy = Math.max(0, Math.min(HM_NY - 1, fy));
+    const ix0 = Math.floor(cx), iy0 = Math.floor(cy);
+    const ix1 = Math.min(HM_NX - 1, ix0 + 1), iy1 = Math.min(HM_NY - 1, iy0 + 1);
+    const tx = cx - ix0, ty = cy - iy0;
+    const at = (ix, iy) => {
+      const v = _heightMap[iy * HM_NX + ix];
+      return Number.isNaN(v) ? _hmFallbackZ : v;
+    };
+    const z00 = at(ix0, iy0), z10 = at(ix1, iy0);
+    const z01 = at(ix0, iy1), z11 = at(ix1, iy1);
+    const zx0 = z00 * (1 - tx) + z10 * tx;
+    const zx1 = z01 * (1 - tx) + z11 * tx;
+    return zx0 * (1 - ty) + zx1 * ty;
+  }
+
   function groundClamp() {
-    // ── DEAKTIVIERT 2026-06-02 (Max-Direktive) ──────────────────────────────
-    // Der Höhen-Clamp (egal ob alter Cap-Ansatz oder neuer Physik-Drop) ist nur
-    // ein Symptom-Pflaster gegen den eigentlichen Frame-Versatz (Teile pose-Z≈0
-    // vs. Zell-Tray ~1.18 m). Statt im Viewer an der Höhe zu drehen, wird die
-    // Teile rendern jetzt auf ihrer ROHEN Pose-Höhe — die nachhaltige Lösung
-    // (Frame an der Quelle reconcilen: Sim/Export/table_origin) kommt separat.
-    // Funktionskörper bleibt erhalten → Re-Aktivieren = dieses return entfernen.
-    return;
-    // eslint-disable-next-line no-unreachable
-    if (!proxyLoaded && !cellLoaded) return;   // kein Raycast-Ziel → nichts tun
+    if (!proxyLoaded && !cellLoaded) return;        // kein Raycast-Ziel → nichts tun
+    buildHeightMap();                               // lazy: einmal bauen, dann gecacht
+    if (!_heightMap) return;
     const _box = new THREE.Box3();
-    const _origin = new THREE.Vector3();
     partsGroup.children.forEach((holder) => {
       _box.makeEmpty();
       _box.expandByObject(holder);
       if (_box.isEmpty()) return;
 
-      // Footprint (XY-Bbox) dicht abtasten — 5x5 + Zentrum. Pro Stelle die
-      // höchste Fläche darunter; der Auflagepunkt ist das MAXIMUM davon = der
-      // erste Kontaktpunkt beim Fallenlassen ("bis ein Punkt kollidiert").
-      const N = 5;
-      let restZ = null;
+      // Lokale Tischhöhe ROBUST über den ganzen Teil-Footprint aus der Höhenkarte
+      // ableiten — NICHT nur das Bbox-Zentrum. Bei langen Teilen (Anker_Lang) liegt
+      // das Zentrum sonst zufällig auf einer Tray-Kante und hebt das ganze Teil auf
+      // die Kantenhöhe. Wir tasten ein 3×3-Footprint-Gitter ab und nehmen den MEDIAN
+      // der Auflagerhöhen: ein flach liegendes Teil ruht auf der durchgehenden Fläche
+      // unter dem Großteil seines Footprints, nicht auf einer einzelnen Kanten-Ecke.
+      const N = 3;
+      const samples = [];
       for (let i = 0; i < N; i++) {
         const tx = N === 1 ? 0.5 : i / (N - 1);
         const x = _box.min.x + tx * (_box.max.x - _box.min.x);
         for (let j = 0; j < N; j++) {
           const ty = N === 1 ? 0.5 : j / (N - 1);
           const y = _box.min.y + ty * (_box.max.y - _box.min.y);
-          const z = _topSurfaceAt(x, y, _origin);
-          if (z !== null && (restZ === null || z > restZ)) restZ = z;
+          const z = sampleHeightMap(x, y);
+          if (z !== null && Number.isFinite(z)) samples.push(z);
         }
       }
-      if (restZ === null) return;          // gar keine Fläche im Footprint → lassen
+      if (!samples.length) return;
+      samples.sort((a, b) => a - b);
+      const restZ = samples[Math.floor(samples.length / 2)];   // Median-Auflagerhöhe
 
-      const dz = restZ - _box.min.z;       // Unterkante exakt auf den Auflagepunkt
-      if (Math.abs(dz) < 1e-5) return;     // sitzt schon → nichts tun
-      holder.matrix.elements[14] += dz;    // matrixAutoUpdate=false → z direkt setzen
+      const dz = restZ - _box.min.z;                // Unterkante exakt auf die Karte
+      if (Math.abs(dz) < 1e-5) return;              // sitzt schon → nichts tun
+      holder.matrix.elements[14] += dz;             // matrixAutoUpdate=false → z direkt
       holder.matrixWorldNeedsUpdate = true;
     });
   }
@@ -463,6 +569,8 @@ export function createViewer(canvas) {
     loadCell, loadCollisionProxy, setParts, setPartOffset, fitView, resetView, resize,
     isCellLoaded: () => cellLoaded,
     isProxyLoaded: () => proxyLoaded,
+    // Höhenkarte (T-101): für Verify/Debug exponiert.
+    buildHeightMap, sampleHeightMap,
     // legacy no-op fields some callers expect
     tableGroup: cellGroup, tableMesh: null,
   };
