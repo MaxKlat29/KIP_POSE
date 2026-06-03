@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-03T08:46:56Z",
+  "updated": "2026-06-03T09:38:00Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 103,
+  "next_id": 107,
   "tickets": [
     {
       "id": "T-001",
@@ -5193,11 +5193,18 @@
       ],
       "session": "2026-06-01-anker-flip-fix",
       "created": "2026-06-01T16:26:23Z",
-      "updated": "2026-06-01T16:26:23Z",
+      "updated": "2026-06-03T09:04:36Z",
       "started_at": null,
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-03T09:04:36Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "MAX-ENTSCHEIDUNG 2026-06-03: Anker-Flip-Rest erstmal AKZEPTIERT/VERTAGT. Single-View ist mit T-085 (40%) ausgereizt (T-102 4-fach falsifiziert). Multi-View ODER Retrain-DR (dieses Ticket) bleiben die einzigen echten Hebel — NICHT jetzt angehen, später wenn ohnehin relevant. Flip live unverändert."
+        }
+      ]
     },
     {
       "id": "T-091",
@@ -5758,7 +5765,7 @@
       "id": "T-100",
       "title": "T-100: Seltener Edge-Case — langes Anker_Lang an Plateau-Kante bleibt am Boden (groundClamp-Cap blockt inkonsistenten 1.2m-Lift)",
       "description": "1/19 Teile (eine fruehe Szene): Anker_Lang, dessen Footprint eine Plateau-Kante quert -> <50% Samples konsistent -> 0.6m-Cap verweigert den legitimen Lift -> Teil bleibt am Boden statt auf dem Tisch. 18/18 spaetere Teile (inkl. Anker_Lang) seateten korrekt -> seltener Geometrie-Edge-Case, kein Muster. Fix-Idee: Center-Anker-Treffer staerker gewichten ODER Konsistenz-Schwelle fuer lange duenne Teile lockern. NICHT dringend, NICHT die breit funktionierende Logik riskieren.",
-      "column": "backlog",
+      "column": "done",
       "assignee": "lena-frontend",
       "instance": "",
       "priority": "P3",
@@ -5768,17 +5775,30 @@
       ],
       "session": "",
       "created": "2026-06-02T17:44:57Z",
-      "updated": "2026-06-02T17:44:57Z",
+      "updated": "2026-06-03T09:04:51Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-03T09:04:51Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-03T09:04:50Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "Wahrscheinlich OBSOLET durch T-101 Höhenkarten-Drop: der alte 0.6m-Cap (Ursache dieses Edge-Cases) ist ersetzt durch Höhenkarten-Lookup + Footprint-Median (genau für lange Teile auf Tray-Kanten gebaut). Schließe als superseded; reopen falls ein langes Anker_Lang doch noch falsch sitzt."
+        },
+        {
+          "ts": "2026-06-03T09:04:51Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-101",
       "title": "T-101: Frame-Reconciliation an der Quelle — Teile pose-Z≈0 vs Zell-GLB-Tray ~1.18m",
       "description": "Wurzel des Höhen-Themas: die Teile-Posen (GT/Pred) liegen im pose-frame bei z≈0 (≤10cm über Null, korrekt), aber die Zell-GLBs (cell.glb/cell_web/cell_hi) haben ihre Tray-Arbeitsfläche bei z≈1.18 (Boden bei 0). Frame-Versatz ~1.18m. Viewer-Höhen-Hacks (groundClamp-Lift, CELL_Z_ALIGN) sind Symptom-Pflaster und wurden entfernt. NACHHALTIG: den Versatz an der Quelle beheben — entweder cell-GLB-Export mit korrektem Origin (Tray auf 0), ODER table_origin/Welt-Transform so dass Zelle+Teile EINEN konsistenten Frame teilen. Dann sitzen Teile ohne jeden Viewer-Eingriff sichtbar in der Schale.",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P2",
@@ -5789,9 +5809,9 @@
       ],
       "session": "",
       "created": "2026-06-02T20:23:33Z",
-      "updated": "2026-06-03T08:46:56Z",
+      "updated": "2026-06-03T08:50:27Z",
       "started_at": "2026-06-03T07:41:17Z",
-      "completed_at": null,
+      "completed_at": "2026-06-03T08:50:27Z",
       "comments": [],
       "logs": [
         {
@@ -5895,6 +5915,18 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "DONE — Höhenkarten-Drop committed 8f62485 (scene.js, Branch team/2026-06-03-pose-frame-flip). Karte 49x37 gegen cell.glb, OVERHANG_Z=0.18 (Cart-Struktur 0.20-0.30 + Empore/Arm raus), Footprint-Median-Drop. Verify: 27 echte Teile 0>10cm folgen Tischvariation+sichtbar, synth. Zahnrad 5/5 Unterkante==Karte+sichtbar. Nebenbefund: gdrnpp liefert kaum Zahnrad-Detektionen (separat). Kein Export/GLB-Change, CELL_Z_ALIGN=0. Lena Review, Sam Deploy nach Verify."
+        },
+        {
+          "ts": "2026-06-03T08:50:26Z",
+          "agent": "sam-devops",
+          "level": "success",
+          "msg": "DEPLOYED + LIVE. scene.js Höhenkarten-Drop (8f62485) auf Box (md5 de0a3d11, alte cc53760e gesichert), merge 0f48fb0→main gepusht, CF serviert live. Verify: 27 Teile/8 echte Szenen ≤10cm auf Tischfläche, Zahnrad-Drop 5/5 sichtbar (Kai headless). Box-scene.js war == main-Basis → sauberer Replace, Loader-UI erhalten."
+        },
+        {
+          "ts": "2026-06-03T08:50:27Z",
+          "agent": "sam-devops",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
@@ -6013,6 +6045,125 @@
           "agent": "theo-debug",
           "level": "info",
           "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-103",
+      "title": "T-103: gdrnpp gibt kaum/nie Zahnrad als gt/pred aus (Anker-lastig?) — Eval-Abdeckung/Detektor",
+      "description": "Kai-Nebenbefund: über viele Sim-Szenen kommt fast nur Anker raus, Zahnrad praktisch nie (obwohl focus_frac=0.6). Modell evtl. Anker-lastig trainiert / Detektor-Recall für Zahnrad niedrig. = ZWEITER Grund warum Max kaum Zahnräder sieht (Pipeline, nicht Viewer). Prüfen: Detektor-Recall pro Klasse + Trainings-Klassenbalance.",
+      "column": "backlog",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "pose",
+        "eval"
+      ],
+      "session": "",
+      "created": "2026-06-03T08:50:27Z",
+      "updated": "2026-06-03T08:50:27Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-104",
+      "title": "T-104: vereinzelte anomale GT-Tiefe (Anker_Lang t.z=-0.85, Teil 'im Wagen')",
+      "description": "Kai-Nebenbefund: einzelne GT-Posen mit anomaler Tiefe weit unter der Arbeitsfläche. Daten-/Pose-Thema, kein Frame/Viewer. Prüfen: Sim-Physik-Settle / GT-Export-Tiefe für Ausreißer.",
+      "column": "backlog",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P3",
+      "tags": [
+        "pose",
+        "data"
+      ],
+      "session": "",
+      "created": "2026-06-03T08:50:27Z",
+      "updated": "2026-06-03T08:50:27Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-105",
+      "title": "T-105: KIP-FE-Polish — PiP-Leiste/Buttons, Sim-Status redesign, KIT-Favicon, Neue-Szene-Button",
+      "description": "PiP-Leiste: alle Buttons sichtbar + Fullscreen-Btn nicht verdeckt. Sim-Status: grünen Monospace-Block raus, stattdessen Seed + Teile-pro-Typ sauber. KIT-Logo (nur Logo) als Favicon+Page-Logo. Neue-Szene-Button voll breit + dicker.",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "kip",
+        "frontend",
+        "polish"
+      ],
+      "session": "",
+      "created": "2026-06-03T09:18:48Z",
+      "updated": "2026-06-03T09:32:57Z",
+      "started_at": null,
+      "completed_at": "2026-06-03T09:32:57Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-03T09:32:57Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "FE-Polish A-D LIVE+verifiziert (Playwright gegen Box-Sim): A PiP flex-wrap (alle Buttons+⛶ sichtbar), B Sim-Status 'Seed X · N gespawnt / im Bild: n× Teil' (kip-scene, kein grüner Block), C KIT-Favicon, D Neue-Szene-Button full-width+dicker. Deployed (box md5 match), Backups da. Merge→main gebündelt mit T-106 (Kai läuft noch)."
+        },
+        {
+          "ts": "2026-06-03T09:32:57Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
+    },
+    {
+      "id": "T-106",
+      "title": "T-106: Höher-poly Cell-Export — Decal/Logo-Polygone (wbk/KIT-Labels) sauber rendern statt jagged",
+      "description": "cell_hi-Decimation hat die Decals/Labels zerschossen (jagged teal Artefakte). Höhere Tri-Budget exportieren bis Decals sauber rendern; gecacht (browser) nicht lokal persistiert. loadCell ggf. auf neue Datei. Ladezeit darf steigen (Max ok), Loader-UI fängt's.",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "kip",
+        "asset"
+      ],
+      "session": "",
+      "created": "2026-06-03T09:18:48Z",
+      "updated": "2026-06-03T09:38:00Z",
+      "started_at": "2026-06-03T09:20:19Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-03T09:20:19Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-03T09:23:26Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Diagnose: Decals/Logos sind FEINE FLACHE MESH-Geometrie (135 dünne Platten-Meshes, dim<3mm, weiße material_55_255_255 = wbk/KIT/Warn-Label), KEINE Texturen (0 image-maps gebunden), kein Material/Normal/UV-Problem. Ursache der jagged-Artefakte: export_cell_glb.py gruppiert nach quant. Farbe → weiße Decals (24696t) landen in großer weiß-Gruppe (193865t), die UNIFORM proportional quadric-dezimiert wird (ratio 0.304@2.5M) → feine Buchstaben/Logo-Kanten kollabieren. Höher-poly fixt es; targeted-Lösung baue ich (Decals von Dezimierung ausnehmen)."
+        },
+        {
+          "ts": "2026-06-03T09:33:54Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Decal-Verify GRÜN (headless Playwright, lokaler Server gegen neue GLB): cell_decals.glb (67.2MB, 2.73M tris, 325 voll-tesselliert geschützte Label-Meshes) rendert wbk-Logo + KIT-Logo + Warn-/Instruktions-Schild SCHARF statt jagged. Vergleich /tmp/decals2_BEFORE.png (cell_hi 4.01M, jagged türkise Polygon-Fragmente) vs /tmp/decals2_AFTER.png (sauber, lesbar). Aspekt-Kriterium (broad/thin>=4) fängt eingeprägte Schilder (thin5.2mm) + schließt 3D-Klötze aus. 29% kleiner als cell_hi bei scharfen Decals."
+        },
+        {
+          "ts": "2026-06-03T09:38:00Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "DONE: Commit 9d8e791 (nur Code: export_cell_glb.py Decal-Schutz + kip.js loadCell-Default + .gitignore). GLB NICHT committed (gitignored). Staging-Pfad (box, browser-gecacht): /mnt/data/kip_pose/project/frontend/assets/cell_decals.glb, 67.2MB / 2.73M tris (325 voll-tesselliert geschützte Label-Meshes). Decal-Fix VERIFIZIERT (wbk/KIT/Warn-Schild scharf statt jagged, /tmp/decals2_AFTER.png). 29% kleiner als altes cell_hi (94MB). Loader-UI greift (64.1MB Bytes-Progress + hide-after-done). Bestehende cell_hi/hq/web/glb unangetastet (non-destruktiv). Branch team/2026-06-03-cell-decals → Ravi-Review/Sam-Merge+Deploy."
         }
       ]
     }
