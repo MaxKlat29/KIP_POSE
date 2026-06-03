@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-03T12:55:07Z",
+  "updated": "2026-06-03T12:58:59Z",
   "columns": [
     {
       "id": "backlog",
@@ -6297,7 +6297,7 @@
       "id": "T-109",
       "title": "T-109: Metrik auf AR nach BOP-IC-BIN-Protokoll umstellen (anzeigen + maßgeblich)",
       "description": "Max: angezeigte + maßgebliche Metrik soll AR IC-BIN sein (Bin-Picking-Protokoll, Multi-Instanz-Matching mehrerer gleicher Teile pro Bin). Aktuell: eval_bop.py = BOP19-AR mean(VSD,MSSD,MSPD) sym-aware via bop_toolkit. Kai: IC-BIN-Protokoll recherchieren (BOP-docs/bop_toolkit), implementieren, AR pro Teil auf val NEU berechnen (bestehende preds_best.csv, KEIN retrain/sim), alt-vs-neu vergleichen, in /api/metrics + kip.js-Label + README-Badges einwiren. Ehrlich falls Zahlen sich ändern.",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -6308,9 +6308,9 @@
       ],
       "session": "",
       "created": "2026-06-03T12:41:24Z",
-      "updated": "2026-06-03T12:55:07Z",
+      "updated": "2026-06-03T12:58:59Z",
       "started_at": "2026-06-03T12:41:24Z",
-      "completed_at": null,
+      "completed_at": "2026-06-03T12:58:59Z",
       "comments": [],
       "logs": [
         {
@@ -6360,6 +6360,18 @@
           "agent": "kai-ml",
           "level": "info",
           "msg": "Korrektur: Move-zurück nach in_progress — laut Protokoll moved Ravi/Queen nach in_review, nicht der Worker. Story ist READY FOR REVIEW: Commit 5bc7599, alle AKs erfüllt. Ravi: bitte Gate + move in_review."
+        },
+        {
+          "ts": "2026-06-03T12:58:59Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "DEPLOYED+LIVE+MERGED. kip_server.py+kip.js auf Box, kip_server neu gestartet (pid 34841, health 200), /api/metrics metric=ar_ic_bin (ic_bin_ar 0.8706/0.9068/0.8382). Offizielles bop_toolkit-Matching (--icbin, GT-as-pred=1.000). Alt vs IC-BIN praktisch identisch (Ø 0.8716→0.8718). Merge→main gepusht. Sim-Label 'AR IC-BIN'."
+        },
+        {
+          "ts": "2026-06-03T12:58:59Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     },
