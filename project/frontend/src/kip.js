@@ -12,20 +12,26 @@ const canvas = document.getElementById("scene");
 const viewer = createViewer(canvas);
 window.__KIP_VIEWER__ = viewer;
 
-// Cell + Nullpunkt einmal laden. cell_decals.glb (67 MB, 2.7 M tris, T-106):
-// das Bulk ist auf 2.5 M tris dezimiert, ABER die feinen Label-/Logo-Meshes
-// (wbk-/KIT-Logo, Warn-/Instruktions-Schilder auf den Tueren) sind voll
-// tesselliert GESCHUETZT — sie rendern scharf statt als jagged tuerkise Polygon-
-// Fragmente (so passierte es bei der uniformen Dezimierung von cell_hi). 67 MB
-// ist SOGAR kleiner als das alte cell_hi (94 MB) bei scharfen Decals; das volle
-// cell_hq (~197 MB / 8 M tris) waere fuer scharfe Decals nicht noetig und laedt
-// zu lahm. EXT_meshopt verworfen (gltfpack -cc verzerrt Geometrie/Normalen).
+// Cell + Nullpunkt einmal laden. cell_sharp.glb (112.7 MB, 4.22 M tris, 2 Meshes,
+// T-107): Bulk-Budget hoch (schaerfer als das alte cell_hi 4.0 M) + die Decal-/Logo-
+// Flaechen (wbk-/KIT-Logo, Warn-/Instruktions-Schilder, Inverter-Label) zu EINEM
+// vertex-colored Mesh (COLOR_0) gemerged → razorscharf-legibel statt jagged Shards
+// (so passierte es bei der uniformen Dezimierung von cell_hi). Nur 2 Meshes (cell_hi
+// hatte 59) — gut fuer den Aufbau.
+//
+// NON-BLOCKING LADEN (T-108): loadCell parst die GLB OFF-MAIN-THREAD in einem
+// Web-Worker (src/cellLoader.worker.js, dependency-freier GLB-Parser) und baut die
+// Geometrie yield-chunked auf → der Browser-Main-Thread bleibt waehrend des Loads
+// frei, die UI ist klickbar (vorher fror der synchrone ~2.2-s-Parse die UI ein).
+// Faellt der Worker aus, greift automatisch der synchrone GLTFLoader-Fallback.
 // Die laengere Ladezeit faengt die #cell-loader-Progressbar ab (echte Bytes).
-// Fallback-Kette (SICHTBARES Mesh): cell_decals -> cell_hi -> cell_web -> cell.
-viewer.loadCell("./assets/cell_decals.glb", (ok) => {
-  if (!ok) viewer.loadCell("./assets/cell_hi.glb", (ok2) => {
-    if (!ok2) viewer.loadCell("./assets/cell_web.glb", (ok3) => {
-      if (!ok3) viewer.loadCell("./assets/cell.glb", () => {});
+// Fallback-Kette (SICHTBARES Mesh): cell_sharp -> cell_decals -> cell_hi -> cell_web -> cell.
+viewer.loadCell("./assets/cell_sharp.glb", (ok) => {
+  if (!ok) viewer.loadCell("./assets/cell_decals.glb", (ok2) => {
+    if (!ok2) viewer.loadCell("./assets/cell_hi.glb", (ok3) => {
+      if (!ok3) viewer.loadCell("./assets/cell_web.glb", (ok4) => {
+        if (!ok4) viewer.loadCell("./assets/cell.glb", () => {});
+      });
     });
   });
 });

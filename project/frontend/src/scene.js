@@ -121,20 +121,125 @@ export function createViewer(canvas) {
   // mal fehlt — dann eben gegen das Visual, wie vor T-099.
   function clampTarget() { return proxyLoaded ? collisionGroup : cellGroup; }
 
-  function loadCell(url = "./assets/cell.glb", onDone) {
-    // EXT_meshopt_compression Decoder fuer cell_hq_meshopt.glb (17 MB vs 189 MB
-    // bei unkomprimiertem cell_hq.glb, ohne Detail-Verlust).
-    const loader = new GLTFLoader();
-    loader.setMeshoptDecoder(MeshoptDecoder);
-    // Loader-UI sofort sichtbar machen, sonst sieht der Nutzer bei langsamer
-    // Verbindung minutenlang nichts (cell_hi = 94 MB). Wir zeigen Datei + Prozent.
-    // Vollstaendig if(ui)-guarded → harmlos wenn das #cell-loader-DOM fehlt.
+  // ── Cell-Loader-UI-Helper (gemeinsam fuer Worker- + Fallback-Pfad) ──
+  // Vollstaendig if(ui)-guarded → harmlos wenn das #cell-loader-DOM fehlt.
+  function cellLoaderUI() {
     const ui = document.getElementById("cell-loader");
     const pctEl = document.getElementById("cell-loader-pct");
     const lblEl = document.getElementById("cell-loader-label");
     const fill = ui?.querySelector(".kip-bar__fill");
-    if (ui) { ui.hidden = false; if (fill) fill.style.width = "0%"; if (pctEl) pctEl.textContent = "Verbinde…"; }
-    if (lblEl) lblEl.textContent = `3D-Modell laedt (${url.split('/').pop()})`;
+    return {
+      start(url) {
+        if (ui) { ui.hidden = false; if (fill) fill.style.width = "0%"; if (pctEl) pctEl.textContent = "Verbinde…"; }
+        if (lblEl) lblEl.textContent = `3D-Modell laedt (${url.split('/').pop()})`;
+      },
+      progress(loaded, total) {
+        if (!ui) return;
+        const mbL = loaded / (1024 * 1024);
+        if (total && total > 0) {
+          const mbT = total / (1024 * 1024);
+          const pc = Math.min(100, (loaded / total) * 100);
+          if (fill) fill.style.width = pc.toFixed(1) + "%";
+          if (pctEl) pctEl.textContent = `${mbL.toFixed(1)} / ${mbT.toFixed(1)} MB · ${pc.toFixed(0)} %`;
+        } else {
+          if (fill) fill.style.width = "0%";
+          if (pctEl) pctEl.textContent = `${mbL.toFixed(1)} MB geladen`;
+        }
+      },
+      parsing() { if (pctEl) pctEl.textContent = "Wird aufbereitet…"; },
+      done() {
+        if (fill) fill.style.width = "100%";
+        if (lblEl) lblEl.textContent = "3D-Modell geladen";
+        setTimeout(() => { if (ui) ui.hidden = true; }, 800);
+      },
+      fail() { if (ui) ui.hidden = true; },
+    };
+  }
+
+  // Baut aus den vom Worker gelieferten Roh-Buffern (zero-copy Transferables) die
+  // sichtbare THREE-Geometrie YIELD-CHUNKED auf — wenige Meshes pro Frame, damit
+  // der Main-Thread zwischen den Batches frei bleibt (UI klickbar). Pro Mesh nur
+  // billige BufferGeometry+Material-Konstruktion (~0 ms); der teure Parse lief im
+  // Worker. cellGroup.add inkrementell, fitView erst nach dem letzten Batch.
+  function buildCellFromWorker(meshes, onDone) {
+    const group = new THREE.Group();
+    const _m4 = new THREE.Matrix4();
+    let i = 0;
+    const CHUNK = 8;  // Meshes pro Frame
+    function step() {
+      const end = Math.min(i + CHUNK, meshes.length);
+      for (; i < end; i++) {
+        const d = meshes[i];
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(d.pos, 3));
+        if (d.nrm) geo.setAttribute("normal", new THREE.BufferAttribute(d.nrm, 3));
+        if (d.col) geo.setAttribute("color", new THREE.BufferAttribute(d.col, d.colItems || 3, !!d.colNormalize));
+        if (d.idx) geo.setIndex(new THREE.BufferAttribute(d.idx, 1));
+        if (!d.nrm) geo.computeVertexNormals();
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(d.color[0], d.color[1], d.color[2]),
+          roughness: d.roughness, metalness: d.metalness,
+          side: THREE.DoubleSide,
+          vertexColors: !!d.col,   // Decal-/Logo-Farben (cell_sharp.glb, T-107)
+          transparent: d.alphaMode === "BLEND" || (d.opacity != null && d.opacity < 1),
+          opacity: d.opacity != null ? d.opacity : 1,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        _m4.fromArray(d.matrix);
+        mesh.applyMatrix4(_m4);
+        group.add(mesh);
+      }
+      if (i < meshes.length) {
+        requestAnimationFrame(step);   // naechster Batch im naechsten Frame → UI frei
+      } else {
+        cellGroup.add(group);
+        cellLoaded = true;
+        fitView();
+        onDone?.(true);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function loadCell(url = "./assets/cell.glb", onDone) {
+    const ui = cellLoaderUI();
+    ui.start(url);
+
+    // ── PRIMAER: Parse off-main-thread im Worker (kein UI-Freeze, T-108) ──
+    // Worker hat KEINE Imports (dependency-freier GLB-Parser) → klassischer Worker,
+    // portabel ohne Bundler/Importmap. Faellt der Worker aus (Konstruktion, Parse-
+    // Fehler, fremde GLB-Form), greift der synchrone GLTFLoader-Fallback.
+    let worker = null;
+    const fallback = (reason) => {
+      if (reason) console.warn("[cell] Worker-Pfad uebersprungen → Main-Thread-Fallback:", reason);
+      try { worker?.terminate(); } catch (_) {}
+      loadCellMainThread(url, ui, onDone);
+    };
+    try {
+      worker = new Worker(new URL("./cellLoader.worker.js", import.meta.url));
+    } catch (e) { fallback(String(e?.message ?? e)); return; }
+
+    worker.onmessage = (ev) => {
+      const m = ev.data;
+      if (m.type === "progress") { ui.progress(m.loaded, m.total); }
+      else if (m.type === "phase" && m.phase === "parse") { ui.parsing(); }
+      else if (m.type === "done") {
+        try { worker.terminate(); } catch (_) {}
+        buildCellFromWorker(m.meshes, (ok) => { if (ok) ui.done(); else ui.fail(); onDone?.(ok); });
+      } else if (m.type === "error") {
+        fallback(m.message);
+      }
+    };
+    worker.onerror = (e) => fallback(e?.message || "worker onerror");
+    worker.postMessage({ url: new URL(url, location.href).href });
+  }
+
+  // Fallback: der bisherige synchrone Main-Thread-Load (GLTFLoader). Korrekt fuer
+  // jede GLB (auch texturiert/komprimiert) — nur eben blockierend. Wird nur genutzt
+  // wenn der Worker-Pfad ausfaellt. EXT_meshopt-Decoder bleibt fuer komprimierte GLBs.
+  function loadCellMainThread(url, ui, onDone) {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
     loader.load(
       url,
       (gltf) => {
@@ -147,29 +252,12 @@ export function createViewer(canvas) {
         });
         cellGroup.add(gltf.scene);
         cellLoaded = true;
-        // Erfolg: Bar voll, dann ausblenden.
-        if (fill) fill.style.width = "100%";
-        if (lblEl) lblEl.textContent = "3D-Modell geladen";
-        setTimeout(() => { if (ui) ui.hidden = true; }, 800);
+        ui.done();
         fitView();
         onDone?.(true);
       },
-      // onProgress: ECHTE Bytes vom XMLHttpRequest (xhr.total=0 wenn kein
-      // Content-Length → nur MB-Counter ohne Balken).
-      (xhr) => {
-        if (!ui) return;
-        const mbL = xhr.loaded / (1024 * 1024);
-        if (xhr.total && xhr.total > 0) {
-          const mbT = xhr.total / (1024 * 1024);
-          const p = Math.min(100, (xhr.loaded / xhr.total) * 100);
-          if (fill) fill.style.width = p.toFixed(1) + "%";
-          if (pctEl) pctEl.textContent = `${mbL.toFixed(1)} / ${mbT.toFixed(1)} MB · ${p.toFixed(0)} %`;
-        } else {
-          if (fill) fill.style.width = "0%";
-          if (pctEl) pctEl.textContent = `${mbL.toFixed(1)} MB geladen`;
-        }
-      },
-      (err) => { console.warn("[cell] nicht geladen:", err?.message ?? err); if (ui) ui.hidden = true; onDone?.(false); }
+      (xhr) => ui.progress(xhr.loaded, xhr.total),
+      (err) => { console.warn("[cell] nicht geladen:", err?.message ?? err); ui.fail(); onDone?.(false); }
     );
   }
 

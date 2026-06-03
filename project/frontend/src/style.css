@@ -329,8 +329,11 @@ html, body {
   position: absolute;
   right: 16px;
   bottom: 16px;
-  width: min(30vw, 380px);
-  padding: 10px 14px;
+  /* Breiter als zuvor (war min(30vw,380px)): die Fortschritts-Zeile
+     'X / Y MB · Z %' braucht Platz, damit sie EINZEILIG bleibt (T-108). */
+  width: min(36vw, 460px);
+  max-width: calc(100vw - 32px);
+  padding: 11px 16px;
   border-radius: 10px;
   background: rgba(16, 18, 22, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -338,13 +341,19 @@ html, body {
   z-index: 50;
   color: #e7ecf3;
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13px;
 }
 .kip-cell-loader__txt {
   display: flex; justify-content: space-between; align-items: baseline;
-  gap: 8px; margin-bottom: 6px;
+  gap: 12px; margin-bottom: 7px;
+  /* Label darf bei Bedarf kuerzen; der Prozent-Wert NIE umbrechen. */
+  white-space: nowrap;
+}
+.kip-cell-loader__txt #cell-loader-label {
+  overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 .kip-cell-loader__txt #cell-loader-pct {
   color: rgb(140, 230, 170); font-family: var(--mono); font-weight: 600;
+  font-size: 14px; white-space: nowrap; flex: none;
 }
 .kip-cell-loader .kip-bar { display: block; }

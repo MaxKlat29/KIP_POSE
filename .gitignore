@@ -74,10 +74,14 @@ project/models/gdrnpp/
 # Live-Variante des Viewers; cell_hq ist das volle Offline-Render. Beide gross ->
 # nicht in git (auf der Box via box_src/export_cell_glb.py erzeugbar).
 # cell_decals.glb (67MB, 2.7M tris): Decal-/Logo-Meshes voll-tesselliert geschützt
-# (T-106) → wbk/KIT/Warn-Schilder scharf statt jagged; ist die Live-Variante.
+# (T-106) → wbk/KIT/Warn-Schilder scharf statt jagged.
+# cell_sharp.glb (112.7MB, 4.22M tris, NUR 2 Meshes): höher-poly Bulk (Budget 4M)
+# + Decals voll-tess, zu 2 vertex-colored Meshes gemergt (schneller Viewer-Load,
+# T-107/T-108) → schärfer als cell_hi, Label-Decals razorscharf; Live-Variante.
 project/frontend/assets/cell_hq.glb
 project/frontend/assets/cell_hi.glb
 project/frontend/assets/cell_decals.glb
+project/frontend/assets/cell_sharp.glb
 # Detektor-Trainings-Artefakte (Kurven-Plot + CSV; via setup.ipynb erzeugbar).
 project/models/detector.curves.png
 project/models/*.results.csv
