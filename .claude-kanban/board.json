@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-02T20:23:33Z",
+  "updated": "2026-06-03T08:46:56Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 102,
+  "next_id": 103,
   "tickets": [
     {
       "id": "T-001",
@@ -5778,7 +5778,7 @@
       "id": "T-101",
       "title": "T-101: Frame-Reconciliation an der Quelle — Teile pose-Z≈0 vs Zell-GLB-Tray ~1.18m",
       "description": "Wurzel des Höhen-Themas: die Teile-Posen (GT/Pred) liegen im pose-frame bei z≈0 (≤10cm über Null, korrekt), aber die Zell-GLBs (cell.glb/cell_web/cell_hi) haben ihre Tray-Arbeitsfläche bei z≈1.18 (Boden bei 0). Frame-Versatz ~1.18m. Viewer-Höhen-Hacks (groundClamp-Lift, CELL_Z_ALIGN) sind Symptom-Pflaster und wurden entfernt. NACHHALTIG: den Versatz an der Quelle beheben — entweder cell-GLB-Export mit korrektem Origin (Tray auf 0), ODER table_origin/Welt-Transform so dass Zelle+Teile EINEN konsistenten Frame teilen. Dann sitzen Teile ohne jeden Viewer-Eingriff sichtbar in der Schale.",
-      "column": "backlog",
+      "column": "in_progress",
       "assignee": "claude",
       "instance": "",
       "priority": "P2",
@@ -5789,11 +5789,232 @@
       ],
       "session": "",
       "created": "2026-06-02T20:23:33Z",
-      "updated": "2026-06-02T20:23:33Z",
-      "started_at": null,
+      "updated": "2026-06-03T08:46:56Z",
+      "started_at": "2026-06-03T07:41:17Z",
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-03T07:41:17Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-03T07:41:17Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "STREAM A (Max: export-fix). export_cell_glb.py-Origin so fixen dass Tray-Arbeitsflaeche bei z=0 exportiert wird (Cart-Versatz ~1.18 raus, abgeleitet aus USD-Cart-Z / Sim-Kalib table-z=-0.007). cell.glb+cell_web+cell_hi neu exportieren+deployen. Viewer unangetastet (CELL_Z_ALIGN=0, clamp deaktiviert). Verify Playwright: Teile <=10cm ueber 0 UND sichtbar auf Tisch, Zahnraeder sichtbar."
+        },
+        {
+          "ts": "2026-06-03T07:44:35Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Stream A START. Worktree=team/2026-06-03-pose-frame-flip @ haupt-repo. Kontext aus T-099: alle 3 GLBs teilen Origin+Z, max.z=1.3651, Tray-Flaeche ~1.18 (cell.glb median). Plan: USD-Cart-Z ableiten -> export_cell_glb.py Z-Origin-Translate so dass Tray bei z=0 landet -> neu exportieren (.new staging, backup) -> self-verify."
+        },
+        {
+          "ts": "2026-06-03T07:45:18Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Box-Connect OK (maxgpuserverobk, GPU 1708MiB=kip-worker idle, kein Training). USD-Files + isaacsim-venv + faces-venv (CPU) verfuegbar."
+        },
+        {
+          "ts": "2026-06-03T07:46:47Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "USD-MESSUNG (GST_Scene.usd, faces-venv): Tray-Schalen (Anker_Tray/Poltopf_Tray) Unterseite EXAKT bei z=-0.0070 = identisch zur Sim --table-z=-0.007. Tray_Anker_leer Oberkante z bis +0.060. Cart-Auflageflaeche im Spawn-XY-Fenster bei z~-0.025..+0.05 (wo Teile settlen). Die 1.18/1.37 sind die obere Cart-EMPORE/Aufbau (z 1.12-1.35), NICHT die Arbeitsflaeche. => GLB-Export ist im USD-Welt-Frame BEREITS bei z~0 aligned mit Pose-Posen (z~0, table_origin z=0.08). KEIN 1.18m-Quell-Versatz."
+        },
+        {
+          "ts": "2026-06-03T07:52:23Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "EHRLICHES NEGATIV (empirisch, headless Playwright gegen Live-Box-Sim + Live-Assets): Es gibt KEINEN 1.18m-Quell-Versatz. (1) Baseline-Render mit aktuellen Prod-Assets (cell_hi-Visual + cell.glb-Proxy, table_origin[0,0,0.08] addiert, groundClamp aus): ALLE Teile rendern minZ=-0.012..+0.02 = sitzen schon AUF z~0 (=Tray-Arbeitsflaeche). t_world.z=-0.03..-0.07. (2) Cell-GLB im Viewer-Frame: raycast-down an Teile-XY trifft Stack: TOP=1.19-1.27 (obere Cart-Empore/Armsockel, von oben zuerst) -> Zwischenebenen 1.11/0.55/0.47 -> ARBEITSFLAECHE z=0.0-0.02 -> Cart-Basis negativ. Lenas T-099-'median 1.18' = der TOP des Stacks (obere Struktur), NICHT die Arbeitsflaeche. GLB-Origin runter-shiften um 1.18 wuerde die Arbeitsflaeche auf z=-1.18 ziehen = WEG von den Teilen = STRIKT SCHLECHTER. Teile+Zelle teilen BEREITS einen konsistenten Frame. Das echte sichtbare Problem: Cart-Eigengeometrie (Arm+oberer Aufbau z 1.1-1.35) VERDECKT die kleinen Teile von der Kamera (siehe today_scene2.png) - das ist Kamera/Cull, KEIN Frame-Versatz, NICHT per Export-Z loesbar."
+        },
+        {
+          "ts": "2026-06-03T07:54:51Z",
+          "agent": "queen",
+          "level": "warn",
+          "msg": "Stream A export-fix premise WIDERLEGT durch Kais USD-Messung (Tray=-0.007, 1.18=Cart-Empore-Artefakt). Export-Shift gestoppt (wäre Schaden). Echtes Problem=Kamera-Occlusion durch Cart-Eigengeometrie → Viewer-Fix (Lena), nicht Export. Warte Max-Direktive zur neuen Richtung."
+        },
+        {
+          "ts": "2026-06-03T07:59:21Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "STREAM A ABGESCHLOSSEN als EHRLICHES NEGATIV (Queen D-1 acked). KEIN Code/Asset geaendert: export_cell_glb.py unveraendert (git diff leer), GLBs unangetastet, kein Deploy. Negativ-Befund dokumentiert: team/_shared/sessions/2026-06-03-pose-frame-flip/frame-nonissue.md. Kern: kein 1.18m-Frame-Versatz; Tray-Arbeitsflaeche im USD bei z=-0.007 (=Sim table-z, exakt); Teile rendern schon bei minZ=-0.01..+0.02 auf z~0; die 1.18 ist die obere Cart-Empore (raycast-down-Artefakt von T-099). Echtes Problem = Cart-Eigengeometrie verdeckt kleine Teile von der Kamera = Viewer-Visibility (Lena/Queen+Max), NICHT Export. Nebenbefund: vereinzelte GT-Posen mit anomaler Tiefe (Anker_Lang t.z=-0.85) - separat ticketn."
+        },
+        {
+          "ts": "2026-06-03T08:02:24Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "RE-PIVOT (Max): NICHT Export, NICHT flach-z=0. Max will dichte Höhenkarte der nicht-planaren Tischfläche + Teile drauf droppen (sonst versinken kleine Teile = unsichtbar). Kai baut Höhenkarte+Drop-Prototyp, Lena integriert."
+        },
+        {
+          "ts": "2026-06-03T08:05:19Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "WAVE 2: Kai re-spawned für Höhenkarten-Drop (Export endgültig verworfen, Negativ-Befund in frame-nonissue.md)."
+        },
+        {
+          "ts": "2026-06-03T08:07:00Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Pivot D-2 (Höhenkarte statt Export-Shift) acked. Plan: dichtes XY-Grid-Raycast gegen cell.glb (Collision-Proxy), pro XY höchster Hit UNTER Overhang-Schwelle 0.30m (Empore/Arm bei z>0.3 raus), Karte einmal beim Proxy-Load cachen, groundClamp schlägt pro Teil-XY bilinear nach + setzt Unterkante drauf."
+        },
+        {
+          "ts": "2026-06-03T08:08:50Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Höhenkarten-Drop implementiert in scene.js: buildHeightMap() raycastet 49x37=1813 Stützpunkte über Spawn-Fenster x[0.02,0.82] y[0.00,0.58] gegen cell.glb, pro XY höchster Hit UNTER OVERHANG_Z=0.30 (Empore/Arm raus), NaN-Löcher→Median-Fallback. sampleHeightMap() bilinear. groundClamp() schlägt pro Teil-Bbox-Zentrum nach, setzt Unterkante drauf (beide Richtungen). Rebuild beim Proxy-Load. Karte+Sampler im Viewer exponiert."
+        },
+        {
+          "ts": "2026-06-03T08:16:08Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Verify 4 Szenen: Höhenkarte greift. z-Band im Arbeitsfenster z≈-0.004..+0.139 (Tray-Boden ~0 + Tray-Kanten-Plateau 0.139). Teile minZ min=-0.005/median=0.001/max=0.022 — sitzen AUF der Fläche, folgen lokaler Variation. 0/13 Teile >10cm (Overhang-Ausschluss greift). ABER: noch kein Zahnrad gespawnt — forciere jetzt Zahnrad-Szenen."
+        },
+        {
+          "ts": "2026-06-03T08:28:19Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Verify 8 weitere Szenen: (1) noch KEIN Zahnrad gespawnt (Sim wählt es selten trotz focus). (2) 1 Anker_Lang bei minZ=0.116 (>10cm) center=(0.581,0.239) — Höhenkarte liefert dort ein Tray-Kanten-Plateau ~0.12. Bbox-Zentrum-Lookup ist bei langen Teilen nicht robust (Zentrum auf Kante). Untersuche Karte um den Punkt, prüfe Footprint-Min-Lookup."
+        },
+        {
+          "ts": "2026-06-03T08:29:59Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Fix: OVERHANG_Z 0.30→0.18 — Live-Probe der Karte um den >10cm-Punkt zeigte ein Cart-Struktur-Cluster bei z0.20-0.30 (134 Stützpunkte, KEINE Auflage), das die 0.30-Schwelle durchliess. 0.18 trennt sauber (Tray-Boden+Kanten bis 0.15 bleiben, Struktur ab 0.20 raus). Zusätzlich: groundClamp nutzt jetzt Footprint-Median (3x3) statt Bbox-Zentrum → langes Teil dessen Zentrum auf Kante liegt wird nicht mehr hochgehoben."
+        },
+        {
+          "ts": "2026-06-03T08:44:44Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Re-Verify nach Fix: 8 Sim-Szenen, 27 Teile, 0 >10cm (Anker_Lang-Problem behoben). minZ min=-0.005/median=0.017/max=0.020 — folgen Tischvariation. Karten-z-Band Arbeitsfläche [-0.005,+0.115] (Struktur 0.20-0.30 jetzt raus). Synthetischer Zahnrad-Drop (Sim liefert selten Zahnrad): 5/5 Positionen OK — Unterkante==Karte, sichtbar (49mm Höhe ragt auf), ≤10cm. Screenshots /tmp/hm_scene5.png (echt) + /tmp/hm_gear_topdown.png (Zahnrad)."
+        },
+        {
+          "ts": "2026-06-03T08:46:56Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "DONE — Höhenkarten-Drop committed 8f62485 (scene.js, Branch team/2026-06-03-pose-frame-flip). Karte 49x37 gegen cell.glb, OVERHANG_Z=0.18 (Cart-Struktur 0.20-0.30 + Empore/Arm raus), Footprint-Median-Drop. Verify: 27 echte Teile 0>10cm folgen Tischvariation+sichtbar, synth. Zahnrad 5/5 Unterkante==Karte+sichtbar. Nebenbefund: gdrnpp liefert kaum Zahnrad-Detektionen (separat). Kein Export/GLB-Change, CELL_Z_ALIGN=0. Lena Review, Sam Deploy nach Verify."
+        }
+      ]
+    },
+    {
+      "id": "T-102",
+      "title": "T-102: Anker-180-Flip bei partieller Sicht/Frame-Rand — Frame-Rand-Prior",
+      "description": "Live reproduziert (dot=-0.94). Single-View-Flip, Root in GDRNPP-Coarse (ADR-020). NEUER Winkel: Frame-Rand-Prior (Teil am Bildrand abgeschnitten -> ragt aus Frame -> zwingt Orientierung). Theo Root-Cause + Kai Pose. Kein neues Sim, AR-Eval 1x am Ende. Ehrlich ueber Limits.",
+      "column": "done",
+      "assignee": "theo-debug",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose-tune",
+        "flip",
+        "sprint-frameflip"
+      ],
+      "session": "2026-06-03-pose-frame-flip",
+      "created": "2026-06-03T07:41:17Z",
+      "updated": "2026-06-03T08:18:50Z",
+      "started_at": "2026-06-03T07:41:17Z",
+      "completed_at": "2026-06-03T08:18:50Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-03T07:41:17Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-03T07:46:33Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "Flip-Sammlung-Start: Box erreichbar, BOP-val (10 scenes, 1280x720), preds_best.csv fuer anker_kurz/anker_lang/zahnrad da. scene_gt_info hat bbox_obj (volle Silhouette, frame-geclippt) + bbox_visib (sichtbar) -> Frame-Rand-Beruehrung pro Flip quantifizierbar. Live-det.json liefert NUR AABB bbox_est (keine rotierte OBB), Bildgroesse 1280 live verfuegbar."
+        },
+        {
+          "ts": "2026-06-03T07:48:56Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "Flip-Statistik (n=2559 Anker, 192 echte Flips, rot_sym>90deg): frame_truncated 58 (30.2%), occluded_only 133 (69.3%), full 1 (0.5%). MECHANISMUS-KERN: bei den 58 frame-truncated Flips ragt in 50/58 der KOPF (+Y) off-frame, Spitze nur 4/58 -> Detektor sieht nur Schaft, flippt Kopf ins sichtbare Bild rein obwohl Kopf nachweislich aus dem Frame ragt. Frame-Rand-Prior adressiert NUR die 30%-Teilmenge (frame-truncated), NICHT die 69% rein-occludierten."
+        },
+        {
+          "ts": "2026-06-03T07:51:47Z",
+          "agent": "theo-debug",
+          "level": "warn",
+          "msg": "Frame-Rand-Prior (endpoint-geometrisch) FALSIFIZIERT: 0/58 disambiguierbar. Grund: 180-Quer-Flip dreht um die Teil-MITTE (t fix) -> coarse und flip180 legen IMMER dasselbe Bild-Ende off-frame (co_beyond==fl_beyond, margin=0.0 in ALLEN 58). Off-frame sagt nur 'EIN Ende ragt raus', NICHT WELCHES (Kopf/Spitze). EXACTLY-ONE-off-frame=0/58 -> rein geometrisch nicht trennbar. Symptom (coarse-Kopf im Bild, GT-Kopf off) 48/58 bestaetigt Mechanismus, aber liefert kein nutzbares Prior-Signal. Pruefe jetzt appearance-Variante: Silhouetten-Dicke am Truncation-Rand (Kopf dick / Schaft duenn)."
+        },
+        {
+          "ts": "2026-06-03T07:53:32Z",
+          "agent": "theo-debug",
+          "level": "warn",
+          "msg": "Appearance-Variante des Frame-Rand-Priors (edge-band IoU) ebenfalls KEIN orthogonaler Hebel: CORRECT 23/58 (40%) == EXAKT der bereits gemergte vollstaendige vis-aware appearance-Score (T-085, auch 23/58 40%). Die Band-Restriktion fuegt NULL zusaetzliche Diskriminanz hinzu (Margins +-0.003..0.099, decisive nur 20/58, oft 0.000/0.000 weil Kopf komplett off-frame = keine Pixel im Rand-Band). Mechanistisch konsistent mit T-092: ragt der Kopf off-frame, ist die Kopf-Asymmetrie ausserhalb des Frames -> nicht sichtbar -> nicht nutzbar. Frame-Rand ist KEIN neuer Hebel ueber T-085 hinaus."
+        },
+        {
+          "ts": "2026-06-03T07:59:49Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "Live-Pfad-Bestaetigung: det.json liefert NUR AABB bbox_est (kein OBB/Winkel) -> Laengsachsen-Orientierung relativ zum Rand live gar nicht beobachtbar. Ueber 64 Live-Szenen / 98 Anker-Boxen beruehren nur 4 (4.1%) den Frame-Rand -> Frame-Truncation im deployten Pfad SEHR selten (Live-Flips sind ueberwiegend occluded_only). VERDIKT: Frame-Rand-Prior NICHT tragfaehig: (1) geometrisch 0/58 disambiguierbar (Flip um Mitte), (2) appearance-Variante=T-085 (40%, kein Orthogonal-Gewinn), (3) trifft nur 30% offline / 4% live, (4) live OBB nicht mal beobachtbar. Empfehlung: T-085 vis-aware bleibt der Weg; echter Rest = Multi-View (d)."
+        },
+        {
+          "ts": "2026-06-03T08:01:45Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "Investigation komplett. flip-rootcause.md geschrieben, Brain-Bug-Note + Learnings aktualisiert. KEIN Code-Fix (Hebel falsifiziert). Stream B Verdikt: Frame-Rand-Prior verworfen."
+        },
+        {
+          "ts": "2026-06-03T08:02:24Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "RE-PIVOT (Max): 'meinen Approach' = appearance/sichtbares-Ende-Diskriminator (Kopf dick/Spitze dünn → occludiertes Ende bekannt → fixiert Flip). Greift für ALLE partial-vis (nicht nur 30% frame-truncated). Theo treibt voll, Andock im Live-Pfad."
+        },
+        {
+          "ts": "2026-06-03T08:05:19Z",
+          "agent": "queen",
+          "level": "info",
+          "msg": "WAVE 2: Theo re-spawned für DIREKTEN visible-end-Form-Diskriminator (Max' Approach, distinkt vom edge-band-Test=40%=T-085). Kopf-dick/Spitze-dünn aus mask_visib, live-deploybar da nur Crop nötig."
+        },
+        {
+          "ts": "2026-06-03T08:06:34Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "PIVOT D-1 acked: Max-Approach = direkter visible-end-Form-Diskriminator (dicker Kopf vs duenne Spitze auf sichtbarer Region), NICHT render-compare/edge-band. Greift fuer ALLE 192 Flips. Starte Diskriminator-Bau auf mask_visib."
+        },
+        {
+          "ts": "2026-06-03T08:10:42Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "Diskriminator-Design fertig: visible_end_form.py. CAD-Befund (obj1/obj2): dicke Masse cross-width ~22-24mm am -Y-Ende, duenner Schaft 4-9mm zum +Y. Feature = Blockigkeit(Dicke*Masse)-Schwerpunkt der beobachteten mask_visib entlang projizierter Y-Achse, verglichen mit coarse-vorhergesagter Dick-Ende-Lage. KEIN render-compare. Messe jetzt auf 192 Flips + well-visible FP-Set."
+        },
+        {
+          "ts": "2026-06-03T08:13:32Z",
+          "agent": "theo-debug",
+          "level": "warn",
+          "msg": "Visible-end-Form-Diskriminator (Max-Approach) MISST das Signal: 23/192 (12%) centroid-Variante, 26/192 (14%) end-thickness-Variante. BEIDE unter T-085-Decke (40%). KILLER: Signal nicht praediktiv — auf 192 Flips align mean=-0.001 (split 97/95), end_contrast mean=+0.055 (split 90/100) = exakter Coin-Flip. Die beobachtete Maske traegt KEINE verlaessliche Dick-vs-Duenn-Info ueber die wahre Orientierung. Pruefe Mechanismus (dicker Koerper ist genau das occludierte Ende?)."
+        },
+        {
+          "ts": "2026-06-03T08:15:20Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "MECHANISMUS BEWIESEN warum Max-Approach scheitert: (1) auf 192 Flips ist die DICKE Koerper-Region MEHR sichtbar als der Rod (187/192), Rod-visible nur 1.2%. (2) In 169/192 ist die sichtbare Maske BODY-ONLY (rod<5%, body>30%). (3) KILLER-Control: selbst bei NULL Occlusion ist der duenne Rod nur 4.8% der Silhouette (138/2850px). Das diskriminierende Feature (duenne Spitze) ist im 2D-Projektion vernachlaessigbar -> Anker sieht aus fast jedem Winkel wie ein blockiger Klumpen. Form-Signal kann nicht funktionieren weil die Spitze nie genug Pixel hat."
+        },
+        {
+          "ts": "2026-06-03T08:17:48Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "VERDIKT Max-Approach (visible-end-Form-Diskriminator): NICHT tragfaehig. 12-14% < 40%/T-085, Signal nicht praediktiv (Coin-Flip), strukturell limitiert (Spitze 4.8% der Silhouette selbst unverdeckt), Live-Input fehlt (mask_visib GT-only). Appearance-Signal aus Single-View mit T-085 erschoepft. Echter Rest = Multi-View(d)/Retrain(b)=T-090, Max-Entscheidung. Findings: flip-rootcause.md Abschnitt 'Direkter visible-end-Form-Diskriminator'. Bug-Note + learnings ergaenzt."
+        },
+        {
+          "ts": "2026-06-03T08:18:50Z",
+          "agent": "theo-debug",
+          "level": "success",
+          "msg": "VERDIKT: Max' voller Approach (direkter visible-end-Form-Diskriminator) auf 4 Achsen falsifiziert. Trefferquote 12-14% (<T-085 40%), nicht-prädiktiv (Coin-Flip, Signal um 0 zentriert). Mechanismus: Anker ~95% Körper/~5% Schaft, Spitze nur 4.8% der 2D-Silhouette selbst bei 0 Occlusion → in Projektion ausgewaschen. Live zudem: nur dummy mask_visib, real bräuchte SAM (T-089). Appearance-Signal mit T-085 erschöpft. Rest = Multi-View/Retrain-DR (T-090) = Max-Entscheidung."
+        },
+        {
+          "ts": "2026-06-03T08:18:50Z",
+          "agent": "theo-debug",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
     }
   ]
 }
