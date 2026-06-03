@@ -116,3 +116,11 @@
 .kip-metric__name { color: var(--text); font-weight: 600; }
 .kip-metric__val  { font-family: var(--mono); color: #34d399; }
 .kip-metric__val--pending { color: var(--text-dim); }
+
+/* ── Szenen-Info (Sim): Seed + Teile-pro-Typ — sauber statt grünem Monospace-Block ── */
+.kip-scene { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-dim); min-height: 16px; }
+.kip-scene__seed  { font-family: var(--mono); color: var(--text); }
+.kip-scene__parts { color: var(--text); font-weight: 600; }
+
+/* ── "Neue Szene live generieren": volle Breite + dicker ── */
+#sim-infer { width: 100%; margin: 0; padding: 11px 16px; font-size: 14px; font-weight: 600; }

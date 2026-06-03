@@ -329,8 +329,17 @@ async function inferLiveSim() {
     await renderSim(m);
     setPip(`./api/sim/live_rgb/${job}`, `./api/sim/live_boxes/${job}`);
     simBar.done("Live generiert");
-    simStat.className = "kip-status kip-status--ok";
-    simStat.textContent = `Live Isaac-Szene (seed ${final.seed}, ${final.n_obj} Teile gespawnt): ${final.n_gt}× Ground-Truth, ${final.n_pred}× inferiert`;
+    // Szenen-Info: Seed + Teile-pro-Typ (sauber, statt dem grünen Monospace-Block).
+    const sceneGt = (m.results || []).filter((r) => r.color === "gt");
+    const partCnt = {};
+    for (const r of sceneGt) partCnt[r.part] = (partCnt[r.part] || 0) + 1;
+    const breakdown = Object.entries(partCnt)
+      .map(([p, n]) => `${n}× ${NAMES[p] || p}`)
+      .join(" · ") || "keine sichtbaren Teile";
+    simStat.className = "kip-scene";
+    simStat.innerHTML =
+      `<span class="kip-scene__seed">Seed ${final.seed}</span> · ${final.n_obj} Teile gespawnt` +
+      `<br>im Bild: <span class="kip-scene__parts">${breakdown}</span>`;
   } catch (e) {
     simBar.hide();
     simStat.className = "kip-status kip-status--err";
