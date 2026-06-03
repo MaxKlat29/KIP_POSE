@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-03T09:38:00Z",
+  "updated": "2026-06-03T10:13:48Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 107,
+  "next_id": 109,
   "tickets": [
     {
       "id": "T-001",
@@ -6126,7 +6126,7 @@
       "id": "T-106",
       "title": "T-106: Höher-poly Cell-Export — Decal/Logo-Polygone (wbk/KIT-Labels) sauber rendern statt jagged",
       "description": "cell_hi-Decimation hat die Decals/Labels zerschossen (jagged teal Artefakte). Höhere Tri-Budget exportieren bis Decals sauber rendern; gecacht (browser) nicht lokal persistiert. loadCell ggf. auf neue Datei. Ladezeit darf steigen (Max ok), Loader-UI fängt's.",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P2",
@@ -6136,9 +6136,9 @@
       ],
       "session": "",
       "created": "2026-06-03T09:18:48Z",
-      "updated": "2026-06-03T09:38:00Z",
+      "updated": "2026-06-03T09:41:56Z",
       "started_at": "2026-06-03T09:20:19Z",
-      "completed_at": null,
+      "completed_at": "2026-06-03T09:41:56Z",
       "comments": [],
       "logs": [
         {
@@ -6164,6 +6164,132 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "DONE: Commit 9d8e791 (nur Code: export_cell_glb.py Decal-Schutz + kip.js loadCell-Default + .gitignore). GLB NICHT committed (gitignored). Staging-Pfad (box, browser-gecacht): /mnt/data/kip_pose/project/frontend/assets/cell_decals.glb, 67.2MB / 2.73M tris (325 voll-tesselliert geschützte Label-Meshes). Decal-Fix VERIFIZIERT (wbk/KIT/Warn-Schild scharf statt jagged, /tmp/decals2_AFTER.png). 29% kleiner als altes cell_hi (94MB). Loader-UI greift (64.1MB Bytes-Progress + hide-after-done). Bestehende cell_hi/hq/web/glb unangetastet (non-destruktiv). Branch team/2026-06-03-cell-decals → Ravi-Review/Sam-Merge+Deploy."
+        },
+        {
+          "ts": "2026-06-03T09:41:56Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "DEPLOYED + LIVE + MERGED. cell_decals.glb (67MB, 2.73M tris, Decal-Meshes voll-tesselliert geschützt) auf Box (200, CF 200), kip.js loadCell→cell_decals (md5 00b2a036) live. Decals (wbk/KIT/Warn) scharf statt jagged (Kai before/after verifiziert). Diagnose: Decals=echte Mesh-Geo (keine Textur), uniforme Dezimierung killte feine Label-Tris → Aspect-Ratio≥4-Klassifikator nimmt sie aus. Merge 2f5bc42→main gepusht. Branch team/2026-06-03-cell-decals."
+        },
+        {
+          "ts": "2026-06-03T09:41:56Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-107",
+      "title": "T-107: Cell-Modell schärfer/höher-poly (>80MB, mehr Poly) — Decals weiter geschützt",
+      "description": "Max: cell_decals (67MB) ist KLEINER als vorher (cell_hi 94MB), er will GRÖSSER/schärfer (~>80MB, mehr Poly). Höher-poly re-exportieren (Bulk-Tri-Budget hoch), Decals weiter voll-tesselliert. Mesh-COUNT wo möglich reduzieren (Decals gleicher Material mergen) → hilft dem non-blocking-Load (T-108). loadCell NICHT anfassen (Lena ownt Frontend), nur GLB+Name melden.",
+      "column": "done",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "kip",
+        "asset"
+      ],
+      "session": "",
+      "created": "2026-06-03T09:46:42Z",
+      "updated": "2026-06-03T10:03:08Z",
+      "started_at": "2026-06-03T09:46:42Z",
+      "completed_at": "2026-06-03T10:03:08Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-03T09:46:42Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-03T09:50:36Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Diagnose: cell_decals(T-106)=77 meshes/2.726M tris, Normalen ROH im GLB (77/77 NORMAL accessors, Viewer braucht kein computeVertexNormals). Bulk=59 Farbgruppen(Q24, dezimierbar), Decals=325 voll-tess Meshes in 28 Farbgruppen mit ECHTEN Logo-Farben (KIT/wbk: rot/grün/blau/gelb/weiß/schwarz). Tri-Budget war 2.5M (Bulk) → Max will hoch (>80MB)."
+        },
+        {
+          "ts": "2026-06-03T09:52:18Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Export-Script erweitert (--merge-meshes default 1): Bulk→1 vertex-colored Mesh + Decals→1 vertex-colored Mesh (volle Tess). Smoke verifiziert: GLB-Export schreibt POSITION+COLOR_0+NORMAL Accessors → Three.js bekommt Vertex-Colors UND rohe Normalen (kein computeVertexNormals). Starte Vollexport cell_sharp.glb, Bulk-Budget 4.5M (>80MB Ziel)."
+        },
+        {
+          "ts": "2026-06-03T09:53:21Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Erster Export @Bulk-4.5M = 126MB / 4.72M tris / 2 Meshes (1 Bulk + 1 Decal vertex-colored, 28 Decal-Farben, volle Tess). 126MB knapp über Ziel-Fenster (90-120MB). Re-Export @Bulk-4.0M → total ~4.2M tris (mehr Poly als cell_hi 4.0M) + Ziel ~110MB."
+        },
+        {
+          "ts": "2026-06-03T10:00:15Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Visuelles Verify GRÜN (headless Chromium, vendor/three, swiftshader): GLB lädt fehlerfrei als 2 meshes / 4.219M tris / vertexColors 2/2 / normals 2/2. Inverter-Label-Decals ('2000W / Peak Power 4000W / POWER INVERTER / DC TO AC / USB Output') RAZORSCHARF + voll legibel + farbig korrekt (label_center.png, label_right.png). Direkter Vergleich gleiche Kamera cell_hi.glb (alt): dort Label = jagged zersplitterte Shards (label_center_HI.png). Bulk schärfer (mehr Poly, glatte Kurven, label_center war Arm-Base smooth). cell_hi=59 meshes vs cell_sharp=2 meshes (30x weniger Traverse-Nodes für T-108)."
+        },
+        {
+          "ts": "2026-06-03T10:01:21Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Commit 9d79a4e (NUR box_src/export_cell_glb.py + .gitignore — KEIN kip.js/scene.js, das ownt Lena T-108). cell_sharp.glb gitignored + box-staged. Box-Script == committed (in sync)."
+        },
+        {
+          "ts": "2026-06-03T10:03:08Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "DONE: cell_sharp.glb 112.7MB / 4.22M tris / NUR 2 Meshes (Vertex-Color-Merge→COLOR_0, statt 59/325) / Normalen+VColors verifiziert. Decals razorscharf (A/B vs cell_hi jagged), Bulk schärfer. GroundPlane-Fehlklassifikation gefixt. Box-staged assets/cell_sharp.glb (gitignored). Commit 9d79a4e (export_cell_glb.py+.gitignore). 2-Mesh-Count killt direkt T-108-Freeze-Ursache. Handoff @lena: loadCell→cell_sharp.glb."
+        },
+        {
+          "ts": "2026-06-03T10:03:08Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-108",
+      "title": "T-108: Cell-GLB non-blocking laden (UI interaktiv während Load) + Loader-Text größer/breiter",
+      "description": "Max: während die Cell lädt friert die UI ein (kann nicht klicken) — soll im HINTERGRUND laden wie früher, UI bleibt interaktiv. + Loader-Text (#cell-loader) zu klein + bricht bei 'MB' in 2 Zeilen → breiter/größer/no-wrap. Investigate Freeze (GLTF-parse vs 325-Decal-Mesh-Traverse/computeVertexNormals); fix via Worker-Load ODER yield-chunked Post-Processing (requestAnimationFrame) sodass Main-Thread frei bleibt. loadCell auf Kais neue GLB (Bus-Koordination).",
+      "column": "in_progress",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "kip",
+        "frontend"
+      ],
+      "session": "",
+      "created": "2026-06-03T09:46:42Z",
+      "updated": "2026-06-03T10:13:48Z",
+      "started_at": "2026-06-03T09:46:42Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-03T09:46:42Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-03T09:58:17Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Freeze-Diagnose: Block sitzt AUSSCHLIESSLICH im GLB-Parse (heartbeat maxGap 2250ms, 4 ticks, 0/1 tab-klick durch). Post-Proc 1ms, scene.add 0ms, render 8ms - NICHT die Mesh-Anzahl (77 nach Merge). GLB unkomprimiert/0-texturen. Ansatz: dependency-freier GLB-Parser im Web-Worker (kein GLTFLoader/Importmap noetig) + Transferables + yield-chunked Mesh-Aufbau main-thread + Main-Thread-Fallback."
+        },
+        {
+          "ts": "2026-06-03T10:13:48Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "FIX commit c669397. Web-Worker GLB-Parser (dependency-frei, kein Importmap-Problem) + yield-chunked Mesh-Build + Main-Thread-Fallback. Loader-Text: min(36vw,460px)/14px/nowrap → einzeilig. loadCell-Default = cell_sharp.glb (T-107). VERIFY headless 8Mbit/s: 144/144 Tab-Klicks responsiv waehrend 112MB-Load (vorher 0/1), nur 1x254ms longtask (vorher 2250ms cell-parse OFF-thread), Modell scharf 2 Meshes/4.22M tris vertex-colors, Teile sitzen minZ~0.02 (heightmap T-101 intakt), Fallback OK."
+        },
+        {
+          "ts": "2026-06-03T10:13:48Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Nebenbefund (NICHT T-108, T-101-Territorium): buildHeightMap macht 1813 Raycasts gegen cell.glb ohne BVH → in headless bis ~8.8s sync Main-Thread (im echten cached-Flow nur ~1.1s longtask). Separates Ticket fuer @kai-ml: BVH (three-mesh-bvh) oder Raycast in Worker. Habe es NICHT angefasst (TABU)."
         }
       ]
     }
