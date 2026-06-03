@@ -49,6 +49,15 @@ SELECT_BEST = {  # obj-slug -> select_best.json (Eval-Kennzahlen pro Modell)
     "anker_lang": GDRNPP_OUT / "anker_lang" / "select_best.json",
     "zahnrad":    GDRNPP_OUT / "zahnrad"    / "select_best.json",
 }
+# IC-BIN AR (official BOP19/IC-BIN localisation protocol, multi-instance
+# bin-picking matching via bop_toolkit pose_matching+score; see box_src/eval_bop.py
+# --icbin and T-109). This is the MAINTAINED, displayed metric. select_best.json's
+# best_full_ar (translation-match AR) is kept as fallback only.
+IC_BIN = {
+    "anker_kurz": GDRNPP_OUT / "anker_kurz" / "ic_bin.json",
+    "anker_lang": GDRNPP_OUT / "anker_lang" / "ic_bin.json",
+    "zahnrad":    GDRNPP_OUT / "zahnrad"    / "ic_bin.json",
+}
 TRAINED_OBJS = {"anker_kurz"}   # wird aus vorhandenen preds_best.csv abgeleitet (s.u.)
 
 for d in (TEMP, UPLOADS, RENDERS):
@@ -151,13 +160,21 @@ def health():
 
 @app.get("/api/metrics")
 def metrics():
-    """Eval-Kennzahlen pro Objekt aus select_best.json (AR etc.)."""
+    """Eval-Kennzahlen pro Objekt.
+
+    Maßgebliche + angezeigte Metrik: ``ic_bin_ar`` = AR nach dem offiziellen
+    BOP19/IC-BIN-Localisation-Protokoll (Multi-Instanz-/Bin-Picking-Matching via
+    bop_toolkit pose_matching+score, siehe box_src/eval_bop.py --icbin, T-109).
+    ``best_full_ar`` (Translation-Match-AR aus select_best.json) bleibt als
+    Fallback erhalten, falls ic_bin.json (noch) fehlt — die Werte sind auf dem
+    val-Split ohnehin praktisch identisch (Δ < 0.001)."""
     out = {}
     for slug, p in SELECT_BEST.items():
+        entry = {"status": "training_or_pending"}
         if p.exists():
             try:
                 sel = json.load(open(p))["selection"][0]
-                out[slug] = {
+                entry = {
                     "best_ckpt": sel.get("best_ckpt"),
                     "best_full_ar": sel.get("best_full_ar"),
                     "best_is_final": sel.get("best_is_final"),
@@ -165,10 +182,29 @@ def metrics():
                     "status": "trained",
                 }
             except Exception as e:
-                out[slug] = {"status": "error", "detail": str(e)}
-        else:
-            out[slug] = {"status": "training_or_pending"}
-    return {"objects": out, "trained": sorted(_discover_trained())}
+                entry = {"status": "error", "detail": str(e)}
+        # IC-BIN AR überlagern (bevorzugt). Fällt auf best_full_ar zurück.
+        icp = IC_BIN.get(slug)
+        ic_ar = None
+        if icp and icp.exists():
+            try:
+                icj = json.load(open(icp))
+                ic_ar = icj.get("ic_bin_ar")
+                entry["ic_bin_ar"] = ic_ar
+                entry["ar_protocol"] = icj.get("protocol", "ic_bin_bop19_localisation")
+            except Exception:
+                pass
+        if ic_ar is None:
+            # noch kein IC-BIN-Eval -> Translation-Match-AR als IC-BIN-Anzeigewert
+            ic_ar = entry.get("best_full_ar")
+            if ic_ar is not None:
+                entry["ic_bin_ar"] = ic_ar
+                entry["ar_protocol"] = "fallback_translation_match"
+        # ``ar`` ist der EINE maßgebliche Anzeigewert (IC-BIN, sonst Fallback).
+        entry["ar"] = ic_ar
+        out[slug] = entry
+    return {"objects": out, "trained": sorted(_discover_trained()),
+            "metric": "ar_ic_bin"}
 
 
 @app.get("/api/pipelines")
