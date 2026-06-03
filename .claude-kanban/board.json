@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-03T10:13:48Z",
+  "updated": "2026-06-03T12:55:07Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 109,
+  "next_id": 111,
   "tickets": [
     {
       "id": "T-001",
@@ -6292,6 +6292,96 @@
           "msg": "Nebenbefund (NICHT T-108, T-101-Territorium): buildHeightMap macht 1813 Raycasts gegen cell.glb ohne BVH → in headless bis ~8.8s sync Main-Thread (im echten cached-Flow nur ~1.1s longtask). Separates Ticket fuer @kai-ml: BVH (three-mesh-bvh) oder Raycast in Worker. Habe es NICHT angefasst (TABU)."
         }
       ]
+    },
+    {
+      "id": "T-109",
+      "title": "T-109: Metrik auf AR nach BOP-IC-BIN-Protokoll umstellen (anzeigen + maßgeblich)",
+      "description": "Max: angezeigte + maßgebliche Metrik soll AR IC-BIN sein (Bin-Picking-Protokoll, Multi-Instanz-Matching mehrerer gleicher Teile pro Bin). Aktuell: eval_bop.py = BOP19-AR mean(VSD,MSSD,MSPD) sym-aware via bop_toolkit. Kai: IC-BIN-Protokoll recherchieren (BOP-docs/bop_toolkit), implementieren, AR pro Teil auf val NEU berechnen (bestehende preds_best.csv, KEIN retrain/sim), alt-vs-neu vergleichen, in /api/metrics + kip.js-Label + README-Badges einwiren. Ehrlich falls Zahlen sich ändern.",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose",
+        "eval",
+        "metric"
+      ],
+      "session": "",
+      "created": "2026-06-03T12:41:24Z",
+      "updated": "2026-06-03T12:55:07Z",
+      "started_at": "2026-06-03T12:41:24Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-03T12:41:24Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-03T12:44:01Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "IC-BIN-Protokoll recherchiert (BOP-docs + bop_toolkit pose_matching.py/eval_calc_scores.py). KERNBEFUND: IC-BIN ist KEIN eigenes Metrik-Protokoll — es IST BOP19-AR=mean(AR_VSD,AR_MSSD,AR_MSPD), nur auf einen Bin-Picking-Datensatz (viele gleiche Instanzen/Bild) angewandt. Bin-Picking-Spezifik = (a) Multi-Instanz-Matching, (b) inst_count im targets-File als Recall-Denominator, (c) n_top=-1 (alle Ests). UNSER eval_bop.py macht Multi-Instanz-Matching BEREITS (match_greedy), ABER 2 Abweichungen vom offiziellen Protokoll: (1) Matching per euklidischer TRANSLATION statt per FEHLERMETRIK pro Threshold (BOP matched pro err_type+threshold neu, niedrigster Fehler unter Threshold gewinnt); (2) ohne --vsd nur mean(MSSD,MSPD) statt 3-Komponenten."
+        },
+        {
+          "ts": "2026-06-03T12:48:24Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "IC-BIN-Eval implementiert (--icbin Modus in eval_bop.py): nutzt offizielle bop_toolkit pose_matching.match_poses + score.calc_localization_scores (= exakt scripts/eval_bop19_pose.py Logik), per-Threshold error-based greedy Matching, inst_count-Denominator aus test_targets_pose_isaac_val.json (visib_gt_min=0.1, n_top=-1). Smoke anker_kurz (3 imgs/scene): AR_icbin=0.888 (vs alt 0.870). Starte Vollrun alle 3 Teile."
+        },
+        {
+          "ts": "2026-06-03T12:50:48Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "VOLLRUN val fertig, alt-vs-neu (selbst reproduziert auf preds_best.csv): anker_kurz 0.8697→0.8706 (+0.0008), anker_lang 0.9068→0.9068 (±0), zahnrad 0.8382→0.8382 (±0). Ø 0.8716→0.8718 (+0.0003). FAZIT: IC-BIN-Protokoll praktisch IDENTISCH zur jetzigen AR — weil unser eval_bop.py das Multi-Instanz-Matching (Bin-Picking-Kern) BEREITS machte; error-based-per-threshold-Matching vs Translation-Matching ergibt bei diesen GDRNPP-Posen dieselben Paarungen (Posen klar richtig oder klar daneben). inst_count/visib_fract ändert Denominator nicht (n_gt identisch). → Es ist ein Label/Doku-Fix + protokoll-treuer Eval-Pfad, KEINE Zahlen-Verschiebung."
+        },
+        {
+          "ts": "2026-06-03T12:54:52Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Wire-through verifiziert + Commit 5bc7599 (Branch team/2026-06-03-ar-icbin). /api/metrics liefert ic_bin_ar(bevorzugt)+ar+metric:ar_ic_bin (gegen echte Box-ic_bin.json geprüft → 'AR IC-BIN 0.871/0.907/0.838'). best_full_ar bleibt Fallback. kip.js Label 'AR IC-BIN <wert>'. README Badges+TL;DR+§9 auf 'AR (IC-BIN-Protokoll)'. IC-BIN GT-as-pred-Sanity AR=1.000. Files: box_src/eval_bop.py (--icbin), project/kip_server.py, project/frontend/src/kip.js, README.md. Box-Artefakte: ic_bin.json je Objekt unter /mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/<obj>/, Reports /mnt/data/bop/results/icbin_t109/<obj>/report.json. Ravi→Review, Sam→Merge+Deploy (kip_server+kip.js müssen auf Box neu deployed werden, /api/metrics liest live aus Files, kein Cache). KEIN move durch mich."
+        },
+        {
+          "ts": "2026-06-03T12:54:52Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-03T12:55:07Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_review → in_progress"
+        },
+        {
+          "ts": "2026-06-03T12:55:07Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Korrektur: Move-zurück nach in_progress — laut Protokoll moved Ravi/Queen nach in_review, nicht der Worker. Story ist READY FOR REVIEW: Commit 5bc7599, alle AKs erfüllt. Ravi: bitte Gate + move in_review."
+        }
+      ]
+    },
+    {
+      "id": "T-110",
+      "title": "T-110: buildHeightMap Raycasts ohne BVH → bis ~8.8s sync Main-Thread (Lena-FU)",
+      "description": "Lena-Nebenbefund (T-108): scene.js buildHeightMap macht 1813 Raycasts gegen cell.glb ohne BVH → headless bis 8.8s sync (cached ~1.1s longtask). FU: three-mesh-bvh ODER Raycast/Heightmap im Worker. Nicht dringend (einmalig beim Load).",
+      "column": "backlog",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P3",
+      "tags": [
+        "kip",
+        "perf"
+      ],
+      "session": "",
+      "created": "2026-06-03T12:41:24Z",
+      "updated": "2026-06-03T12:41:24Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
     }
   ]
 }
