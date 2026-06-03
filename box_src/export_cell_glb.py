@@ -10,6 +10,10 @@ Was es macht:
   • gruppiert Dreiecke nach (quantisierter) Farbe → 1 trimesh.Mesh pro Farbe
     (statt 4433 Einzel-Meshes → weniger Draw-Calls im Browser)
   • optional Decimation pro Farb-Mesh wenn target-faces gesetzt
+  • DECAL-SCHUTZ (T-106): feine flache Label-/Logo-Meshes (wbk/KIT/Warn-Schilder)
+    werden erkannt (dünne Platte: kleinste Bbox-Dim < --decal-thin-mm, breit
+    > --decal-broad-mm) und in EIGENE, NIE dezimierte Gruppen gelegt. Das Tri-
+    Budget (--max-total-tris) gilt nur fürs Bulk → kleine Datei + scharfe Decals.
   • exportiert EIN GLB mit PBR-baseColor pro Gruppe
 
 CPU-only — kein GPU, läuft gefahrlos parallel zum GDRNPP-Training.
@@ -56,6 +60,22 @@ def main():
     ap.add_argument("--scale", type=float, default=0.001)
     ap.add_argument("--max-total-tris", type=int, default=2_500_000,
                     help="globales Tri-Budget; Gruppen werden proportional dezimiert (0=voll)")
+    # DECAL-SCHUTZ (T-106): feine flache Label-/Logo-Meshes (wbk/KIT/Warn-Schilder
+    # auf den Zell-Türen) sind dünne Platten-Geometrie. Die proportionale
+    # Farbgruppen-Dezimierung zerschießt ihre filigranen Buchstaben-/Logo-Kanten
+    # (jagged Polygon-Artefakte). Lösung: solche Meshes als EIGENE, NIE dezimierte
+    # Gruppen exportieren — der grobe Rest bleibt im Tri-Budget, die Decals scharf.
+    ap.add_argument("--protect-decals", type=int, default=1,
+                    help="1=feine flache Label/Logo-Meshes voll-tesselliert behalten (nie dezimieren)")
+    ap.add_argument("--decal-thin-mm", type=float, default=8.0,
+                    help="max. Dicke (kleinste Bbox-Dim, mm) damit ein Mesh als Decal/Label gilt")
+    ap.add_argument("--decal-broad-mm", type=float, default=12.0,
+                    help="min. Breite (2.-kleinste Bbox-Dim, mm) eines Decals — schließt winzige Splitter aus")
+    ap.add_argument("--decal-aspect", type=float, default=4.0,
+                    help="min. broad/thin-Verhältnis — trennt flache Schilder/Logos von 3D-Boxen "
+                         "(ein eingeprägtes Schild ist viel breiter als dick; ein Kasten nicht)")
+    ap.add_argument("--decal-max-tris", type=int, default=20_000,
+                    help="Decals über diesem Tri-Count sind eher Bleche/Wände → NICHT schützen (in Budget)")
     a = ap.parse_args()
 
     stage = Usd.Stage.Open(a.usd)
@@ -116,9 +136,30 @@ def main():
                 return True
         return False
 
-    # accumulate per quantized color
-    groups = {}   # color_key -> [vertsList, facesList, vcount]
-    nmesh = ntri = nskip = 0
+    # DECAL-/LABEL-Erkennung (T-106): ein Aufkleber/Logo/Warn-Schild ist eine
+    # DÜNNE FLACHE Platte — eine Bbox-Dim ist nahe 0 (Folien-/Schilddicke), die
+    # beiden anderen sind nennenswert breit. Solche Meshes tragen die feinen
+    # Buchstaben-/Logo-Kanten und dürfen NICHT dezimiert werden. Sehr große
+    # Bleche/Wände (über --decal-max-tris) sind keine Decals → bleiben im Budget.
+    def is_decal(F_count, ext_mm):
+        if not a.protect_decals:
+            return False
+        if F_count > a.decal_max_tris:
+            return False
+        se = sorted(float(e) for e in ext_mm)   # [thin, broad, broader]
+        thin, broad = se[0], se[1]
+        if thin >= a.decal_thin_mm or broad <= a.decal_broad_mm:
+            return False
+        # Aspekt-Kriterium: ein flaches Schild/Logo ist VIEL breiter als dick.
+        # Trennt eingeprägte Labels (thin~5mm, broad~35mm → Aspekt 7) von kleinen
+        # 3D-Klötzen/Knöpfen (thin~6mm, broad~14mm → Aspekt 2.3, KEIN Decal).
+        return (broad / max(thin, 1e-3)) >= a.decal_aspect
+
+    # accumulate per quantized color (bulk) + per-mesh dedizierte Decal-Gruppen
+    groups = {}        # color_key -> [vertsList, facesList, vcount]   (dezimierbar)
+    decal_groups = []  # [(Vw, F)]  je Decal-Mesh eine eigene, NIE dezimierte Gruppe
+    nmesh = ntri = nskip = ndecal = 0
+    decal_tris = 0
     t0 = time.time()
     for prim in stage.Traverse():
         if not prim.IsA(UsdGeom.Mesh):
@@ -137,6 +178,7 @@ def main():
         # raw(mm) @ M = korrekte Welt-Meter. (Bug 2026-05-28: *0.001 war doppelt
         # → Geometrie kollabierte auf den Translations-Punkt → unsichtbar.)
         V = np.array(pts, dtype=np.float64)
+        ext_mm = V.max(0) - V.min(0)   # LOKALE Bbox in mm — Flachheit ist frame-invariant
         M = np.array(xcache.GetLocalToWorldTransform(prim), dtype=np.float64).reshape(4, 4)
         Vw = (np.c_[V, np.ones(len(V))] @ M)[:, :3]   # USD row-vector: p' = p @ M
         F = triangulate(list(counts), list(idx))
@@ -144,20 +186,31 @@ def main():
             continue
         col = diffuse_color(prim)
         key = tuple(int(round(c * 24)) for c in col)   # quantize ~24 buckets/channel (feiner)
-        g = groups.setdefault(key, [[], [], 0])
-        g[0].append(Vw)
-        g[1].append(F + g[2])
-        g[2] += len(Vw)
+        if is_decal(len(F), ext_mm):
+            # Eigene Gruppe → wird NIE in die Bulk-Farbgruppe gemischt, NIE dezimiert.
+            decal_groups.append((Vw, F, key))
+            ndecal += 1; decal_tris += len(F)
+        else:
+            g = groups.setdefault(key, [[], [], 0])
+            g[0].append(Vw)
+            g[1].append(F + g[2])
+            g[2] += len(Vw)
         nmesh += 1; ntri += len(F)
         if nmesh % 500 == 0:
             log(f"  processed {nmesh} meshes, {ntri/1e6:.1f}M tris, {time.time()-t0:.0f}s")
 
-    log(f"collected {nmesh} meshes ({nskip} baked parts skipped) -> {len(groups)} color-groups, {ntri/1e6:.2f}M tris total")
+    bulk_tris = ntri - decal_tris
+    log(f"collected {nmesh} meshes ({nskip} baked parts skipped) -> "
+        f"{len(groups)} color-groups + {ndecal} protected decals ({decal_tris/1e3:.0f}k tris), "
+        f"{ntri/1e6:.2f}M tris total")
 
+    # Das Tri-Budget gilt NUR fürs dezimierbare Bulk — die geschützten Decals
+    # zählen nicht mit (sie bleiben voll). So bleibt die Datei klein UND scharf.
     ratio = 1.0
-    if a.max_total_tris and ntri > a.max_total_tris:
-        ratio = a.max_total_tris / ntri
-        log(f"decimating: {ntri/1e6:.2f}M -> ~{a.max_total_tris/1e6:.2f}M tris (ratio {ratio:.2f})")
+    if a.max_total_tris and bulk_tris > a.max_total_tris:
+        ratio = a.max_total_tris / bulk_tris
+        log(f"decimating bulk: {bulk_tris/1e6:.2f}M -> ~{a.max_total_tris/1e6:.2f}M tris "
+            f"(ratio {ratio:.2f}); {ndecal} Decals voll erhalten")
 
     scene = trimesh.Scene()
     for ci, (key, (vl, fl, _)) in enumerate(groups.items()):
@@ -191,6 +244,31 @@ def main():
             metallicFactor=0.15, roughnessFactor=0.65)
         m.visual = trimesh.visual.TextureVisuals(material=mat)
         scene.add_geometry(m, geom_name=f"grp_{ci}")
+
+    # GESCHÜTZTE DECALS: voll-tesselliert, NIE dezimiert. Nach Farbe gemergt
+    # (eine Gruppe je Decal-Farbe), damit die Draw-Calls niedrig bleiben — aber
+    # in EIGENEN Gruppen, getrennt von den (dezimierten) Bulk-Farbgruppen, sonst
+    # würde der proportionale Pass sie wieder mitzerschießen.
+    decal_by_color = {}
+    for Vw, F, key in decal_groups:
+        d = decal_by_color.setdefault(key, [[], [], 0])
+        d[0].append(Vw); d[1].append(F + d[2]); d[2] += len(Vw)
+    for di, (key, (vl, fl, _)) in enumerate(decal_by_color.items()):
+        V = np.vstack(vl); F = np.vstack(fl)
+        m = trimesh.Trimesh(vertices=V, faces=F, process=False)   # KEINE Dezimierung
+        try:
+            m.fix_normals()
+            _ = m.vertex_normals
+        except Exception:
+            pass
+        rgb = [min(1.0, max(0.0, key[i] / 24.0)) for i in range(3)]
+        mat = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=[rgb[0], rgb[1], rgb[2], 1.0],
+            metallicFactor=0.15, roughnessFactor=0.65)
+        m.visual = trimesh.visual.TextureVisuals(material=mat)
+        scene.add_geometry(m, geom_name=f"decal_{di}")
+    if decal_by_color:
+        log(f"  + {len(decal_by_color)} Decal-Gruppen voll-tesselliert ({decal_tris/1e3:.0f}k tris)")
 
     log(f"exporting GLB ({len(scene.geometry)} groups) ...")
     data = scene.export(file_type="glb")

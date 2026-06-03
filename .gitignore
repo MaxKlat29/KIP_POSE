@@ -73,8 +73,11 @@ project/models/gdrnpp/
 # HQ-Variante der Maschinen-Zelle (197MB). cell_hi.glb (94MB, 4.0M tris) ist die
 # Live-Variante des Viewers; cell_hq ist das volle Offline-Render. Beide gross ->
 # nicht in git (auf der Box via box_src/export_cell_glb.py erzeugbar).
+# cell_decals.glb (67MB, 2.7M tris): Decal-/Logo-Meshes voll-tesselliert geschützt
+# (T-106) → wbk/KIT/Warn-Schilder scharf statt jagged; ist die Live-Variante.
 project/frontend/assets/cell_hq.glb
 project/frontend/assets/cell_hi.glb
+project/frontend/assets/cell_decals.glb
 # Detektor-Trainings-Artefakte (Kurven-Plot + CSV; via setup.ipynb erzeugbar).
 project/models/detector.curves.png
 project/models/*.results.csv
