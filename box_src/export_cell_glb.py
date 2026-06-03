@@ -59,7 +59,19 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--scale", type=float, default=0.001)
     ap.add_argument("--max-total-tris", type=int, default=2_500_000,
-                    help="globales Tri-Budget; Gruppen werden proportional dezimiert (0=voll)")
+                    help="Bulk-Tri-Budget (nur dezimierbares Bulk, Decals zählen NICHT mit); "
+                         "Gruppen werden proportional dezimiert (0=voll)")
+    # MESH-COUNT-MERGE (T-107): der Per-Farbgruppen-Split erzeugt viele kleine
+    # Meshes (cell_decals: 77). Three.js traversiert beim Load jedes Mesh einzeln
+    # über den Main-Thread → friert die UI bei vielen Meshes ein (T-108 will
+    # non-blocking-Load). Lösung: nach Farb-Gruppierung+Dezimierung alle Bulk-
+    # Meshes zu EINER Mesh und alle Decal-Meshes zu EINER Mesh mergen — die
+    # Per-Gruppen-Farbe wandert in PER-VERTEX Vertex-Colors (glTF COLOR_0), die
+    # Three.js GLTFLoader nativ in EINEM Draw-Call rendert (vertexColors=true).
+    # Volle Decal-Tesselierung + Normalen + alle Farben bleiben erhalten.
+    ap.add_argument("--merge-meshes", type=int, default=1,
+                    help="1=Bulk→1 Mesh + Decals→1 Mesh mit Vertex-Colors (minimaler Mesh-Count "
+                         "für schnellen Viewer-Load); 0=eine Mesh pro Farbgruppe (alt)")
     # DECAL-SCHUTZ (T-106): feine flache Label-/Logo-Meshes (wbk/KIT/Warn-Schilder
     # auf den Zell-Türen) sind dünne Platten-Geometrie. Die proportionale
     # Farbgruppen-Dezimierung zerschießt ihre filigranen Buchstaben-/Logo-Kanten
@@ -128,8 +140,17 @@ def main():
     # als "Geister-Teile" in der Maschine erscheinen. (Fix 2026-05-28)
     BAKED_SUBSTR = ("/Anker_Kurz", "/Anker_Lang", "/Zahnrad", "/Buerstenhalter",
                     "/Getriebe", "/Ringmagnet", "/Poltopf_")
+    # Sim-Collision-Geometrie ist KEIN Visual: die GroundPlane/CollisionMesh ist
+    # ein 500×500m weißes Quad (Welt-Koords ±250m). Sie wurde von is_decal als
+    # "perfekt flaches Decal" fehlklassifiziert (thin=0) und blähte die gemergte
+    # Decal-Mesh-Bbox auf ±250m (riesige bounding-sphere → nie gecullt + sichtbarer
+    # 500m-Boden). Raus damit. (T-107)
+    SKIP_SUBSTR = ("/GroundPlane", "/CollisionMesh", "/PhysicsScene")
     def is_baked_part(prim):
         p = prim.GetPath().pathString
+        for s in SKIP_SUBSTR:
+            if s in p:
+                return True
         # Tray-SCHALEN behalten (heißen "Tray_..."), nur die Part-Prims raus.
         for s in BAKED_SUBSTR:
             if s in p and "/Tray_" not in p:
@@ -212,38 +233,76 @@ def main():
         log(f"decimating bulk: {bulk_tris/1e6:.2f}M -> ~{a.max_total_tris/1e6:.2f}M tris "
             f"(ratio {ratio:.2f}); {ndecal} Decals voll erhalten")
 
-    scene = trimesh.Scene()
-    for ci, (key, (vl, fl, _)) in enumerate(groups.items()):
-        V = np.vstack(vl); F = np.vstack(fl)
-        m = trimesh.Trimesh(vertices=V, faces=F, process=False)
-        if ratio < 1.0 and len(m.faces) > 128:
-            tgt = max(64, int(len(m.faces) * ratio))
-            done = False
-            for call in (
-                lambda: m.simplify_quadric_decimation(face_count=tgt),
-                lambda: m.simplify_quadric_decimation(percent=ratio),
-                lambda: m.simplify_quadric_decimation(1.0 - ratio),  # target_reduction
-            ):
-                try:
-                    m = call(); done = True; break
-                except Exception:
-                    continue
-            if not done and ci < 3:
-                log(f"  decimation API mismatch group {ci} — keeping full")
+    def keyrgb(key):
+        return [min(1.0, max(0.0, key[i] / 24.0)) for i in range(3)]   # glTF baseColor ist 0..1!
+
+    def ensure_normals(m):
         # WICHTIG: Normalen erzwingen — ohne sie rendert MeshStandardMaterial
         # im Three.js unbeleuchtet/unsichtbar (Bug 2026-05-28: Cell war komplett
-        # unsichtbar trotz korrekter Geometrie+Farbe).
+        # unsichtbar trotz korrekter Geometrie+Farbe). Der Viewer (T-108) soll
+        # zudem KEIN computeVertexNormals() pro Mesh laufen lassen müssen → die
+        # Normalen MÜSSEN als NORMAL-Accessor in der GLB landen.
         try:
             m.fix_normals()
             _ = m.vertex_normals          # lazy-compute erzwingen
         except Exception:
             pass
-        rgb = [min(1.0, max(0.0, key[i] / 24.0)) for i in range(3)]   # glTF baseColor ist 0..1!
-        mat = trimesh.visual.material.PBRMaterial(
-            baseColorFactor=[rgb[0], rgb[1], rgb[2], 1.0],
-            metallicFactor=0.15, roughnessFactor=0.65)
-        m.visual = trimesh.visual.TextureVisuals(material=mat)
-        scene.add_geometry(m, geom_name=f"grp_{ci}")
+        return m
+
+    def decimate(m, ratio, tag):
+        if ratio >= 1.0 or len(m.faces) <= 128:
+            return m
+        tgt = max(64, int(len(m.faces) * ratio))
+        for call in (
+            lambda: m.simplify_quadric_decimation(face_count=tgt),
+            lambda: m.simplify_quadric_decimation(percent=ratio),
+            lambda: m.simplify_quadric_decimation(1.0 - ratio),  # target_reduction
+        ):
+            try:
+                return call()
+            except Exception:
+                continue
+        log(f"  decimation API mismatch ({tag}) — keeping full")
+        return m
+
+    scene = trimesh.Scene()
+
+    # ── BULK ────────────────────────────────────────────────────────────────
+    # Dezimierung passiert PRO Farbgruppe (Quadric erhält die Gruppen-Form
+    # besser als ein globaler Pass). Im Merge-Modus werden die dezimierten
+    # Gruppen danach zu EINER Mesh mit Vertex-Colors verschmolzen.
+    bulk_V, bulk_F, bulk_C, bulk_N = [], [], [], []   # für den Merge-Modus
+    bulk_off = 0
+    for ci, (key, (vl, fl, _)) in enumerate(groups.items()):
+        V = np.vstack(vl); F = np.vstack(fl)
+        m = trimesh.Trimesh(vertices=V, faces=F, process=False)
+        m = decimate(m, ratio, f"bulk grp {ci}")
+        m = ensure_normals(m)
+        rgb = keyrgb(key)
+        if a.merge_meshes:
+            bulk_V.append(np.asarray(m.vertices, dtype=np.float32))
+            bulk_F.append(np.asarray(m.faces, dtype=np.int64) + bulk_off)
+            bulk_N.append(np.asarray(m.vertex_normals, dtype=np.float32))
+            col = np.tile(np.array(rgb + [1.0], dtype=np.float32), (len(m.vertices), 1))
+            bulk_C.append(col)
+            bulk_off += len(m.vertices)
+        else:
+            mat = trimesh.visual.material.PBRMaterial(
+                baseColorFactor=[rgb[0], rgb[1], rgb[2], 1.0],
+                metallicFactor=0.15, roughnessFactor=0.65)
+            m.visual = trimesh.visual.TextureVisuals(material=mat)
+            scene.add_geometry(m, geom_name=f"grp_{ci}")
+    if a.merge_meshes and bulk_V:
+        mV = np.vstack(bulk_V); mF = np.vstack(bulk_F); mN = np.vstack(bulk_N)
+        mC = (np.vstack(bulk_C) * 255).astype(np.uint8)
+        mm = trimesh.Trimesh(vertices=mV, faces=mF, vertex_normals=mN, process=False)
+        # Vertex-Colors → glTF COLOR_0 (GLTFLoader setzt vertexColors=true).
+        # Ein neutrales weißes baseColor-Material multipliziert die Vertex-Color.
+        mm.visual = trimesh.visual.ColorVisuals(mesh=mm, vertex_colors=mC)
+        mm.visual.material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=[1.0, 1.0, 1.0, 1.0], metallicFactor=0.15, roughnessFactor=0.65)
+        scene.add_geometry(mm, geom_name="bulk")
+        log(f"  bulk merged → 1 mesh ({len(mF)/1e6:.2f}M tris, vertex-colored)")
 
     # GESCHÜTZTE DECALS: voll-tesselliert, NIE dezimiert. Nach Farbe gemergt
     # (eine Gruppe je Decal-Farbe), damit die Draw-Calls niedrig bleiben — aber
@@ -253,21 +312,40 @@ def main():
     for Vw, F, key in decal_groups:
         d = decal_by_color.setdefault(key, [[], [], 0])
         d[0].append(Vw); d[1].append(F + d[2]); d[2] += len(Vw)
+    dec_V, dec_F, dec_C, dec_N = [], [], [], []
+    dec_off = 0
     for di, (key, (vl, fl, _)) in enumerate(decal_by_color.items()):
         V = np.vstack(vl); F = np.vstack(fl)
         m = trimesh.Trimesh(vertices=V, faces=F, process=False)   # KEINE Dezimierung
-        try:
-            m.fix_normals()
-            _ = m.vertex_normals
-        except Exception:
-            pass
-        rgb = [min(1.0, max(0.0, key[i] / 24.0)) for i in range(3)]
-        mat = trimesh.visual.material.PBRMaterial(
-            baseColorFactor=[rgb[0], rgb[1], rgb[2], 1.0],
-            metallicFactor=0.15, roughnessFactor=0.65)
-        m.visual = trimesh.visual.TextureVisuals(material=mat)
-        scene.add_geometry(m, geom_name=f"decal_{di}")
-    if decal_by_color:
+        m = ensure_normals(m)
+        rgb = keyrgb(key)
+        if a.merge_meshes:
+            dec_V.append(np.asarray(m.vertices, dtype=np.float32))
+            dec_F.append(np.asarray(m.faces, dtype=np.int64) + dec_off)
+            dec_N.append(np.asarray(m.vertex_normals, dtype=np.float32))
+            col = np.tile(np.array(rgb + [1.0], dtype=np.float32), (len(m.vertices), 1))
+            dec_C.append(col)
+            dec_off += len(m.vertices)
+        else:
+            mat = trimesh.visual.material.PBRMaterial(
+                baseColorFactor=[rgb[0], rgb[1], rgb[2], 1.0],
+                metallicFactor=0.15, roughnessFactor=0.65)
+            m.visual = trimesh.visual.TextureVisuals(material=mat)
+            scene.add_geometry(m, geom_name=f"decal_{di}")
+    if a.merge_meshes and dec_V:
+        # Alle Decals → 1 Mesh, volle Tesselierung (NIE dezimiert), Logo-Farben
+        # als Vertex-Colors erhalten (rot/grün/blau/gelb/weiß/schwarz der
+        # KIT-/wbk-/Warn-Schilder). Normalen behalten.
+        dV = np.vstack(dec_V); dF = np.vstack(dec_F); dN = np.vstack(dec_N)
+        dC = (np.vstack(dec_C) * 255).astype(np.uint8)
+        dm = trimesh.Trimesh(vertices=dV, faces=dF, vertex_normals=dN, process=False)
+        dm.visual = trimesh.visual.ColorVisuals(mesh=dm, vertex_colors=dC)
+        dm.visual.material = trimesh.visual.material.PBRMaterial(
+            baseColorFactor=[1.0, 1.0, 1.0, 1.0], metallicFactor=0.15, roughnessFactor=0.65)
+        scene.add_geometry(dm, geom_name="decals")
+        log(f"  decals merged → 1 mesh ({len(dF)/1e3:.0f}k tris, vertex-colored, full tess, "
+            f"{len(decal_by_color)} Farben erhalten)")
+    elif decal_by_color:
         log(f"  + {len(decal_by_color)} Decal-Gruppen voll-tesselliert ({decal_tris/1e3:.0f}k tris)")
 
     log(f"exporting GLB ({len(scene.geometry)} groups) ...")
