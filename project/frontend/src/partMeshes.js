@@ -78,7 +78,7 @@ function _loadPLY(plyId, baseUrl) {
   });
 }
 
-function _loadGLB(glbName, baseUrl) {
+function _loadGLB(glbName, baseUrl, _retry = 2) {
   const url = `${baseUrl}/${glbName}.glb`;
   return new Promise((resolve) => {
     _gltfLoader.load(
@@ -108,8 +108,17 @@ function _loadGLB(glbName, baseUrl) {
       },
       undefined,
       (err) => {
-        console.warn(`[part] GLB ${glbName} nicht geladen:`, err?.message ?? err);
-        resolve(null);
+        // RETRY bei transientem Fehler (z.B. Netz-Blip während des schweren
+        // cell_sharp-Worker-Loads sättigt die Verbindung → Part-GLB-Fetch bricht
+        // ab). Ohne Retry+ohne Cache-Schutz (s. loadPartTemplate) würde EIN
+        // Fehlschlag das Teil für die ganze Session zur Box-Fallback machen.
+        if (_retry > 0) {
+          console.warn(`[part] GLB ${glbName} Load-Fehler, Retry (${_retry})…`, err?.message ?? err);
+          setTimeout(() => _loadGLB(glbName, baseUrl, _retry - 1).then(resolve), 500);
+        } else {
+          console.warn(`[part] GLB ${glbName} nicht geladen (final):`, err?.message ?? err);
+          resolve(null);
+        }
       }
     );
   });
@@ -123,7 +132,13 @@ function loadPartTemplate(part, baseUrl) {
   // GLB ist primär — gleiche Vertex-Zahl wie PLY (23k) aber stabil im Three.js-
   // Loader. PLY-Pfad bleibt für Server-side Render auf der Box (pyrender).
   // (2026-05-26: PLY-Browser-Render zeigte Splitter-Artefakte → revert auf GLB.)
-  const p = _loadGLB(cfg.glbName, baseUrl);
+  // WICHTIG: Fehlschlag (null) NICHT cachen — sonst ist ein einmaliger transienter
+  // Load-Fehler permanent (Teil bleibt die ganze Session Box-Fallback). Bei null
+  // Cache-Eintrag löschen → der nächste setParts/getPartMesh lädt frisch.
+  const p = _loadGLB(cfg.glbName, baseUrl).then((g) => {
+    if (!g) _cache.delete(cacheKey);
+    return g;
+  });
   _cache.set(cacheKey, p);
   return p;
 }
