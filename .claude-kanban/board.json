@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-04T08:31:00Z",
+  "updated": "2026-06-04T09:55:56Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 112,
+  "next_id": 113,
   "tickets": [
     {
       "id": "T-001",
@@ -6399,7 +6399,7 @@
       "id": "T-111",
       "title": "T-111: Part-Mesh Cache-Poisoning — transienter GLB-Load-Fehler macht Teil (Zahnrad) permanent zur Box",
       "description": "Max: Zahnräder als Bounding-Box gerendert, nicht sauber auf Tisch. Wurzel: partMeshes.js loadPartTemplate cached den null-Promise bei Load-Fehler → ein transienter Fetch-Fail (Netz-Blip während 112MB cell_sharp-Worker-Load sättigt Verbindung) macht das Teil für die ganze Session zur Box. Box-Fallback liegt zudem nicht flach wie das Mesh. Fix: Retry (2×) bei transientem Fehler + Fehlschlag NICHT cachen (delete on null → nächster setParts retryt). Verifiziert per Route-Interception (Test A Retry→MESH, Test B kein Poison→MESH).",
-      "column": "backlog",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -6410,11 +6410,100 @@
       ],
       "session": "",
       "created": "2026-06-04T08:31:00Z",
-      "updated": "2026-06-04T08:31:00Z",
+      "updated": "2026-06-04T08:31:18Z",
       "started_at": null,
+      "completed_at": "2026-06-04T08:31:18Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-04T08:31:18Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "DEPLOYED+LIVE+MERGED. partMeshes.js Retry(2×)+kein-Cache-Poison. Verifiziert per Route-Interception (Test A transient→MESH, Test B kein-Poison→MESH#2). Box md5 b3cf95a3, CF serviert _retry. Merge→main gepusht. Erklärt beide Symptome (Box + 'liegt nicht flach'=Box-Fallback)."
+        },
+        {
+          "ts": "2026-06-04T08:31:18Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
+    },
+    {
+      "id": "T-112",
+      "title": "T-112: Zahnrad End-to-End-Validierung (image-only) + zu-helle-Render-Farbe",
+      "description": "Max: Zahnrad wird zu hell gerendert (kaum sichtbar). Kontrollierten Backend-Lauf MIT garantiertem Zahnrad machen: render→2D-Bild→Detektor→bbox→Pose. KRITISCH verifizieren: Pose-Modell bekommt NUR das Bild (+det-bbox), KEINE GT-Daten (muss auf plain JPEG laufen). Prüfen: (a) Zahnrad-Material zu hell? fixen dass sichtbar wie Anker; (b) Detektor findet Zahnrad+bbox; (c) Pose image-only, kein GT-Leak; (d) GT-Conversion dropt Zahnräder? (e) rendert sauber auf Tisch (GT+Pred). Befund 9451b190: Isaac-GT nur 3 Anker, kein gespawntes Zahnrad.",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose",
+        "pipeline",
+        "eval"
+      ],
+      "session": "",
+      "created": "2026-06-04T09:15:20Z",
+      "updated": "2026-06-04T09:55:56Z",
+      "started_at": "2026-06-04T09:15:20Z",
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-04T09:15:20Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-04T09:21:18Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "IMAGE-ONLY AUDIT (Code-Beweis, noch nicht empirisch): Real-Pose-Pfad ist BBOX-ONLY, KEIN GT-Leak. Kette: kip_server /api/real/infer -> _worker_infer_upload -> Worker run_upload setzt LOAD_DETS_TEST=True + TEST_BBOX_TYPE=est + with_masks=False + with_depth=False. GDRN data_loader.read_data_test (data_loader.py:705) -> bbox_key=bbox_est (Detektor), Kommentar dont-load-annotations-at-test-time, KEIN cam_R_m2c/pose/maske gelesen. load_detections_into_dataset (dataset_utils.py:175) wirft original-GT-annotations WEG und baut sie NEU NUR aus det-file (bbox_est/category_id/score/model_info). kip_server schreibt zwar dummy scene_gt.json (R=I,t=[0,0,1000],bbox[0,0,40,40]) ABER die wird verworfen. Modell-Inputs: roi_img+roi_cls+roi_cam(K)+roi_wh+roi_center+resize_ratio+roi_coord_2d+roi_extent(CAD). Alles aus Bild+bbox+K+CAD. Empirischer Plain-JPEG-Beweis folgt."
+        },
+        {
+          "ts": "2026-06-04T09:38:05Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "IMAGE-ONLY EMPIRISCH BEWIESEN (2 Beweise). (1) PLAIN-JPEG: reines 1280x720 JPEG OHNE BOP-Sidecars (kein scene_gt/cam mitgeliefert) -> /api/real/infer -> 5 det / 5 Posen, Detektor findet Zahnrad obj6 scores 0.96-0.97 an GT-Positionen. (2) DUMMY-vs-REAL-GT-Diff: SELBES Bild + SELBE Detektor-bbox 2x durch Worker, einmal mit ECHTER scene_gt (wahre Zahnrad-Posen) einmal mit DUMMY-GT (R=I,t=[0,0,1000]). Ergebnis BIT-IDENTISCH: max|dR|=0.000e+00, max|dt|=0.000 mm ueber alle 4 Zahnraeder. GT geht beweisbar NICHT ein -> reine Bild+bbox-Inferenz. Artefakte: /tmp/leak_proof.py, /tmp/plain_jpeg_proof/zahnrad_only.jpg auf Box."
+        },
+        {
+          "ts": "2026-06-04T09:44:52Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "GT-CONVERSION-CHECK (AK5): Zahnrad wird NICHT gedroppt. isaac_to_bop.py Filter ist EINZIG visib_fract<=min_visib, PER-INSTANCE nicht per-class (Zahnrad gleich behandelt wie Anker), und --min-visib Default=0.0 = behält ALLES. val-Set-Beleg: 778/1000 Bilder haben Zahnrad in scene_gt, n_gt Zahnrad=1484 (deckt sich mit AR-Tabelle). Kein per-class-Drop. Max' 9451b190-Szene (3 Anker/0 Zahnrad) war KEIN Conversion-Drop sondern: in jener Live-Sim wurde stochastisch kein Zahnrad gespawnt (focus_frac=0.6 ist Erwartungswert, Einzelszene kann 0 haben); der Detektor-'Zahnrad 94%' dort war ein False-Positive an der Zell-Wand."
+        },
+        {
+          "ts": "2026-06-04T09:46:15Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "RENDER-FARBE 'ZU HELL' EMPIRISCH BESTÄTIGT + ZAHNRAD-SPEZIFISCH (mask-based, vf>0.7, 250-img subsample full val): Zahnrad gray_mean median=175.0 / p90=213 / max=243, 12.2% (41/337) >210 (fast weiss). Anker_Kurz median=59.6 (max 74), Anker_Lang median=49.7 (max 123) — KEIN Anker >210. Zahnrad ist ~3.5x heller als Anker, systematisch. Max' Beobachtung ('Zahnrad zu hell, kaum sichtbar') voll bestätigt. WICHTIG: randomize_material(DR) ist fuer ALLE Teile identisch (tint g in [0.45,0.85]) -> die Zahnrad-Helligkeit ist NICHT DR-gleichverteilt sondern teil-spezifisch => Verdacht: Zahnrad_Typ7.usdz traegt ein eigenes helles Basismaterial das die DR-Bindung NICHT ueberschreibt (usdz-Material-Override-Problem). Untersuche USD."
+        },
+        {
+          "ts": "2026-06-04T09:50:29Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "RENDER-FARBE URSACHE BEWIESEN (USD-Material-Inspektion, train-venv pxr): Zahnrad_Typ7.usdz hat Mesh DIREKT gebunden an Material 'SmoothWhite' = UsdPreviewSurface diffuseColor=(0.828,0.828,0.828) HELLGRAU, metallic=0, roughness=0.8, specularColor=0. Anker_Kurz.usd hat KEINE Mesh-Direktbindung, nur dunkle MDL-Materialien (Copper, Steel_Grey_Dark_Clean). UND: --dr-strong wurde in KEINEM Gen-Lauf (val/train) je gesetzt (grep über alle Logs leer) -> randomize_material() wird nie aufgerufen (gen_sdg Zeile 360 'if a.dr_strong') -> alle Teile rendern mit ROHEM CAD-Material. Daher Zahnrad gray~175 (0.828 hellgrau), Anker gray~50 (dunkles Metall). KEIN Code-Bug — Material-Mismatch im CAD-Asset. Fix: Zahnrad ein dunkleres/kontrastreiches Material binden (analog Anker)."
+        },
+        {
+          "ts": "2026-06-04T09:51:56Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "DETEKTOR-vs-HELLIGKEIT (AK3): Helligkeit schwächt Detektion NICHT. Über volle Spanne gray 132..240 (inkl. fast-weiße 240er-Zahnräder): 13/13 detektiert, scores konstant 0.943-0.968, IoU>=0.5. Hellstes Zahnrad (gray240) score 0.943. => Das helle Zahnrad-Material ist KEIN Detektor- und KEIN Pose-Problem (Modell wurde darauf trainiert, AR 0.838 solide). Es ist rein ein VISUELLES Wahrnehmungs-Thema im Live-Frontend (helles Zahnrad vor hellem Zell-Untergrund schwer fürs Auge, nicht fürs Netz). Konsequenz: Material-Fix wäre reiner Sim-Realismus + bräuchte Retrain (Max-OK nötig) — kein Pipeline-Defekt der jetzt gefixt werden MUSS."
+        },
+        {
+          "ts": "2026-06-04T09:53:24Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "E2E-VERDIKT (AK6) VISUELL BELEGT: gerendertes Zahnrad -> Detektor (4/4, score~0.96) -> image-only Pose (dummy-GT-updir = bbox-only) -> GT(blau) und Pred(rot) überlagern sich ENG auf allen 4 Zahnrädern, rote CAD-Reprojektion sitzt mittig, Würfelkanten decken sich. e2e PASST. Artefakte: /tmp/e2e_zr/all_s0000_im0016.png + allzoom (lokal /tmp/t112_artifacts/). Im Overlay auch visuell sichtbar: Zahnräder weißlich-hell, heben sich vor grauem Zell-Untergrund nur schwach ab (Max' Beobachtung) — aber Pipeline meistert es."
+        },
+        {
+          "ts": "2026-06-04T09:55:56Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "MATERIAL-FIX committed (Commit 48ac32e, Branch team/2026-06-04-zahnrad-e2e): gen_sdg_arm_visible.py +72 Zeilen. Neuer --equalize-bright-materials Flag (default AUS, unabhängig von --dr-strong) + --bright-mat-thresh (0.70). equalize_bright_material() erkennt gebackene near-white Preview-Surface (mean diffuseColor > thresh) und rebindet dunkles neutral-Metall (diffuse 0.18-0.40 -> render gray ~50-90 statt ~175), NUR auf betroffenen Teilen. Standalone gegen ECHTE Assets verifiziert (train-venv pxr, ohne Isaac): Zahnrad 0.828->0.288 gedunkelt, Anker_Kurz/Lang (kein Preview-Surface) korrekt UNBERÜHRT. Default AUS weil Aktivieren Retrain erfordert (Modell auf hellem Look trainiert) — Max-OK nötig. Box-Push + py_compile grün auf Box. KEIN aktives Verhalten geändert."
+        }
+      ]
     }
   ]
 }
