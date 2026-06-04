@@ -101,6 +101,10 @@ def parse_args():
     # one for the smoke proof. Empty when omitted (normal RNG sampling).
     p.add_argument("--force-counts", default="",
                    help="comma list of n_obj per scene (smoke proof; overrides min/max)")
+    p.add_argument("--force-each-focus", action="store_true",
+                   help="T-119: garantiere >=1 gespawntes Objekt JEDER Fokus-Klasse "
+                        "(Anker_Kurz/Anker_Lang/Zahnrad), sofern Platz (n_focus>=3). "
+                        "Vom Live-Website-Sim genutzt; aus fuer Dataset-/Eval-Gen.")
     return p.parse_args()
 
 
@@ -402,7 +406,19 @@ def main():
         path2label = {}
         max_attempts = n_obj * dg.MAX_SPAWN_ATTEMPTS * 2
         n_focus = int(round(n_obj * focus_frac))
-        plan = ([rng.choice(focus_idx) for _ in range(n_focus)] +
+        # T-119: jede Fokus-Klasse mehrfach seeden, sofern Platz. >=2 wenn moeglich
+        # (robust gegen Upright-Removal der rotsym. Anker: ein Exemplar darf aufrecht
+        # wegfallen, das zweite bleibt → praktisch immer >=1 von jedem Typ), sonst
+        # >=1. Rest zufaellig aus den Fokus-Klassen. Sonst rein zufaellig (alt).
+        nf = len(focus_idx)
+        if getattr(a, "force_each_focus", False) and n_focus >= nf:
+            reps = 2 if n_focus >= 2 * nf else 1
+            seeded = list(focus_idx) * reps
+            focus_plan = seeded + [rng.choice(focus_idx)
+                                   for _ in range(n_focus - len(seeded))]
+        else:
+            focus_plan = [rng.choice(focus_idx) for _ in range(n_focus)]
+        plan = (focus_plan +
                 [rng.choice(distract_idx) for _ in range(n_obj - n_focus)])
         rng.shuffle(plan)
         while spawned < n_obj and attempt < max_attempts:
@@ -482,6 +498,12 @@ def main():
         # die Annotatoren-Daten zieht. Resultat: weniger Teile im Bild, dafuer
         # nur stabile Posen.
         ROTSYM_LABELS = ("Anker_Kurz", "Anker_Lang", "Zahnrad", "Ringmagnet")
+        # T-119: im Live-Demo-Modus (--force-each-focus) das Zahnrad NICHT upright-
+        # entfernen. Zahnrad ist C7 (diskrete Achse → aufrecht pose-bar), anders als
+        # die KONTINUIERLICH rotsym. Anker/Ringmagnet (aufrecht echt mehrdeutig). So
+        # verschwindet das garantierte Zahnrad nicht, wenn es auf der Kante landet.
+        if getattr(a, "force_each_focus", False):
+            ROTSYM_LABELS = tuple(l for l in ROTSYM_LABELS if l != "Zahnrad")
         def _is_upright_unstable(prim_path, label):
             if label not in ROTSYM_LABELS:
                 return False

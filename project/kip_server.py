@@ -1198,11 +1198,13 @@ def _sim_generate_job(job):
 
         import random as _r
         seed = _r.randint(1, 2**31 - 1)
-        # 3-5 Teile pro Szene; force-counts garantiert dass semantic labels
-        # stabil registriert werden (single-scene-Bug bei num-scenes=1 ohne).
-        # focus-frac=1.0 ⇒ nur trainierte Klassen (Anker_Kurz/Lang/Zahnrad).
-        # Sonst kann die Zufalls-Auswahl reine Distractor liefern (Demo-Killer).
-        n_obj = _r.randint(3, 5)
+        # 7-10 Teile pro Szene (T-119: mehr Teile); force-counts garantiert dass
+        # semantic labels stabil registriert werden (single-scene-Bug bei
+        # num-scenes=1 ohne). focus-frac=1.0 ⇒ nur trainierte Klassen
+        # (Anker_Kurz/Lang/Zahnrad); --force-each-focus garantiert >=1 von JEDEM
+        # der 3 Typen pro Szene (sonst kann die Zufalls-Auswahl einen Typ auf 0
+        # ziehen — Demo-Killer).
+        n_obj = _r.randint(7, 10)
         gen = subprocess.Popen(
             [_ISAAC_VENV, _GEN_SCRIPT,
              "--scene", _SCENE_USD,
@@ -1211,6 +1213,7 @@ def _sim_generate_job(job):
              "--num-scenes", "1",
              "--force-counts", str(n_obj),
              "--focus-frac", "1.0",
+             "--force-each-focus",
              "--seed", str(seed)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         # parse stdout for progress markers
