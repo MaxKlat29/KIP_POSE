@@ -636,17 +636,43 @@ def _first_trained_im(gt_all, trained):
 
 
 def _camera_pose(R_w2c, t_w2c, K, results, table_origin):
-    """Aufnahme-Kamera im Viewer-Frame (world): pos/look_at/up/fov_y für Foto-View."""
+    """Aufnahme-Kamera 1:1 im Viewer-Frame (world meters): pos/look_at/up/fov_y.
+
+    Liefert die VOLLE Orientierung der Isaac-Sim-Kamera (T-114, Max-Direktive
+    „Kameraperspektive = exakt das Isaac-RGB"). Frueher war look_at der Teile-
+    ZENTROID — das verschob das Framing weg von der echten optischen Achse und
+    rollte/schwenkte die Sicht anders als das gerenderte RGB. Jetzt:
+
+      R_c2w = R_w2c.T          (Welt<-Kamera)
+      cam_pos = -R_c2w @ t_w2c                          (mm -> m)
+      forward = R_c2w @ [0,0,+1]  (OpenCV-Cam blickt entlang +Z)  -> look_at
+      up      = R_c2w @ [0,-1,0]  (OpenCV +Y zeigt nach unten -> up = -Y)
+
+    cam_pos UND parts liegen im SELBEN absoluten World-Meter-Frame: der Viewer
+    rendert Teile bei t_world + table_origin (= absolute world meters), und
+    cam_pos = -R_c2w@t_w2c/1000 ist ebenfalls absolute world meters. Kein
+    table_origin-Offset auf die Kamera noetig — beide teilen den Frame.
+    """
     import numpy as np
     Rwc = np.asarray(R_w2c, float); twc = np.asarray(t_w2c, float)
-    cam_pos = (-Rwc.T @ twc) / 1000.0                 # world meters
-    up = Rwc.T @ np.array([0.0, -1.0, 0.0])           # OpenCV y-down -> up = -y
+    R_c2w = Rwc.T
+    cam_pos = (-R_c2w @ twc) / 1000.0                  # world meters
+    forward = R_c2w @ np.array([0.0, 0.0, 1.0])        # OpenCV optical axis = +Z
+    up = R_c2w @ np.array([0.0, -1.0, 0.0])            # OpenCV y-down -> up = -y
+    # look_at-Distanz: bis zum Teile-Schwerpunkt entlang der ECHTEN optischen
+    # Achse projiziert (nicht der Zentroid selbst — der schwenkt die Sicht weg).
+    # Fallback (keine Teile): 1 m vor der Kamera. So liegt look_at exakt auf dem
+    # Strahl, den auch das Isaac-RGB als Bildmitte zeigt.
     if results:
         cen = np.mean([[r["t_world"][i] + table_origin[i] for i in range(3)] for r in results], axis=0)
+        d = float(np.dot(cen - cam_pos, forward))
+        if not np.isfinite(d) or d <= 1e-3:
+            d = 1.0
     else:
-        cen = np.asarray(table_origin, float)
+        d = 1.0
+    look_at = cam_pos + forward * d
     fov_y = float(2 * np.degrees(np.arctan(0.5 * 720.0 / float(K[1, 1]))))
-    return {"cam_pos": [float(x) for x in cam_pos], "look_at": [float(x) for x in cen],
+    return {"cam_pos": [float(x) for x in cam_pos], "look_at": [float(x) for x in look_at],
             "up": [float(x) for x in up], "fov_y": fov_y}
 
 

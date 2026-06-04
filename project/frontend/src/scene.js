@@ -194,7 +194,7 @@ export function createViewer(canvas) {
       } else {
         cellGroup.add(group);
         cellLoaded = true;
-        fitView();
+        fitView({ fromCellLoad: true });
         onDone?.(true);
       }
     }
@@ -253,7 +253,7 @@ export function createViewer(canvas) {
         cellGroup.add(gltf.scene);
         cellLoaded = true;
         ui.done();
-        fitView();
+        fitView({ fromCellLoad: true });
         onDone?.(true);
       },
       (xhr) => ui.progress(xhr.loaded, xhr.total),
@@ -535,10 +535,18 @@ export function createViewer(canvas) {
   // beim zweiten Call die wiederhergestellte Sicht ueberschreiben. 3 s deckt
   // die Cell-GLB-Ladezeit komfortabel ab, ohne Tab-Wechsel zu blockieren.
   const _viewerStartedAt = Date.now();
+  // True sobald der User selbst dreht/zoomt/pant — danach kein Auto-fitView mehr
+  // aus dem (verzoegerten) Cell-Load. Verhindert das Kamera-Springen mitten in
+  // der Interaktion. (T-114)
+  let _userInteracted = false;
 
   // ── Auto-Fit: Kamera auf die Teile-Bounding-Box (mit Kontext-Padding) ──
   // force=true: ignoriere persistierte View komplett ("Ansicht zuruecksetzen").
+  // opts.fromCellLoad=true: ausgeloest vom asynchronen Cell-Load — darf die Sicht
+  //   NUR setzen wenn der User noch nicht interagiert hat UND noch keine Teile da
+  //   sind. Sonst No-Op (sonst reisst der 112-MB-Load die Kamera zurueck).
   function fitView(opts = {}) {
+    if (opts.fromCellLoad && (_userInteracted || partsGroup.children.length)) return;
     if (!opts.force && (Date.now() - _viewerStartedAt) < 3000) {
       if (tryRestoreView()) return;
     }
@@ -562,7 +570,7 @@ export function createViewer(canvas) {
     // auf dem Tisch sind klar sichtbar, der hohe Wagen tritt zurueck.
     const dir = new THREE.Vector3(0.18, -0.42, 0.89).normalize();
     camera.position.copy(center.clone().add(dir.multiplyScalar(fitDist)));
-    refreshClipping();
+    refreshClipping(true);                 // grosser Sprung → Stufen-Neuberechnung erzwingen
     controls.target.copy(center);
     controls.update();
     if (opts.force) saveView();
@@ -571,10 +579,32 @@ export function createViewer(canvas) {
   // ── Near/Far dynamisch ans aktuelle Cam-Target-Distance anpassen.
   // Verhindert dass beim Rauszoomen das Bild abrupt clippt oder beim ganz nahem
   // Reinzoomen die Tiefenaufloesung zusammenbricht.
-  function refreshClipping() {
+  //
+  // SMOOTHNESS-FIX (T-114, Max „teils ruckelig"): frueher lief das bei JEDEM
+  // OrbitControls-"change" — also jeden Damping-Frame (~60×/s). Die Cam<->Target-
+  // Distanz wackelt waehrend des Daempfens minimal; jede winzige Aenderung baute
+  // die Projektionsmatrix NEU + remappte den Z-Buffer → near/far-Jitter →
+  // sichtbares Clipping/Z-Fight-Flackern auf der dichten Zelle (4.2 M tris) +
+  // ueberlappenden Decals/Teilen = das gemeldete Ruckeln. Fix: (1) near/far in
+  // log-Stufen QUANTISIEREN, damit Mikro-Distanz-Jitter dieselbe Stufe trifft,
+  // (2) updateProjectionMatrix NUR wenn sich eine Stufe wirklich aendert
+  // (Hysterese). Bei reinem Orbit (Distanz konstant) passiert so GAR NICHTS mehr
+  // pro Frame → fluessig; nur Zoom/Pan loest einen (seltenen) Rebuild aus.
+  let _lastNear = -1, _lastFar = -1;
+  function _quantize(v) {
+    // auf ~3 % Stufen runden → unempfindlich gegen Sub-Promille-Jitter, aber fein
+    // genug dass near/far der Distanz folgt.
+    const e = Math.round(Math.log(v) / Math.log(1.03));
+    return Math.pow(1.03, e);
+  }
+  function refreshClipping(force = false) {
     const d = camera.position.distanceTo(controls.target);
-    camera.near = Math.max(d / 1000, 0.001);
-    camera.far  = Math.max(d * 60, 100);
+    const near = _quantize(Math.max(d / 1000, 0.001));
+    const far  = _quantize(Math.max(d * 60, 100));
+    if (!force && near === _lastNear && far === _lastFar) return;  // Stufe gleich → kein Rebuild
+    _lastNear = near; _lastFar = far;
+    camera.near = near;
+    camera.far  = far;
     camera.updateProjectionMatrix();
   }
 
@@ -612,7 +642,7 @@ export function createViewer(canvas) {
       controls.target.fromArray(v.tgt);
       if (Array.isArray(v.up)) camera.up.fromArray(v.up);
       if (Number.isFinite(v.fov)) camera.fov = v.fov;
-      refreshClipping();
+      refreshClipping(true);
       controls.update();
       return true;
     } catch (_) { return false; }
@@ -625,6 +655,11 @@ export function createViewer(canvas) {
   }
   controls.addEventListener("end", scheduleSave);
   controls.addEventListener("change", () => { refreshClipping(); scheduleSave(); });
+  // Sobald der User selbst interagiert, darf ein spaeter eintreffendes fitView
+  // (z.B. nach dem asynchronen 112-MB-Cell-Load) die Kamera NICHT mehr
+  // zurueckreissen — das war ein Teil des „buggy"-Gefuehls: man dreht, und
+  // Sekunden spaeter springt die Sicht weil die Zelle fertiggeladen hat. (T-114)
+  controls.addEventListener("start", () => { _userInteracted = true; });
 
   // ── Resize ───────────────────────────────────────────────────
   function resize() {
@@ -654,7 +689,7 @@ export function createViewer(canvas) {
   return {
     scene, camera, renderer, controls,
     partsGroup, cellGroup, collisionGroup, pickables,
-    loadCell, loadCollisionProxy, setParts, setPartOffset, fitView, resetView, resize,
+    loadCell, loadCollisionProxy, setParts, setPartOffset, fitView, resetView, resize, saveView,
     isCellLoaded: () => cellLoaded,
     isProxyLoaded: () => proxyLoaded,
     // Höhenkarte (T-101): für Verify/Debug exponiert.
