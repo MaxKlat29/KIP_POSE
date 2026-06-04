@@ -63,6 +63,18 @@ def parse_args():
     # cell (0 GT, arm + cart only) which the converter writes as a 0-GT frame.
     p.add_argument("--min-obj", type=int, default=0)
     p.add_argument("--max-obj", type=int, default=10)
+    p.add_argument("--equalize-bright-materials", action="store_true",
+                   help="T-112: rebind a darker metallic material onto spawned parts "
+                        "whose baked CAD material is near-white (diffuseColor mean > "
+                        "--bright-mat-thresh), so a pale part (Zahnrad_Typ7.usdz carries "
+                        "diffuseColor 0.828 'SmoothWhite') renders with contrast like the "
+                        "dark-metal Anker instead of washing out against the cell. "
+                        "Default OFF — enabling CHANGES the rendered appearance and "
+                        "REQUIRES a retrain (the shipped model was trained on the bright "
+                        "look). Independent of --dr-strong.")
+    p.add_argument("--bright-mat-thresh", type=float, default=0.70,
+                   help="T-112: mean baked diffuseColor above this counts as 'too bright' "
+                        "for --equalize-bright-materials (Zahnrad SmoothWhite = 0.828).")
     p.add_argument("--dr-strong", action="store_true",
                    help="T-038 Phase-2: STRONGER domain randomization — per-object "
                         "material roughness/metallic/tint, denser clutter, wider "
@@ -327,6 +339,61 @@ def main():
         except Exception as e:
             pass  # DR is best-effort; never crash the render over a material
 
+    def _mean_bound_diffuse(stage, prim_path):
+        """Return the mean diffuseColor of the BRIGHTEST UsdPreviewSurface bound under
+        prim_path, or None if no preview-surface diffuseColor is found. Used to detect a
+        baked near-white CAD material (T-112: Zahnrad SmoothWhite = (0.828,0.828,0.828))."""
+        try:
+            best = None
+            for prim in Usd.PrimRange(stage.GetPrimAtPath(prim_path)):
+                if not prim.IsA(UsdShade.Shader):
+                    continue
+                sh = UsdShade.Shader(prim)
+                if sh.GetIdAttr().Get() != "UsdPreviewSurface":
+                    continue
+                inp = sh.GetInput("diffuseColor")
+                v = inp.Get() if inp else None
+                if v is None:
+                    continue
+                m = float((v[0] + v[1] + v[2]) / 3.0)
+                if best is None or m > best:
+                    best = m
+            return best
+        except Exception:
+            return None
+
+    def equalize_bright_material(stage, prim_path, rng, thresh):
+        """T-112: if a spawned part's baked CAD material is near-white (mean diffuseColor
+        > thresh), rebind a darker neutral-metal UsdPreviewSurface so it renders with
+        contrast like the dark-metal Anker (whose meshes carry no preview-surface and use
+        dark MDL looks). NON-DESTRUCTIVE to other parts — only touches bright ones. Returns
+        True if a part was darkened. Default-OFF flag; enabling REQUIRES a retrain."""
+        m = _mean_bound_diffuse(stage, prim_path)
+        if m is None or m <= thresh:
+            return False
+        try:
+            mat_path = prim_path + "/_EqMat"
+            mat = UsdShade.Material.Define(stage, mat_path)
+            shader = UsdShade.Shader.Define(stage, mat_path + "/Shader")
+            shader.CreateIdAttr("UsdPreviewSurface")
+            # dark neutral metal, matched to the Anker tonal range (renders gray ~50-90,
+            # not ~175). Small random tint so the network still sees finish variation.
+            g = float(rng.uniform(0.18, 0.40))
+            tint = np.array([g, g, g]) * np.array(
+                [rng.uniform(0.92, 1.0), rng.uniform(0.9, 1.0), rng.uniform(0.85, 1.0)])
+            shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(
+                Gf.Vec3f(*[float(c) for c in tint]))
+            shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(float(rng.uniform(0.5, 1.0)))
+            shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(float(rng.uniform(0.25, 0.6)))
+            shader.CreateInput("specular", Sdf.ValueTypeNames.Float).Set(float(rng.uniform(0.3, 0.7)))
+            mat.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+            for prim in Usd.PrimRange(stage.GetPrimAtPath(prim_path)):
+                if prim.IsA(UsdGeom.Mesh):
+                    UsdShade.MaterialBindingAPI(prim).Bind(mat)
+            return True
+        except Exception:
+            return False  # best-effort; never crash the render over a material
+
     def spawn_weighted(stage, rng, n_obj, focus_frac):
         """Like dg.spawn_random_mode but forces a focus_frac of focus parts.
         Returns {prim_path: label}."""
@@ -358,6 +425,11 @@ def main():
             dg.spawn_single_object(stage, pp, asset, x, y, z, rx, ry, rz)
             if a.dr_strong:
                 randomize_material(stage, pp, rng)
+            if a.equalize_bright_materials:
+                # T-112: darken near-white baked materials (e.g. Zahnrad SmoothWhite)
+                # AFTER any DR bind, so the equalizer wins for a still-bright part.
+                if equalize_bright_material(stage, pp, rng, a.bright_mat_thresh):
+                    log(f"  [eq-bright] darkened {asset['label']} @ {pp}")
             existing.append({"path": pp, "pos": (x, y, z), "size": dg.OBJECT_SIZE / 2})
             path2label[pp] = asset["label"]
             spawned += 1
