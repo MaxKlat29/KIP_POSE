@@ -812,12 +812,16 @@ def _build_sim_doc(scene, im=-1, use_worker=False):
             source = "worker"
     if preds is None:
         preds = _preds_for(scene, im)
+    kept_proj, n_drop = [], 0
     for oid, R, t, sc in preds:
         iid += 1
-        results.append(_bop_pose_to_result(R, t, R_w2c, t_w2c, table_origin, oid, iid, "pred", sc, snap=True))
+        if not _add_pred_filtered(results, kept_proj, R, t, R_w2c, t_w2c,
+                                  table_origin, oid, iid, sc, K=K):
+            n_drop += 1
     return {
         "meta": {"source_image": f"{scene:06d}/rgb/{im:06d}.png", "table_origin": table_origin,
                  "units": "m", "scene": scene, "im": im, "source": source,
+                 "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
                  "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin),
                  "n_gt": sum(1 for r in results if r["color"] == "gt"),
                  "n_pred": sum(1 for r in results if r["color"] == "pred")},
@@ -906,12 +910,21 @@ def real_boxes(job: str):
         raise HTTPException(404, "Bild oder Detektionen nicht gefunden")
     img = Image.open(rgb).convert("RGB"); draw = ImageDraw.Draw(img)
     det = json.load(open(detp))
+    # T-113: nur Boxen zeichnen, zu denen eine behaltene (on-table) Pred projiziert
+    # — Off-Table-FPs (Wand-Zahnrad) erscheinen weder in 3D noch hier (2D == 3D).
+    # Doc fehlt -> konservativ alle Boxen zeichnen (kein Filter).
+    docp = RENDERS / f"real_{job}.json"
+    _meta = json.load(open(docp)).get("meta", {}) if docp.exists() else None
+    _filter = _meta is not None
+    kept_proj = (_meta or {}).get("kept_proj", [])
     # det.json ist dict {scene/im: [{obj_id, bbox_est=[x,y,w,h], score, ...}]}
     boxes = []
     for k, lst in det.items():
         for b in lst:
             boxes.append((int(b["obj_id"]), b["bbox_est"], float(b.get("score", 0.0))))
     for oid, (x, y, w, h), sc in boxes:
+        if _filter and not _box_has_kept_pred((x, y, w, h), oid, kept_proj):
+            continue
         col = _BBOX_COLOR.get(oid, (52, 211, 153))
         draw.rectangle([x, y, x + w, y + h], outline=col, width=4)
         label = f"{_BBOX_LABEL.get(oid, str(oid))}  {sc*100:.0f}%"
@@ -1072,12 +1085,13 @@ def _sim_generate_job(job):
         else:
             wp = []
 
+        kept_proj, n_drop = [], 0
         for p in wp:
             iid += 1
-            results.append(_bop_pose_to_result(
-                np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
-                R_w2c, t_w2c, table_origin, p["obj_id"], iid, "pred", p.get("score", 1.0),
-                snap=True))
+            if not _add_pred_filtered(results, kept_proj,
+                                      np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
+                                      R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
+                n_drop += 1
 
         _job_set(job, phase="BOP -> Welt + Boden-Snap", pct=95)
         n_gt = sum(1 for r in results if r["color"] == "gt")
@@ -1085,6 +1099,7 @@ def _sim_generate_job(job):
         doc = {
             "meta": {"source_image": f"live/{job}", "table_origin": table_origin,
                      "units": "m", "scene": 99, "im": 0, "source": "isaac-live",
+                     "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
                      "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin),
                      "n_gt": n_gt, "n_pred": n_pred, "seed": seed, "n_obj": n_obj},
             "results": results,
@@ -1135,9 +1150,17 @@ def sim_live_boxes(job: str):
     img = Image.open(rgb).convert("RGB"); draw = ImageDraw.Draw(img)
     if detp.exists():
         det = json.load(open(detp))
+        # T-113: nur Boxen mit behaltener (on-table) Pred — Off-Table-FPs raus (2D == 3D).
+        # Doc fehlt (z.B. Server-Neustart nach Generation) -> konservativ: alle
+        # Boxen zeichnen (lieber ein FP durch als alle Boxen verstecken).
+        _doc = _SIM_DOCS.get(job)
+        _filter = _doc is not None
+        kept_proj = (_doc or {}).get("meta", {}).get("kept_proj", [])
         for k, lst in det.items():
             for b in lst:
                 oid = int(b["obj_id"]); x, y, w, h = b["bbox_est"]
+                if _filter and not _box_has_kept_pred((x, y, w, h), oid, kept_proj):
+                    continue
                 col = _BBOX_COLOR.get(oid, (52, 211, 153))
                 draw.rectangle([x, y, x + w, y + h], outline=col, width=4)
                 label = f"{_BBOX_LABEL.get(oid, str(oid))}  {float(b.get('score',0))*100:.0f}%"
