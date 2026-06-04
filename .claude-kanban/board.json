@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-03T12:58:59Z",
+  "updated": "2026-06-04T08:31:00Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 111,
+  "next_id": 112,
   "tickets": [
     {
       "id": "T-001",
@@ -6390,6 +6390,27 @@
       "session": "",
       "created": "2026-06-03T12:41:24Z",
       "updated": "2026-06-03T12:41:24Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-111",
+      "title": "T-111: Part-Mesh Cache-Poisoning — transienter GLB-Load-Fehler macht Teil (Zahnrad) permanent zur Box",
+      "description": "Max: Zahnräder als Bounding-Box gerendert, nicht sauber auf Tisch. Wurzel: partMeshes.js loadPartTemplate cached den null-Promise bei Load-Fehler → ein transienter Fetch-Fail (Netz-Blip während 112MB cell_sharp-Worker-Load sättigt Verbindung) macht das Teil für die ganze Session zur Box. Box-Fallback liegt zudem nicht flach wie das Mesh. Fix: Retry (2×) bei transientem Fehler + Fehlschlag NICHT cachen (delete on null → nächster setParts retryt). Verifiziert per Route-Interception (Test A Retry→MESH, Test B kein Poison→MESH).",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "kip",
+        "frontend",
+        "bug"
+      ],
+      "session": "",
+      "created": "2026-06-04T08:31:00Z",
+      "updated": "2026-06-04T08:31:00Z",
       "started_at": null,
       "completed_at": null,
       "comments": [],
