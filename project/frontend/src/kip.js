@@ -205,14 +205,21 @@ function wirePip() {
     if (!lastCamPose) return;
     const c = viewer.camera, ctl = viewer.controls;
     const p = lastCamPose;
+    // EXAKT die Isaac-Sim-Kamera 1:1 (T-114, Max). Reihenfolge wichtig:
+    //   1) up = die ECHTE Kamera-up aus den Extrinsics VOR controls.update,
+    //      damit OrbitControls den Roll uebernimmt (nicht den Welt-Z-up).
+    //   2) position = cam_pos, target = look_at (entlang der optischen Achse),
+    //      fov = fov_y.
+    // KEIN Z-up-Reset mehr: die gesetzte Perspektive deckt sich 1:1 mit dem
+    // Isaac-RGB und BLEIBT, bis der User selbst dreht. Frueher rollte ein
+    // resetUp-on-first-drag die Sicht sofort auf Welt-Z zurueck → anders
+    // gerollt als das RGB.
     c.up.set(p.up[0], p.up[1], p.up[2]);
     c.position.set(p.cam_pos[0], p.cam_pos[1], p.cam_pos[2]);
     c.fov = p.fov_y; c.updateProjectionMatrix();
     ctl.target.set(p.look_at[0], p.look_at[1], p.look_at[2]);
     ctl.update();
-    // beim ersten Drag up -> Welt-Z zuruecksetzen (logische Bewegung danach).
-    const resetUp = () => { c.up.set(0, 0, 1); ctl.update(); ctl.removeEventListener("start", resetUp); };
-    ctl.addEventListener("start", resetUp);
+    viewer.saveView?.();                 // Perspektive persistieren (inkl. up/fov)
     btnCam.classList.add("pip__btn--on");
     setTimeout(() => btnCam.classList.remove("pip__btn--on"), 600);
   });
