@@ -681,6 +681,168 @@ def _pred_on_table(t_world, table_origin):
     return (xl <= wx <= xh) and (yl <= wy <= yh)
 
 
+# ── T-113 (reopen): Statische-Wand-FP-Pose-Registry ──────────────────────────
+# Der erste T-113-Versuch filterte NUR auf der gesnappten Welt-XY (Arbeitsflaeche).
+# Das war blind fuer das wbk-Zahnrad-Logo (und ein zweites rundes Wand-Lochplatten-
+# Panel): GDRNPP halluziniert fuer den flachen Wand-Decal eine VOLL tisch-konsistente
+# 3D-Pose, deren Welt-XY mitten im Arbeitsbereich liegt. Empirisch (T-113-reopen):
+#   - M1 Pre-Snap-Plane-Distanz: WIDERLEGT — die ROHE (un-gesnappte) Logo-Pose sitzt
+#     bei raw_z≈-0.054 (Tischebene -0.08), snap-dz nur ~6mm; nicht trennbar von echten
+#     Ankern (dz bis -18mm).
+#   - M2 grobe Welt-XY-Region: WIDERLEGT — das Logo-Cluster [0.659,0.144] hat 383
+#     echte GT-Teile innerhalb 8cm, [0.252,0.565] hat 129 → eine Region-Sperre wuerde
+#     hunderte echte Teile droppen (Constraint-Verstoss).
+#   - M3 Back-Projection-Ray gegen Cell-Mesh: WIDERLEGT — der bbox-Center-Ray des
+#     Logos trifft die Cell-GLB bei z≈0.000 (= Tischebene) wie jedes echte Teil; die
+#     Wand-Panels sind in der GLB keine treffbare Ueberhang-Geometrie + die flache
+#     Kamera projiziert die Tischebene bis zum Horizont.
+#
+# DIE EINZIGE harte, bewiesene Signatur: die Wand-Panels sind STATISCHE Cell-Struktur.
+# Bei der (fix montierten) Zivid-Kamera erzeugt jedes der ~runden Panels GDRN-seitig
+# eine BIT-IDENTISCHE 6DoF-Pose ueber ALLE Bilder (t_std=0, R_std=0 ueber 5 bzw. 7
+# verschiedene Uploads). Ein echtes Teil hingegen variiert in Position UND Rotation.
+#
+# Loesung: eine kleine Registry der bekannten statischen FP-Welt-Posen (Position +
+# sym-aware Rotation). Ein Pred wird als Wand-FP verworfen, wenn seine Pose ENG (Default
+# t<1cm UND sym-aware-R<3deg) an einer Registry-Pose liegt. Die enge Toleranz ist sicher,
+# weil das Logo bit-identisch reproduziert. EMPIRISCH (full val, 1484 echte obj6-GT):
+# bei t<1cm & R<3deg werden 0/1484 echte Zahnraeder faelschlich gedroppt — obwohl 28
+# bzw. 3 echte GT-Zahnraeder positionsnah (t<3cm) liegen, ist ihre Rotation >=19.8deg
+# bzw. >3deg entfernt. Die volle 6DoF-Pose trennt, wo die XY allein versagt.
+#
+# Perspektiv-Robustheit: heute nutzen ALLE Render-Pfade (val/sim-live/real-upload) die
+# EINE fixe Zivid-Extrinsic (cam_t_w2c = const). Die Registry ist gegen genau diese
+# Kamera kalibriert und damit fuer das aktuelle System vollstaendig robust. Wandert die
+# Render-Kamera kuenftig (mehrere Isaac-Perspektiven), aendert sich die GDRN-Welt-Pose
+# des Wand-Decals → die Registry muss dann pro Perspektive neu kalibriert oder kamera-
+# relativ gemacht werden. Komplett ueber env abschaltbar/erweiterbar:
+#   KIP_WALLFP_POSES = "x,y,z,R0..R8; x,y,z,R0..R8; ..."  (Welt-Pose pro statischem FP)
+#   KIP_WALLFP_T_TOL (m, default 0.01)  KIP_WALLFP_R_TOL (deg, default 3.0)
+#   KIP_WALLFP_DISABLE = "1"  → Registry aus (nur Workspace-Box-Filter, alt-Verhalten)
+#
+# Die zwei Default-Posen sind die empirisch bestaetigten statischen Wand-Lochplatten-
+# Panels (links-oben/„wbk-Zahnrad-Logo" + ein zweites Panel), kalibriert aus den bit-
+# identisch reproduzierten GDRNPP-Welt-Posen ueber je >=5 reale Uploads.
+_WALLFP_SYM_CACHE: list | None = None
+
+
+def _wallfp_sym_rotations():
+    """Diskrete Symmetrie-Rotationen von obj6 (Zahnrad, C7 -> 7 Rotationen inkl. I).
+
+    Aus models_info.json (BOP `symmetries_discrete`, 4x4 in mm). Nur die 3x3-Rotation
+    zaehlt fuer die sym-aware Winkel-Distanz. Fallback: [I] (kein Sym-File -> exakt)."""
+    global _WALLFP_SYM_CACHE
+    if _WALLFP_SYM_CACHE is not None:
+        return _WALLFP_SYM_CACHE
+    import numpy as np
+    Rs = [np.eye(3)]
+    try:
+        mi = json.load(open(_MODELS_DIR / "models_info.json")).get("6", {})
+        for S in mi.get("symmetries_discrete", []):
+            Rs.append(np.array(S, float).reshape(4, 4)[:3, :3])
+    except Exception:
+        pass
+    _WALLFP_SYM_CACHE = Rs
+    return Rs
+
+
+def _wallfp_registry():
+    """Liste der statischen Wand-FP-Welt-Posen [{t:(3,), R:(3,3)}] + Toleranzen.
+
+    Default = die 2 empirisch bestaetigten Wand-Panels (KIP_WALLFP_POSES_FILE oder
+    eingebaute Konstante); env-override via KIP_WALLFP_POSES. KIP_WALLFP_DISABLE=1 →
+    leere Liste (Registry aus, alt-Verhalten)."""
+    import numpy as np
+    if os.environ.get("KIP_WALLFP_DISABLE") == "1":
+        return [], 0.01, 3.0
+    t_tol = float(os.environ.get("KIP_WALLFP_T_TOL", "0.01"))
+    r_tol = float(os.environ.get("KIP_WALLFP_R_TOL", "3.0"))
+    raw = os.environ.get("KIP_WALLFP_POSES")
+    poses = []
+    if raw:
+        try:
+            for chunk in raw.split(";"):
+                vals = [float(v) for v in chunk.replace(",", " ").split()]
+                if len(vals) == 12:
+                    poses.append({"t": np.array(vals[:3]), "R": np.array(vals[3:]).reshape(3, 3)})
+        except Exception:
+            poses = []
+    if not poses:
+        poses = [{"t": np.array(p["t"], float), "R": np.array(p["R"], float).reshape(3, 3)}
+                 for p in _wallfp_default_poses()]
+    return poses, t_tol, r_tol
+
+
+def _wallfp_default_poses():
+    """Die 2 eingebauten statischen Wand-Panel-Welt-Posen (t_world rel. Tisch + R_world).
+
+    Optional aus JSON-Datei KIP_WALLFP_POSES_FILE [{"t":[...],"R":[...9]}], damit die
+    Kalibrier-Werte ausserhalb des Codes pflegbar sind. Fallback: eingebaute Konstante
+    (empirisch aus den bit-identischen realen GDRNPP-Welt-Posen)."""
+    fp = os.environ.get("KIP_WALLFP_POSES_FILE")
+    if fp:
+        try:
+            return json.load(open(fp))
+        except Exception:
+            pass
+    return [
+        # wbk-Zahnrad-Logo (linke Wand). Exakte bit-identische GDRNPP-Welt-Pose
+        # (reproduziert ueber 5 reale Uploads, t_std=0/R_std=0).
+        {"t": [0.6589772257697978, 0.14396749450000074, -0.060819005189524364],
+         "R": [0.20224183164212217, 0.5651220622235716, -0.7998344989304583,
+               0.6973274973536784, 0.4903463092354758, 0.5227760644453029,
+               0.6876282011517266, -0.6634737830300684, -0.29490662850657773]},
+        # zweites rundes Wand-Panel. Exakte bit-identische GDRNPP-Welt-Pose
+        # (reproduziert ueber 7 reale Uploads).
+        {"t": [0.2522968469027424, 0.5653873162944252, -0.06658828936692851],
+         "R": [-0.6138009081380393, -0.0028099556503303155, -0.7894558427358523,
+               -0.7889584846565993, -0.03348608343804366, 0.6135334163089187,
+               -0.028159795450809898, 0.9994351778142537, 0.018336867611907486]},
+    ]
+
+
+def _sym_rot_angle_deg(R1, R2):
+    """Minimaler geodaetischer Rotationswinkel (deg) zwischen R1 und R2, sym-aware
+    ueber die obj6-Symmetrien. Ein Wand-Decal (Zahnrad) ist C7-symmetrisch — eine
+    naive Winkel-Distanz wuerde symmetrie-aequivalente Posen kuenstlich auseinander-
+    ziehen. Wir nehmen das Minimum ueber R2@S, S in den diskreten Symmetrien."""
+    import numpy as np
+    best = 180.0
+    for S in _wallfp_sym_rotations():
+        Rrel = np.asarray(R1).T @ (np.asarray(R2) @ S)
+        c = (np.trace(Rrel) - 1.0) / 2.0
+        a = float(np.degrees(np.arccos(np.clip(c, -1.0, 1.0))))
+        if a < best:
+            best = a
+    return best
+
+
+def _is_static_wall_fp(t_world, R_world, table_origin, obj_id):
+    """True wenn die Pred eine bekannte statische Wand-Panel-Pose ist (T-113-reopen).
+
+    NUR fuer Zahnrad/obj6 (die einzigen Objekte, die die runden Wand-Lochplatten-Panels
+    fehl-detektieren). Eng toleriert auf VOLLER 6DoF-Welt-Pose: t-Distanz < t_tol UND
+    sym-aware-Rotationswinkel < r_tol. Echte Teile, die zufaellig positionsnah liegen,
+    haben eine andere Rotation und werden NICHT getroffen (empirisch 0/1484 echte GT)."""
+    if int(obj_id) != 6:
+        return False
+    import numpy as np
+    poses, t_tol, r_tol = _wallfp_registry()
+    if not poses:
+        return False
+    # absolute Welt-Position (t_world ist rel. Tisch; Registry-t ebenso → gleicher Frame,
+    # table_origin hebt sich auf, wir vergleichen direkt in t_world-Koordinaten).
+    tw = np.asarray(t_world, float)
+    Rw = np.asarray(R_world, float).reshape(3, 3)
+    for p in poses:
+        pt = np.asarray(p["t"], float)
+        if np.linalg.norm(tw - pt) > t_tol:
+            continue
+        if _sym_rot_angle_deg(Rw, p["R"]) <= r_tol:
+            return True
+    return False
+
+
 def _project_world_to_image(t_world, table_origin, R_w2c, t_w2c, K):
     """Pred-Welt-Position -> Bild-Pixel (u,v). Für 2D↔3D-Box-Korrelation.
 
@@ -726,13 +888,23 @@ def _add_pred_filtered(results, kept_proj, R, t, R_w2c, t_w2c, table_origin,
                        obj_id, inst_id, conf, K=None):
     """Pred -> world-Result, NUR anhängen wenn on-table (T-113-Off-Table-Filter).
 
+    Zwei Filter-Linien:
+      1) Workspace-Box: die gesnappte Welt-XY muss in der Arbeitsflaeche liegen
+         (faengt Off-Table-FPs, deren Pose neben den Tisch projiziert).
+      2) Statische-Wand-FP-Registry (T-113-reopen): faengt Wand-Decal-FPs (wbk-Logo
+         + 2. Panel), deren GDRN-Pose tisch-konsistent IN die Arbeitsflaeche
+         halluziniert. Eng toleriert auf voller 6DoF-Pose (sym-aware) → droppt keine
+         echten Teile (empirisch 0/1484 echte obj6-GT).
+
     Hängt bei on-table das pred-Result an `results` an und (wenn K gegeben) die
-    Bild-Projektion an `kept_proj` (für 2D-Box-Konsistenz). Off-table → verworfen
+    Bild-Projektion an `kept_proj` (für 2D-Box-Konsistenz). Gedroppt → verworfen
     (nicht in results, nicht in kept_proj → Box wird auch nicht gezeichnet).
-    Gibt True zurück wenn behalten, False wenn als Off-Table-FP gedroppt."""
+    Gibt True zurück wenn behalten, False wenn als FP gedroppt."""
     res = _bop_pose_to_result(R, t, R_w2c, t_w2c, table_origin, obj_id,
                               inst_id, "pred", conf, snap=True)
     if not _pred_on_table(res["t_world"], table_origin):
+        return False
+    if _is_static_wall_fp(res["t_world"], res["R_world"], table_origin, obj_id):
         return False
     results.append(res)
     if K is not None and kept_proj is not None:
