@@ -401,13 +401,17 @@ async def real_infer(image: UploadFile = File(...),
     R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
     t_w2c = np.array(cam["cam_t_w2c"], float)
     table_origin = _table_origin()
-    results = []
-    for i, p in enumerate(wp):
-        results.append(_bop_pose_to_result(
-            np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
-            R_w2c, t_w2c, table_origin, p["obj_id"], i + 1, "pred", p.get("score", 1.0), snap=True))
+    results, kept_proj, n_drop = [], [], 0
+    iid = 0
+    for p in wp:
+        iid += 1
+        if not _add_pred_filtered(results, kept_proj,
+                                  np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
+                                  R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
+            n_drop += 1
     doc = {"meta": {"source_image": f"real_{job}", "table_origin": table_origin, "units": "m",
-                    "n_det": n_det, "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin)},
+                    "n_det": n_det, "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
+                    "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin)},
            "results": results}
     json.dump(doc, open(RENDERS / f"real_{job}.json", "w"))
     return {"job": job, "n_parts": len(results), "n_det": n_det,
@@ -478,13 +482,17 @@ def _real_infer_job(job, img_bytes, fname):
         R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
         t_w2c = np.array(cam["cam_t_w2c"], float)
         table_origin = _table_origin()
-        results = []
-        for i, p in enumerate(wp):
-            results.append(_bop_pose_to_result(
-                np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
-                R_w2c, t_w2c, table_origin, p["obj_id"], i + 1, "pred", p.get("score", 1.0), snap=True))
+        results, kept_proj, n_drop = [], [], 0
+        iid = 0
+        for p in wp:
+            iid += 1
+            if not _add_pred_filtered(results, kept_proj,
+                                      np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
+                                      R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
+                n_drop += 1
         doc = {"meta": {"source_image": f"real_{job}", "table_origin": table_origin, "units": "m",
-                        "n_det": n_det, "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin)},
+                        "n_det": n_det, "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
+                        "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin)},
                "results": results}
         # Atomar schreiben (Frontend pollt -> kein Race auf halb-geschriebenes JSON)
         with open(RENDERS / f"real_{job}.json", "w") as _f:
@@ -622,6 +630,118 @@ def _table_origin():
         return [0.0, 0.0, 0.08]
 
 
+# ── T-113: Off-Table-Pred-Filter ────────────────────────────────────────────
+# Der OBB-Detektor halluziniert gelegentlich ein "Teil" auf Zell-Wand-Features
+# (z.B. das wbk-Zahnkranz-Logo, T-112-Befund). Solche FPs erzeugen entweder eine
+# Pred, deren back-projizierte Welt-Position WEIT neben der Arbeitsfläche liegt
+# (Wand statt Tisch), oder eine 2D-Box ohne überhaupt eine valide 3D-Pose. Beides
+# soll raus — aus den 3D-results UND der 2D-PiP (konsistent), damit kein Phantom-
+# Teil/Phantom-Box mehr erscheint. NUR Pred wird gefiltert; GT (echte gespawnte
+# Teile aus scene_gt) ist immer on-table und bleibt unberührt.
+#
+# Kriterium = Welt-XY der Pred muss in der ARBEITSFLÄCHE liegen. Z ist durch
+# planar_z_snap auf den Tisch gezogen → XY ist das diskriminierende Maß.
+#
+# WORKSPACE_BOX (WORLD-Frame, Meter) — empirisch aus 4043 GT-Posen über 10 val-
+# Szenen kalibriert: deckt ALLE echten Teile ab (0/4043 fälschlich gedroppt) mit
+# Sicherheitsmarge. WICHTIG: das spawn-window aus gen_sdg_arm_visible.py
+# (x[0.057,0.783] y[0.042,0.537]) ist NUR der DROP-Bereich — die Teile rollen
+# danach physikbasiert über die ganze Tischfläche, u.a. in die beidseitigen Trays
+# (Poltopf_Tray x[-0.204,-0.004], Anker_Tray x[0.806,1.021]). Würde man nur das
+# spawn-window (+ kleine Toleranz) als Kriterium nehmen, fielen 574/4043 echte
+# GT-Teile raus — viel zu aggressiv. Die Workbox umschließt die volle gemessene
+# GT-Ausdehnung (x[-0.152,0.965] y[-0.056,0.653]) plus ~10cm Rand. KONSERVATIV:
+# im Zweifel behalten (lieber ein FP durch als ein echtes Tisch-Teil gefiltert).
+# Override via env (kommagetrennt "xmin,xmax,ymin,ymax").
+def _workspace_box():
+    raw = os.environ.get("KIP_WORKSPACE_BOX")
+    if raw:
+        try:
+            xl, xh, yl, yh = (float(v) for v in raw.split(","))
+            return (xl, xh), (yl, yh)
+        except Exception:
+            pass
+    return (-0.25, 1.07), (-0.12, 0.72)
+
+
+def _pred_world_xy(t_world, table_origin):
+    """Welt-XY einer Pred (t_world ist pose-frame = world - table_origin).
+
+    world_xy = t_world_xy + table_origin_xy. Bei der aktuellen Tisch-Definition
+    ist table_origin.xy == 0 (nur z=0.08), wir addieren es trotzdem explizit →
+    frame-robust falls der Tisch-Nullpunkt künftig in XY verschoben wird."""
+    return (float(t_world[0]) + float(table_origin[0]),
+            float(t_world[1]) + float(table_origin[1]))
+
+
+def _pred_on_table(t_world, table_origin):
+    """True wenn die Pred-Welt-XY in der Arbeitsfläche liegt (sonst Off-Table-FP)."""
+    wx, wy = _pred_world_xy(t_world, table_origin)
+    (xl, xh), (yl, yh) = _workspace_box()
+    return (xl <= wx <= xh) and (yl <= wy <= yh)
+
+
+def _project_world_to_image(t_world, table_origin, R_w2c, t_w2c, K):
+    """Pred-Welt-Position -> Bild-Pixel (u,v). Für 2D↔3D-Box-Korrelation.
+
+    Verifiziert (T-113): die Rückprojektion einer behaltenen Pred landet exakt im
+    Zentrum ihrer Detektor-Box → eine det-Box wird nur gezeichnet, wenn eine
+    behaltene Pred dorthin projiziert (immun gegen Loader-Reorder + löst Box-ohne-
+    Pred wie das Wand-Zahnrad). Gibt None bei pc.z<=0 (hinter der Kamera)."""
+    import numpy as np
+    wmm = np.array([float(t_world[0]) + float(table_origin[0]),
+                    float(t_world[1]) + float(table_origin[1]),
+                    float(t_world[2]) + float(table_origin[2])], float) * 1000.0
+    pc = np.asarray(R_w2c, float) @ wmm + np.asarray(t_w2c, float)
+    if pc[2] <= 1e-6:
+        return None
+    Kk = np.asarray(K, float)
+    u = Kk[0, 0] * pc[0] / pc[2] + Kk[0, 2]
+    v = Kk[1, 1] * pc[1] / pc[2] + Kk[1, 2]
+    return (float(u), float(v))
+
+
+def _box_has_kept_pred(bbox_xywh, oid, kept_proj):
+    """True wenn eine behaltene Pred dieses obj_id in diese Box projiziert.
+
+    kept_proj: Liste [{obj_id,u,v}] der behaltenen (on-table) Preds. Eine Box wird
+    nur gezeichnet, wenn mind. eine behaltene Pred gleicher obj_id mit ihrer Bild-
+    Projektion innerhalb der Box (kleiner Rand) liegt. Off-table-Preds sind nicht
+    in kept_proj → ihre Box verschwindet; Detektionen ohne valide Pose (Wand-
+    Zahnrad) haben keine Projektion → ihre Box verschwindet. 2D == 3D."""
+    x, y, w, h = bbox_xywh
+    pad = 0.25 * max(w, h)            # toleranter Rand (Projektion ~ Box-Zentrum)
+    for kp in kept_proj:
+        if int(kp.get("obj_id", -1)) != int(oid):
+            continue
+        u, v = kp.get("u"), kp.get("v")
+        if u is None or v is None:
+            continue
+        if (x - pad) <= u <= (x + w + pad) and (y - pad) <= v <= (y + h + pad):
+            return True
+    return False
+
+
+def _add_pred_filtered(results, kept_proj, R, t, R_w2c, t_w2c, table_origin,
+                       obj_id, inst_id, conf, K=None):
+    """Pred -> world-Result, NUR anhängen wenn on-table (T-113-Off-Table-Filter).
+
+    Hängt bei on-table das pred-Result an `results` an und (wenn K gegeben) die
+    Bild-Projektion an `kept_proj` (für 2D-Box-Konsistenz). Off-table → verworfen
+    (nicht in results, nicht in kept_proj → Box wird auch nicht gezeichnet).
+    Gibt True zurück wenn behalten, False wenn als Off-Table-FP gedroppt."""
+    res = _bop_pose_to_result(R, t, R_w2c, t_w2c, table_origin, obj_id,
+                              inst_id, "pred", conf, snap=True)
+    if not _pred_on_table(res["t_world"], table_origin):
+        return False
+    results.append(res)
+    if K is not None and kept_proj is not None:
+        proj = _project_world_to_image(res["t_world"], table_origin, R_w2c, t_w2c, K)
+        if proj is not None:
+            kept_proj.append({"obj_id": int(obj_id), "u": proj[0], "v": proj[1]})
+    return True
+
+
 _OID = {"anker_kurz": 1, "anker_lang": 2, "zahnrad": 6}
 
 def _trained_oids():
@@ -692,12 +812,16 @@ def _build_sim_doc(scene, im=-1, use_worker=False):
             source = "worker"
     if preds is None:
         preds = _preds_for(scene, im)
+    kept_proj, n_drop = [], 0
     for oid, R, t, sc in preds:
         iid += 1
-        results.append(_bop_pose_to_result(R, t, R_w2c, t_w2c, table_origin, oid, iid, "pred", sc, snap=True))
+        if not _add_pred_filtered(results, kept_proj, R, t, R_w2c, t_w2c,
+                                  table_origin, oid, iid, sc, K=K):
+            n_drop += 1
     return {
         "meta": {"source_image": f"{scene:06d}/rgb/{im:06d}.png", "table_origin": table_origin,
                  "units": "m", "scene": scene, "im": im, "source": source,
+                 "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
                  "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin),
                  "n_gt": sum(1 for r in results if r["color"] == "gt"),
                  "n_pred": sum(1 for r in results if r["color"] == "pred")},
@@ -786,12 +910,21 @@ def real_boxes(job: str):
         raise HTTPException(404, "Bild oder Detektionen nicht gefunden")
     img = Image.open(rgb).convert("RGB"); draw = ImageDraw.Draw(img)
     det = json.load(open(detp))
+    # T-113: nur Boxen zeichnen, zu denen eine behaltene (on-table) Pred projiziert
+    # — Off-Table-FPs (Wand-Zahnrad) erscheinen weder in 3D noch hier (2D == 3D).
+    # Doc fehlt -> konservativ alle Boxen zeichnen (kein Filter).
+    docp = RENDERS / f"real_{job}.json"
+    _meta = json.load(open(docp)).get("meta", {}) if docp.exists() else None
+    _filter = _meta is not None
+    kept_proj = (_meta or {}).get("kept_proj", [])
     # det.json ist dict {scene/im: [{obj_id, bbox_est=[x,y,w,h], score, ...}]}
     boxes = []
     for k, lst in det.items():
         for b in lst:
             boxes.append((int(b["obj_id"]), b["bbox_est"], float(b.get("score", 0.0))))
     for oid, (x, y, w, h), sc in boxes:
+        if _filter and not _box_has_kept_pred((x, y, w, h), oid, kept_proj):
+            continue
         col = _BBOX_COLOR.get(oid, (52, 211, 153))
         draw.rectangle([x, y, x + w, y + h], outline=col, width=4)
         label = f"{_BBOX_LABEL.get(oid, str(oid))}  {sc*100:.0f}%"
@@ -952,12 +1085,13 @@ def _sim_generate_job(job):
         else:
             wp = []
 
+        kept_proj, n_drop = [], 0
         for p in wp:
             iid += 1
-            results.append(_bop_pose_to_result(
-                np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
-                R_w2c, t_w2c, table_origin, p["obj_id"], iid, "pred", p.get("score", 1.0),
-                snap=True))
+            if not _add_pred_filtered(results, kept_proj,
+                                      np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
+                                      R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
+                n_drop += 1
 
         _job_set(job, phase="BOP -> Welt + Boden-Snap", pct=95)
         n_gt = sum(1 for r in results if r["color"] == "gt")
@@ -965,6 +1099,7 @@ def _sim_generate_job(job):
         doc = {
             "meta": {"source_image": f"live/{job}", "table_origin": table_origin,
                      "units": "m", "scene": 99, "im": 0, "source": "isaac-live",
+                     "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
                      "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin),
                      "n_gt": n_gt, "n_pred": n_pred, "seed": seed, "n_obj": n_obj},
             "results": results,
@@ -1015,9 +1150,17 @@ def sim_live_boxes(job: str):
     img = Image.open(rgb).convert("RGB"); draw = ImageDraw.Draw(img)
     if detp.exists():
         det = json.load(open(detp))
+        # T-113: nur Boxen mit behaltener (on-table) Pred — Off-Table-FPs raus (2D == 3D).
+        # Doc fehlt (z.B. Server-Neustart nach Generation) -> konservativ: alle
+        # Boxen zeichnen (lieber ein FP durch als alle Boxen verstecken).
+        _doc = _SIM_DOCS.get(job)
+        _filter = _doc is not None
+        kept_proj = (_doc or {}).get("meta", {}).get("kept_proj", [])
         for k, lst in det.items():
             for b in lst:
                 oid = int(b["obj_id"]); x, y, w, h = b["bbox_est"]
+                if _filter and not _box_has_kept_pred((x, y, w, h), oid, kept_proj):
+                    continue
                 col = _BBOX_COLOR.get(oid, (52, 211, 153))
                 draw.rectangle([x, y, x + w, y + h], outline=col, width=4)
                 label = f"{_BBOX_LABEL.get(oid, str(oid))}  {float(b.get('score',0))*100:.0f}%"

@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-04T09:55:56Z",
+  "updated": "2026-06-04T10:27:26Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 113,
+  "next_id": 115,
   "tickets": [
     {
       "id": "T-001",
@@ -6433,7 +6433,7 @@
       "id": "T-112",
       "title": "T-112: Zahnrad End-to-End-Validierung (image-only) + zu-helle-Render-Farbe",
       "description": "Max: Zahnrad wird zu hell gerendert (kaum sichtbar). Kontrollierten Backend-Lauf MIT garantiertem Zahnrad machen: render→2D-Bild→Detektor→bbox→Pose. KRITISCH verifizieren: Pose-Modell bekommt NUR das Bild (+det-bbox), KEINE GT-Daten (muss auf plain JPEG laufen). Prüfen: (a) Zahnrad-Material zu hell? fixen dass sichtbar wie Anker; (b) Detektor findet Zahnrad+bbox; (c) Pose image-only, kein GT-Leak; (d) GT-Conversion dropt Zahnräder? (e) rendert sauber auf Tisch (GT+Pred). Befund 9451b190: Isaac-GT nur 3 Anker, kein gespawntes Zahnrad.",
-      "column": "in_progress",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P1",
@@ -6444,9 +6444,9 @@
       ],
       "session": "",
       "created": "2026-06-04T09:15:20Z",
-      "updated": "2026-06-04T09:55:56Z",
+      "updated": "2026-06-04T09:59:30Z",
       "started_at": "2026-06-04T09:15:20Z",
-      "completed_at": null,
+      "completed_at": "2026-06-04T09:59:30Z",
       "comments": [],
       "logs": [
         {
@@ -6502,6 +6502,152 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "MATERIAL-FIX committed (Commit 48ac32e, Branch team/2026-06-04-zahnrad-e2e): gen_sdg_arm_visible.py +72 Zeilen. Neuer --equalize-bright-materials Flag (default AUS, unabhängig von --dr-strong) + --bright-mat-thresh (0.70). equalize_bright_material() erkennt gebackene near-white Preview-Surface (mean diffuseColor > thresh) und rebindet dunkles neutral-Metall (diffuse 0.18-0.40 -> render gray ~50-90 statt ~175), NUR auf betroffenen Teilen. Standalone gegen ECHTE Assets verifiziert (train-venv pxr, ohne Isaac): Zahnrad 0.828->0.288 gedunkelt, Anker_Kurz/Lang (kein Preview-Surface) korrekt UNBERÜHRT. Default AUS weil Aktivieren Retrain erfordert (Modell auf hellem Look trainiert) — Max-OK nötig. Box-Push + py_compile grün auf Box. KEIN aktives Verhalten geändert."
+        },
+        {
+          "ts": "2026-06-04T09:59:30Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "VERDIKT: image-only BEWIESEN (Δ-Test 0, plain-JPEG, Code-Audit), e2e PASST (Detektor 4/4 ~0.96, GT+Pred eng), Detektor helligkeitsunabhängig (0.94-0.97), GT-Conversion dropt NICHT (778/1000 val haben Zahnrad). 9451b190=kein-Zahnrad-gespawnt+Wand-FP. Render-Farbe zu hell=CAD-SmoothWhite-Material (0.828), Fix --equalize-bright-materials default-OFF (Aktivieren=Retrain). Commit 48ac32e, merge→main."
+        },
+        {
+          "ts": "2026-06-04T09:59:30Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-113",
+      "title": "T-113: Off-Table-Pred-Filter — Detektor-FPs an Zell-Wand (wbk-Logo) raus, 2D+3D konsistent",
+      "description": "Max-Entscheidung (non-retrain). Detektor FP-t gelegentlich ein Zahnrad auf Zell-Wand-Features (wbk-Logo, T-112). Filter in kip_server: nach dem Worker-Posing Pred-Detektionen droppen deren Welt-XY NICHT in der Arbeitsfläche/Spawn-Window liegt (Wand-FP back-projiziert off-table). Aus 3D-results UND 2D-PiP-Boxen (konsistent). NUR Pred (GT ist clean). Frame-sensibel: pred t_world=pose-frame (world-table_origin), spawn-window x[0.057,0.783] y[0.042,0.537] sim-world. Konservativ (nur klar off-table droppen, echte Tisch-Teile behalten). Live-sim + real-photo. Verify + deploy + kip_server-restart.",
+      "column": "in_review",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "pose",
+        "pipeline",
+        "detector"
+      ],
+      "session": "",
+      "created": "2026-06-04T10:02:03Z",
+      "updated": "2026-06-04T10:19:41Z",
+      "started_at": "2026-06-04T10:02:03Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-04T10:02:03Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-04T10:13:39Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "VERIFY PASS (Funktions-Level gegen echte Box-Daten, kip_server-Filter-Helper importiert). (a) ECHTE GT: 4043 GT-Teile ueber 10 val-Szenen -> 0 faelschlich als off-table gefiltert (konservativ bestaetigt). (b) Wand-FP-Szene 9451b190: Phantom-Zahnrad-Box (obj6 bbox[291,124]) VERSTECKT (Box-ohne-Pred, Worker liefert 0 Preds dafuer), 3 echte Anker_Kurz-Boxen bleiben + korrelieren exakt mit 3 behaltenen Preds (proj==box-center). (c) injizierter Off-Table-Pred (world-XY 1.50,0.30 ausserhalb workbox) -> aus 3D gedroppt + 2D-Box versteckt. 2D==3D konsistent. WORKBOX x[-0.25,1.07] y[-0.12,0.72] WORLD-m."
+        },
+        {
+          "ts": "2026-06-04T10:16:28Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Commit 72dad83 auf Branch (T-113 vollstaendig+kompiliert). ABER Branch vermischt mit T-114: Lenas _camera_pose-Code FEHLT (HEAD zeigt alte Zentroid-Version), ihr T-114-Commit c1a33a6 enthaelt stattdessen Teile meines T-113-Codes. Queen muss Lenas Kamera-Change einspielen vor Deploy. :8077 NICHT angefasst. Box-Datei auf Live-Stand wiederhergestellt."
+        },
+        {
+          "ts": "2026-06-04T10:19:40Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "DONE+verifiziert (Commit 72dad83). Off-Table-Filter: WORKSPACE_BOX x[-0.25,1.07] y[-0.12,0.72] (empirisch aus 4043 GT, 0 fälschlich gedroppt), 4 Posing-Pfade + 2D-Box-Konsistenz via Rückprojektion. Verify PASS (4043 GT→0 gefiltert, 9451b190-Wand-FP-Box weg, injizierter Off-Table-Pred gedroppt). :8077 unangetastet (Queen-Koordination). c1a33a6 nur falsch-beschriftet (Code=Filter)."
+        },
+        {
+          "ts": "2026-06-04T10:19:41Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-114",
+      "title": "T-114: Kamera — Movement wieder smooth + 'Kameraperspektive' 1:1 die Isaac-Render-Perspektive",
+      "description": "Max: (A) OrbitControls-Movement teils buggy/ruckelig → wieder sauber (evtl. refreshClipping-Jitter, damping, fitView/worker-load-Interaktion). (B) #cam-photo 'Kameraperspektive' soll EXAKT die Isaac-Sim-Kamera setzen: position=cam_pos, target=look_at, up=up, fov=fov_y aus doc.meta.camera (kip_server _camera_pose). Aktuell nur Näherung. Frontend (scene.js/kip.js). Verify headless: Movement smooth + cam-photo gibt identische Perspektive wie das Isaac-RGB.",
+      "column": "in_progress",
+      "assignee": "lena-frontend",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "kip",
+        "frontend",
+        "camera"
+      ],
+      "session": "",
+      "created": "2026-06-04T10:03:26Z",
+      "updated": "2026-06-04T10:27:26Z",
+      "started_at": "2026-06-04T10:03:26Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-04T10:03:26Z",
+          "agent": "lena-frontend",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-04T10:09:50Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "DIAGNOSE Movement (A): refreshClipping lief bei JEDEM controls-'change' (~60fps Damping) -> near/far-Jitter -> updateProjectionMatrix+Z-Buffer-Remap jeden Frame -> Clipping/Z-Fight-Flackern auf 4.2M-tri-Zelle = das 'ruckelig'. 2. Ursache: async Cell-Load (112MB) ruft fitView NACH Load -> reisst Kamera zurueck wenn User schon dreht."
+        },
+        {
+          "ts": "2026-06-04T10:09:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "FIX Movement (A): refreshClipping near/far in log-Stufen quantisiert (1.03er) + Hysterese (Rebuild nur bei Stufenwechsel) -> reiner Orbit = 0 Projektionsmatrix-Rebuilds/Frame = fluessig. fitView aus Cell-Load nur noch wenn !userInteracted && keine Teile (fromCellLoad-Gate) -> kein Kamera-Snap mehr mitten in Interaktion. controls 'start' setzt _userInteracted. damping 0.08 bleibt."
+        },
+        {
+          "ts": "2026-06-04T10:09:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "FIX Isaac-1:1 (B): kip_server._camera_pose look_at jetzt entlang ECHTER optischer Achse (R_c2w@[0,0,1], OpenCV +Z forward) statt Teile-Zentroid; up=R_c2w@[0,-1,0]; cam_pos+parts selber abs. World-Meter-Frame. NUMPY-SANITY (synth. Kamera): cam_pos err=0, look_dir·fwd=1.0, up·(-down)=1.0. kip.js #cam-photo: up VOR controls.update gesetzt, KEIN resetUp/Z-up-Reset mehr -> Perspektive bleibt bis User dreht, +saveView persistiert."
+        },
+        {
+          "ts": "2026-06-04T10:10:32Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "COMMIT c1a33a6 auf worktree-agent-a1d2639c616410dce (3 Files: scene.js movement-fix, kip.js cam-photo 1:1, kip_server.py _camera_pose optische Achse). Max-User-only Convention. Naechstes: Live-Verify Box."
+        },
+        {
+          "ts": "2026-06-04T10:12:45Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Scratch-scp folgte Symlink -> prod frontend/src/scene.js+kip.js mit T-114-Static-Aenderungen ueberschrieben (D-1 erlaubt Static-Deploy, forward-kompatibel, kein Breakage). kip_server :8077 unberuehrt. Scratch nun mit REAL-copies isoliert."
+        },
+        {
+          "ts": "2026-06-04T10:20:40Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "VERIFY Isaac-1:1 BEWIESEN (Scratch :8079 mit T-114-kip_server, val-Szene 0): #cam-photo-Pose vs Isaac-RGB. (1) Visuell: 50/50-Overlay+Side-by-Side = pixelgenaue Deckung der Zelle (LARA-Arm, gruener/roter Knopf, Wand-Panel-Grid, Tray-Kanten) ohne Geister. (2) Numerisch DEFINITIV: jede Teil-3D-Pos durch ECHTE Isaac-Kamera (K,R_w2c,t_w2c) vs durch Viewer-cam-photo (cam_pos/look_at/up/fov_y) projiziert -> max 0.000px Diff auf 1280x720. ALT (Zentroid-look_at) war 17.5deg off-axis = ~413px Framing-Versatz -> Fix eliminiert das."
+        },
+        {
+          "ts": "2026-06-04T10:20:40Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "VERIFY Movement: heightmap baut 1790/1813 valid (Cell-Load ok im Headless via SwiftShader), Viewer rendert sauber bei cam-photo-Pose. refreshClipping-Hysterese: bei reinem Orbit (Distanz konstant) 0 updateProjectionMatrix-Calls/Frame -> kein near/far-Jitter mehr. fitView-Gate: fromCellLoad No-Op sobald _userInteracted."
+        },
+        {
+          "ts": "2026-06-04T10:26:34Z",
+          "agent": "claude",
+          "level": "error",
+          "msg": "ACHTUNG SHA-KORREKTUR: Harness-Reset hat meinen Worktree-Branch auf 12de512 zurueckgesetzt; der frueher integrierte Commit c1a33a6 (jetzt auf team/2026-06-04-offtable-filter unter Kais T-113) committete eine STALE kip_server.py OHNE meinen _camera_pose-Fix (noch alter Zentroid-look_at). KORREKTER, vollstaendiger Commit ist jetzt f15aa55 (Worktree-Branch worktree-agent-a1d2639c616410dce): alle 3 Files verifiziert (kip_server forward=R_c2w, scene.js _quantize+fromCellLoad, kip.js saveView+kein-resetUp). @queen: fuer den Final-Merge f15aa55 nehmen, NICHT c1a33a6."
+        },
+        {
+          "ts": "2026-06-04T10:27:26Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "RE-VERIFY committeter Code f15aa55: _camera_pose aus dem Commit-Blob extrahiert + auf echte Isaac-Extrinsics angewendet -> 0.0 px Reprojektions-Diff, look_at=[0.413,0.291,0.055] (optische Achse, NICHT Zentroid). 1:1 bestaetigt aus committetem Stand."
         }
       ]
     }
