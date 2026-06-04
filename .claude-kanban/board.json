@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-04T10:27:26Z",
+  "updated": "2026-06-04T11:11:54Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 115,
+  "next_id": 116,
   "tickets": [
     {
       "id": "T-001",
@@ -6648,6 +6648,64 @@
           "agent": "claude",
           "level": "success",
           "msg": "RE-VERIFY committeter Code f15aa55: _camera_pose aus dem Commit-Blob extrahiert + auf echte Isaac-Extrinsics angewendet -> 0.0 px Reprojektions-Diff, look_at=[0.413,0.291,0.055] (optische Achse, NICHT Zentroid). 1:1 bestaetigt aus committetem Stand."
+        }
+      ]
+    },
+    {
+      "id": "T-115",
+      "title": "T-115: gdrnpp-Worker lädt Zahnrad-Modell (obj 6) nie → Worker skippt alle Zahnrad-Detektionen (KEINE im 3D)",
+      "description": "ROOT CAUSE für Max' 'Zahnräder erkannt aber nie im 3D': Worker (box_src/kip_infer_worker.py, :8078) WARMt anker_kurz(1)+anker_lang(2), aber zahnrad(6)-Load HÄNGT beim Warmup (Log: 'register dataset pose_isaac_zahnrad_train_pbr' 0604_161716, KEIN 'WARM zahnrad'-Eintrag, proctitle steckt 'zahnrad.20260604_161716'). STATE['models'] ohne 6 → Worker dropt obj-6-Preds. Bewiesen: /infer_upload auf det [1,1,6,1] → preds [1,1,1]. Verdacht: zahnrad.py DATASETS.TEST zeigt auf train_pbr (riesig) statt Val. Fix: zahnrad-Modell muss am Warmup durchladen. model_best.pth existiert (1.6G). Worker restart + verify obj 6 posed + e2e.",
+      "column": "in_progress",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose",
+        "worker",
+        "detector"
+      ],
+      "session": "",
+      "created": "2026-06-04T10:35:47Z",
+      "updated": "2026-06-04T11:11:54Z",
+      "started_at": "2026-06-04T10:35:47Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-04T10:35:47Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-04T10:36:56Z",
+          "agent": "kai-ml",
+          "level": "info",
+          "msg": "Start: Box-Verbindung, root-cause Zahnrad-Warmup-Hang im Worker :8078"
+        },
+        {
+          "ts": "2026-06-04T10:40:10Z",
+          "agent": "kai-ml",
+          "level": "warn",
+          "msg": "Hang-Hypothese korrigiert: zahnrad geladen (ALL READY [1,2,6]) aber /infer_upload droppt obj6 still (except:continue in run_upload Z136). Reproduziert: preds [1,1,1] statt [1,1,1,6]."
+        },
+        {
+          "ts": "2026-06-04T10:43:25Z",
+          "agent": "kai-ml",
+          "level": "error",
+          "msg": "ROOT CAUSE: per-Request-Loader GT-abhaengig (pose_isaac_pbr 'if len(insts)==0:continue'). Upload-scene_gt [2,1,1] hat kein obj6 -> zahnrad base-Dataset leer -> 'Dataset is empty!' -> swallowed. Fix: det-getriebener Dataset-Build (GT ignorieren bei LOAD_DETS_TEST)."
+        },
+        {
+          "ts": "2026-06-04T10:56:28Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "Worker-Restart (fix e70772d): Log 'WARM zahnrad (obj_id 6) in 83.9s, 778 inputs' + 'ALL READY: [1, 2, 6]'; /health ready=True loaded=[1,2,6]. kip-server :8077 unberuehrt."
+        },
+        {
+          "ts": "2026-06-04T11:11:54Z",
+          "agent": "kai-ml",
+          "level": "success",
+          "msg": "FIX VERIFIZIERT e2e. (1) /infer_upload obj_ids[1,1,1,6] -> preds [1,1,1,6], obj6 t.z=1057mm det(R)=1.0 ortho (war [1,1,1]). (2) Voller kip_server-Live-Pfad /api/real/infer auf echtem RGB: n_det=4 -> PRED [Anker_Kurz x3, Zahnrad], Zahnrad t_world=[0.659,0.144,-0.061] color=pred -> rendert als ROTES Zahnrad im 3D. (3) Original-scene_gt unberuehrt (blaue GT-Overlays sicher). Worker ALL READY [1,2,6], kip-server :8077 NIE angefasst. Commit e70772d Branch team/2026-06-04-worker-zahnrad."
         }
       ]
     }
