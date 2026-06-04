@@ -98,6 +98,84 @@ def run_infer(scene, im):
     return {"preds": preds, "n": len(preds), "ms": round((time.time()-t0)*1000)}
 
 
+def _build_det_consistent_root(updir, full_det):
+    """T-115-FIX: baut ein ISOLIERTES det-getriebenes Dataset-Root neben updir.
+
+    PROBLEM: Der base-Loader (pose_isaac_pbr) baut Records NUR aus scene_gt-Instanzen
+    mit obj_id in cat_ids und droppt jedes Bild ohne passende GT ('if len(insts)==0:
+    continue'). Findet der Detektor ein obj (z.B. Zahnrad/obj 6), das NICHT in der
+    scene_gt steht (Live-Sim-GT ohne dieses Spawn, oder FP), wird sein single-obj-
+    Dataset leer -> detectron2 'Dataset is empty!' -> das obj wird (frueher still)
+    NIE posiert.
+
+    FIX: ein neues Root '<updir>/_t115_det_root' anlegen, das rgb/depth/scene_camera
+    je Szene per SYMLINK referenziert und eine det-vollstaendige Dummy-scene_gt(+info,
+    +masken) traegt — eine Instanz je im det vorkommender obj_id. So hat JEDES
+    detektierte obj ein nicht-leeres base-Dataset. Bei LOAD_DETS_TEST=True ist die GT
+    semantisch irrelevant (load_detections ersetzt die Annotationen durch die echten
+    Det-Boxen), also unschaedlich fuer bereits funktionierende Objekte (Anker).
+
+    WICHTIG: das ORIGINAL-updir bleibt voellig UNANGETASTET — dort liegt im Live-Sim-
+    Pfad die ECHTE scene_gt, die kip_server (:8077) fuer die blauen GT-Overlays liest.
+    Wir ueberschreiben sie NICHT, sondern bauen ein separates Root. Gibt das neue Root
+    zurueck (als dataset_root fuer alle obj-Loader), None wenn kein Bild vorhanden."""
+    import shutil as _sh
+    from PIL import Image as _Img, ImageDraw as _Draw
+    # det-keys "scene/im" -> {scene_id: {int_im_id: [obj_id, ...]}}
+    per_scene = {}
+    for sii, dets in full_det.items():
+        if not dets:
+            continue
+        parts = str(sii).split("/")
+        sid = int(parts[0]); iid = int(parts[1]) if len(parts) > 1 else 0
+        per_scene.setdefault(sid, {}).setdefault(iid, [])
+        for d in dets:
+            oid = d.get("obj_id")
+            if oid is not None and oid not in per_scene[sid][iid]:
+                per_scene[sid][iid].append(oid)
+    root = os.path.join(updir, "_t115_det_root")
+    if os.path.exists(root):
+        _sh.rmtree(root, ignore_errors=True)   # frisch je Request (Dummy-GT, kein Verlust)
+    built_any = False
+    for sid, ims in per_scene.items():
+        src = os.path.join(updir, f"{sid:06d}")
+        if not os.path.isdir(src):
+            continue   # kein Bild-Verzeichnis -> Loader saehe es eh nicht
+        dst = os.path.join(root, f"{sid:06d}")
+        os.makedirs(os.path.join(dst, "mask"), exist_ok=True)
+        os.makedirs(os.path.join(dst, "mask_visib"), exist_ok=True)
+        # rgb/depth per Symlink referenzieren (Original-Bilder unberuehrt)
+        for sub in ("rgb", "depth"):
+            s_sub = os.path.join(src, sub)
+            if not os.path.isdir(s_sub):
+                continue
+            d_sub = os.path.join(dst, sub); os.makedirs(d_sub, exist_ok=True)
+            for fn in os.listdir(s_sub):
+                link = os.path.join(d_sub, fn)
+                if not os.path.lexists(link):
+                    os.symlink(os.path.abspath(os.path.join(s_sub, fn)), link)
+        # scene_camera.json kopieren (klein, Loader liest sie pro Bild)
+        s_cam = os.path.join(src, "scene_camera.json")
+        if os.path.exists(s_cam):
+            _sh.copyfile(s_cam, os.path.join(dst, "scene_camera.json"))
+        gt = {}; gi = {}
+        for iid, oids in ims.items():
+            gt[str(iid)] = [{"obj_id": oid, "cam_R_m2c": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+                             "cam_t_m2c": [0, 0, 1000]} for oid in oids]
+            gi[str(iid)] = [{"bbox_visib": [0, 0, 40, 40], "bbox_obj": [0, 0, 40, 40],
+                             "visib_fract": 1.0, "px_count_visib": 1600} for _ in oids]
+            # Dummy-Maske pro Instanz (Loader liest mask/mask_visib unbedingt, >=30 px)
+            for ai in range(len(oids)):
+                msk = _Img.new("L", (1280, 720), 0)
+                _Draw.Draw(msk).rectangle([0, 0, 40, 40], fill=255)
+                msk.save(os.path.join(dst, "mask", f"{iid:06d}_{ai:06d}.png"))
+                msk.save(os.path.join(dst, "mask_visib", f"{iid:06d}_{ai:06d}.png"))
+        json.dump(gt, open(os.path.join(dst, "scene_gt.json"), "w"))
+        json.dump(gi, open(os.path.join(dst, "scene_gt_info.json"), "w"))
+        built_any = True
+    return root if built_any else None
+
+
 def run_upload(updir, det_json):
     """Upload-Inferenz: pro obj_id ein temp-Dataset (kip_upload_<slug>) + Inferenz.
     Det-json hat alle obj_ids (1/2/6), pro Modell wird der det auf diese obj_id gefiltert."""
@@ -106,6 +184,17 @@ def run_upload(updir, det_json):
     from core.gdrn_modeling.engine.gdrn_evaluator import GDRN_Evaluator
     from detectron2.data import DatasetCatalog, MetadataCatalog
     full = json.load(open(det_json))
+    # T-115-FIX: isoliertes det-getriebenes Dataset-Root (Symlinks + Dummy-GT), damit
+    # jedes detektierte obj (z.B. Zahnrad ohne scene_gt-Backing) ein nicht-leeres
+    # base-Dataset bekommt. Original-updir-scene_gt bleibt UNANGETASTET (kip_server
+    # liest sie fuer die blauen GT-Overlays). Fallback: updir, falls Bauen scheitert.
+    ds_root = updir
+    try:
+        r = _build_det_consistent_root(updir, full)
+        if r:
+            ds_root = r
+    except Exception as e:
+        print(f"[worker] WARN _build_det_consistent_root: {e}", flush=True)
     preds = []; t0 = time.time()
     with torch.no_grad():
         for oid, m in STATE["models"].items():
@@ -119,7 +208,7 @@ def run_upload(updir, det_json):
             json.dump(filtered, open(det_oid, "w"))
             ds_name = f"kip_upload_{slug}"
             cfg_up = dict(PIP.SPLITS_POSE_ISAAC[f"pose_isaac_{slug}_val"])
-            cfg_up.update(dataset_root=updir, with_masks=False, with_depth=False,
+            cfg_up.update(dataset_root=ds_root, with_masks=False, with_depth=False,
                           filter_invalid=False, use_cache=False)
             if ds_name in DatasetCatalog.list():
                 DatasetCatalog.remove(ds_name); MetadataCatalog.remove(ds_name)
@@ -133,8 +222,10 @@ def run_upload(updir, det_json):
             ev = GDRN_Evaluator(c2, ds_name, distributed=False, output_dir=f"/tmp/kipup_out_{slug}", train_objs=None)
             try:
                 loader = build_gdrn_test_loader(c2, ds_name, train_objs=ev.train_objs)
-            except Exception:
-                continue   # leere det fuer dieses obj_id (kein Match) -> skip
+            except Exception as e:
+                # T-115: kein stiller Drop mehr — den echten Fehler loggen, dann skip.
+                print(f"[worker] WARN loader fuer {slug} (obj {oid}) leer/fehlgeschlagen: {e}", flush=True)
+                continue
             for inp in loader:
                 rots, trans = _forward(m, inp if isinstance(inp, list) else [inp])
                 for i in range(len(rots)):
