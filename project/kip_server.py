@@ -792,12 +792,16 @@ def _wallfp_default_poses():
          "R": [0.20224183164212217, 0.5651220622235716, -0.7998344989304583,
                0.6973274973536784, 0.4903463092354758, 0.5227760644453029,
                0.6876282011517266, -0.6634737830300684, -0.29490662850657773]},
-        # zweites rundes Wand-Panel. Exakte bit-identische GDRNPP-Welt-Pose
-        # (reproduziert ueber 7 reale Uploads).
-        {"t": [0.2522968469027424, 0.5653873162944252, -0.06658828936692851],
-         "R": [-0.6138009081380393, -0.0028099556503303155, -0.7894558427358523,
-               -0.7889584846565993, -0.03348608343804366, 0.6135334163089187,
-               -0.028159795450809898, 0.9994351778142537, 0.018336867611907486]},
+        # HINWEIS (Queen-Korrektur 2026-06-04): die zweite ehemals hier registrierte Pose
+        # [0.2522,0.5653,-0.0666] war KEIN Wand-Panel, sondern ein ECHTES Zahnrad-Werkstueck
+        # (visuell verifiziert: 3D-Mesh mit Zaehnen + Speichen-Nabe — das blasse Zahnrad, das
+        # Max explizit als real bestaetigt hat: "STOPP der halu nicht, da ist wirklich ein
+        # Zahnrad"). Die Begruendung "bit-identische Pose ueber 7 Uploads = statisch" war
+        # konfundiert: alle 7 Uploads hatten denselben Bild-md5 (f02a403d, dasselbe Foto
+        # re-uploaded) -> das beweist KEINE statische Struktur, nur identische Pixel. Pose
+        # ENTFERNT, damit echte Zahnraeder nicht faelschlich gedroppt werden. Es bleibt NUR
+        # das flache, eingepraegte wbk-Wand-Logo (Pose oben, bbox-Region oben-links/Wand)
+        # registriert. Weitere bestaetigte statische Wand-FPs ggf. via KIP_WALLFP_POSES_FILE.
     ]
 
 
