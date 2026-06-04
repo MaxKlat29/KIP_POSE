@@ -401,6 +401,16 @@ export function createViewer(canvas) {
   // (0.15–0.18) eine Lücke, dann das Struktur-Cluster ab ~0.20. 0.18 trennt sauber:
   // behält Tray-Boden+Kanten, schneidet die Cart-Struktur ab. (T-101)
   const OVERHANG_Z = 0.18;
+  // Untere Plausibilitäts-Schwelle für die Höhenkarte (T-121). Der GROBE Proxy
+  // (cell.glb) hat LÖCHER: an manchen XY (Live-Probe x≈0.32–0.39, y≈0.35–0.36)
+  // gibt es zwischen Empore (1.11) und einem TIEFEN Boden (-0.6..-0.79) GAR KEINE
+  // Arbeitsfläche unter OVERHANG_Z — der Raycast fällt durch die Lücke und
+  // _topSurfaceBelow lieferte dann den -0.79-Müll als "Tischhöhe" → ein Teil
+  // dort wurde 60 cm tief geklemmt (oder der Footprint-Median vergiftet). Die
+  // echte Arbeitsfläche liegt USD-gemessen bei z≈-0.05..+0.15; ein Hit unter
+  // FLOOR_Z ist ein Proxy-Loch, KEINE Auflage → als NaN behandeln (Nachbar/
+  // Median füllt). Großzügig (-0.10) damit reale leichte Vertiefungen bleiben.
+  const FLOOR_Z = -0.10;
   // Cast-Start klar über dem höchsten erwarteten Auflager, aber UNTER dem Overhang
   // wäre falsch (wir wollen ja Hits oberhalb verwerfen, nicht den Cast begrenzen) —
   // wir casten von ganz oben und filtern per OVERHANG_Z.
@@ -415,7 +425,10 @@ export function createViewer(canvas) {
   let _heightMap = null;
   let _hmFallbackZ = 0;   // Median der gültigen Map-Werte → Fallback für NaN-Lookups
 
-  // Höchste getroffene Fläche unter (x,y) UNTERHALB OVERHANG_Z. null = kein Hit.
+  // Höchste getroffene Fläche unter (x,y) im Band [FLOOR_Z, maxZ]. null = kein Hit.
+  // Hits ÜBER maxZ (Empore/Arm/Zwischenebene) UND Hits UNTER FLOOR_Z (Proxy-Loch,
+  // Ray fällt durch eine Lücke auf einen tiefen Sub-Boden) werden verworfen — beide
+  // sind keine Arbeitsfläche. So entsteht die "saubere" Höhenkarte (T-121).
   function _topSurfaceBelow(x, y, maxZ) {
     _hmOrigin.set(x, y, HM_CAST_TOP);
     _raycaster.set(_hmOrigin, _down);
@@ -424,6 +437,7 @@ export function createViewer(canvas) {
     for (const h of hits) {
       const z = h.point.z;
       if (z > maxZ) continue;                       // Empore/Arm/Zwischenebene → raus
+      if (z < FLOOR_Z) continue;                    // Proxy-Loch (Ray durch Lücke) → raus
       if (top === null || z > top) top = z;         // höchste Arbeitsfläche darunter
     }
     return top;
@@ -489,40 +503,93 @@ export function createViewer(canvas) {
     return zx0 * (1 - ty) + zx1 * ty;
   }
 
+  // ── Teil-Unterkanten-Profil (T-121) ────────────────────────────────────────
+  // partUnderside(x,y): die UNTERSTE Z-Fläche des TEIL-Mesh in der Welt-Spalte
+  // (x,y). null = das Teil hat an dieser XY keine Geometrie. Realisiert per
+  // Down-Raycast gegen die Mesh des Teils (klein: ~5k–60k tri, NICHT die 4M-tri
+  // Zelle) → billig. Wir nehmen den TIEFSTEN Treffer (intersectObject ist nach
+  // Distanz sortiert, der letzte Hit beim Down-Cast = Unterseite). DoubleSide-
+  // Material → beide Flanken treffen, der letzte ist die Unterkante.
+  const _partRay = new THREE.Raycaster();
+  const _partOrigin = new THREE.Vector3();
+  function _partUndersideAt(holder, x, y, topZ) {
+    _partOrigin.set(x, y, topZ);
+    _partRay.set(_partOrigin, _down);
+    const hits = _partRay.intersectObject(holder, true);
+    if (!hits.length) return null;
+    // tiefster Treffer = Unterseite des Teils in dieser Spalte
+    let lo = hits[0].point.z;
+    for (const h of hits) if (h.point.z < lo) lo = h.point.z;
+    return lo;
+  }
+
+  // PHYSIK-MODELL (T-121): ein starres Teil ruht so, dass es die Fläche am
+  // TIEFSTEN Kontaktpunkt berührt und sie NICHT durchdringt, OHNE auf eine
+  // entfernte Erhebung gehoben zu werden, die der Teil-KÖRPER gar nicht überlappt.
+  // → dz = max über den Footprint von ( surface(xy) − partUnderside(xy) ), aber NUR
+  //   an XY wo das Teil-Mesh tatsächlich Geometrie hat. Positiv = das Teil steckt
+  //   in der Fläche (an der tiefsten Stelle) → anheben bis es frei ist. Negativ =
+  //   das Teil schwebt → absenken bis die nächste Spalte aufsetzt. Das löst BEIDE
+  //   Fälle: gekipptes Zahnrad über flachem Boden (Unterkanten-Profil folgt der
+  //   Neigung → kein Float) UND Teil NEBEN einer Fixture/Tray-Kante (die Erhebung
+  //   liegt im Bbox-Footprint, aber NICHT unter dem Teil-Körper → kein Anheben).
+  //   Anders als das alte Footprint-MEDIAN gegen bbox.min.z, das eine lokale
+  //   Erhebung (Fixture z≈0.07–0.18 bei x≈0.4/y≈0.2) blind in die Auflagerhöhe
+  //   mischte und Anker_Lang ~5 cm schweben ließ.
+  const _MAX_CLAMP = 0.6;                           // Sanity-Cap gg. Katastrophen-Teleport
   function groundClamp() {
     if (!proxyLoaded && !cellLoaded) return;        // kein Raycast-Ziel → nichts tun
     buildHeightMap();                               // lazy: einmal bauen, dann gecacht
     if (!_heightMap) return;
     const _box = new THREE.Box3();
     partsGroup.children.forEach((holder) => {
+      holder.updateMatrixWorld(true);
       _box.makeEmpty();
       _box.expandByObject(holder);
       if (_box.isEmpty()) return;
 
-      // Lokale Tischhöhe ROBUST über den ganzen Teil-Footprint aus der Höhenkarte
-      // ableiten — NICHT nur das Bbox-Zentrum. Bei langen Teilen (Anker_Lang) liegt
-      // das Zentrum sonst zufällig auf einer Tray-Kante und hebt das ganze Teil auf
-      // die Kantenhöhe. Wir tasten ein 3×3-Footprint-Gitter ab und nehmen den MEDIAN
-      // der Auflagerhöhen: ein flach liegendes Teil ruht auf der durchgehenden Fläche
-      // unter dem Großteil seines Footprints, nicht auf einer einzelnen Kanten-Ecke.
-      const N = 3;
-      const samples = [];
+      // Footprint-Grid über die Bbox-XY. 7×7 deckt auch steile Stufen (Fixture-/
+      // Tray-Kante) sauber ab, damit die tiefste Eindringspalte eines GEKIPPTEN
+      // Teils nicht zwischen den Gitterlinien durchrutscht (sonst Rest-Eindringung).
+      // 49 Casts gegen das KLEINE Teil-Mesh (≈5–60 k tri, nicht die 4 M-tri Zelle)
+      // → billig (~1 ms/Teil). topZ klar über dem Teil, damit der Cast die ganze
+      // Höhe durchläuft.
+      const N = 7;
+      const topZ = _box.max.z + 0.05;
+      let maxPen = -Infinity;                       // max ( surface − underside )
+      let nValid = 0;
+      const surfSamples = [];                       // Fallback wenn kein Mesh-Hit
       for (let i = 0; i < N; i++) {
-        const tx = N === 1 ? 0.5 : i / (N - 1);
+        const tx = i / (N - 1);
         const x = _box.min.x + tx * (_box.max.x - _box.min.x);
         for (let j = 0; j < N; j++) {
-          const ty = N === 1 ? 0.5 : j / (N - 1);
+          const ty = j / (N - 1);
           const y = _box.min.y + ty * (_box.max.y - _box.min.y);
-          const z = sampleHeightMap(x, y);
-          if (z !== null && Number.isFinite(z)) samples.push(z);
+          const surf = sampleHeightMap(x, y);
+          if (surf === null || !Number.isFinite(surf)) continue;
+          surfSamples.push(surf);
+          const under = _partUndersideAt(holder, x, y, topZ);
+          if (under === null) continue;             // hier kein Teil-Körper → ignorieren
+          const pen = surf - under;                 // >0: Teil steckt in der Fläche
+          if (pen > maxPen) maxPen = pen;
+          nValid++;
         }
       }
-      if (!samples.length) return;
-      samples.sort((a, b) => a - b);
-      const restZ = samples[Math.floor(samples.length / 2)];   // Median-Auflagerhöhe
 
-      const dz = restZ - _box.min.z;                // Unterkante exakt auf die Karte
+      let dz;
+      if (nValid > 0) {
+        dz = maxPen;                                // tiefsten Kontakt exakt aufsetzen
+      } else if (surfSamples.length) {
+        // Fallback (Teil-Mesh nirgends im Footprint getroffen — sollte praktisch
+        // nie passieren): Bbox-Unterkante auf die Footprint-Median-Höhe wie zuvor.
+        surfSamples.sort((a, b) => a - b);
+        dz = surfSamples[Math.floor(surfSamples.length / 2)] - _box.min.z;
+      } else {
+        return;                                     // keine Fläche im Footprint → lassen
+      }
+
       if (Math.abs(dz) < 1e-5) return;              // sitzt schon → nichts tun
+      if (Math.abs(dz) > _MAX_CLAMP) return;        // Katastrophen-Teleport → lassen
       holder.matrix.elements[14] += dz;             // matrixAutoUpdate=false → z direkt
       holder.matrixWorldNeedsUpdate = true;
     });
