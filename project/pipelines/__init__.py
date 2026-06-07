@@ -20,4 +20,19 @@ from __future__ import annotations
 from .base import PipelineAdapter, PipelineResult
 from . import contract, registry
 
+
+def _autoload_combos() -> None:
+    """Registriert die 6 NICHT-A-ComposedPipelines (Kombi 2..7, CONTRACT.md §5).
+    Defensiv gekapselt — genau wie registry._autoload_reference: ein Fehler beim
+    Bauen einer Kombi (z.B. fehlende optionale Dependency) darf `import pipelines`
+    NIE brechen. Der Live-Monolith (gdrnpp = Pipeline A) bleibt unberuehrt."""
+    try:
+        from . import combos
+        combos.register_combos()
+    except Exception:  # noqa: BLE001 — Kombis sind best-effort beim Import
+        pass
+
+
+_autoload_combos()
+
 __all__ = ["PipelineAdapter", "PipelineResult", "contract", "registry"]
