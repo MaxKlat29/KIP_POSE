@@ -141,6 +141,86 @@ def _resolve_pipeline(pipeline: str) -> str:
     raise HTTPException(501, f"Routing fuer Pipeline '{pid}' folgt — bisher nur gdrnpp live.")
 
 
+# ── Gateway-Proxy-Seam (S-013, additiv; bricht den Boot NIE) ──────────────────
+# kip_server:8077 bleibt der LIVE-Pipeline-A-Pfad (pipeline=gdrnpp byte-identisch).
+# Fuer die 6 NICHT-A-Kombis proxyt /api/predict zum Mesh-Gateway (gateway:8000),
+# damit das FE EINE Origin behaelt (Caddy /KIP, kein zweiter Tunnel). Die testbare
+# Mapping-/Gating-Logik liegt fastapi-/httpx-frei in pipelines.gateway_proxy.
+GATEWAY_URL = os.environ.get("KIP_GATEWAY_URL", "http://gateway:8000").rstrip("/")
+GATEWAY_HEALTH_TIMEOUT = float(os.environ.get("KIP_GATEWAY_HEALTH_TIMEOUT", "5"))
+GATEWAY_PREDICT_TIMEOUT = float(os.environ.get("KIP_GATEWAY_PREDICT_TIMEOUT", "900"))
+# Seg-Quellen, deren Modell gerade trainiert (S-008 yolo-seg medium-Langlaeufer) →
+# unavailable_reason 'training' statt 'service_down'. Kommagetrennt, env-overridebar.
+# Default leer (kein Training-Block); die /team-Session setzt es bei laufendem S-008.
+KIP_TRAINING_SEGS = {s.strip() for s in
+                     os.environ.get("KIP_TRAINING_SEGS", "").split(",") if s.strip()}
+
+try:
+    from pipelines import gateway_proxy as _gwp
+except Exception:  # noqa: BLE001 — Proxy-Seam ist optional, darf den Server nie crashen
+    _gwp = None
+
+
+def _gateway_health() -> Optional[dict]:
+    """Pollt gateway/health (aggregiert yolo/fp/gigapose/sam3). None wenn das Gateway
+    nicht erreichbar ist (dann sind alle 6 NICHT-A-Kombis service_down; Pipeline A
+    bleibt unberuehrt). httpx ist nur in der Box-venv — fehlt es, None (kein Crash)."""
+    try:
+        import httpx
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        with httpx.Client(timeout=GATEWAY_HEALTH_TIMEOUT) as client:
+            r = client.get(GATEWAY_URL + "/health")
+            r.raise_for_status()
+            return r.json()
+    except Exception:  # noqa: BLE001 — Gateway down ist ein erwarteter Zustand
+        return None
+
+
+def _live_pipeline_a_available() -> bool:
+    """Pipeline A (Kombi 1) lebt, solange der :8078-GDRNPP-Worker erreichbar ist.
+    Mia §6: solange der Live-Pfad lebt, ist Kombi 1 IMMER available (>=1 Kombi da).
+    Defensiv: bei Probe-Fehler True (der Live-Pfad ist der Anker, nicht das Mesh)."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen("http://127.0.0.1:8078/health", timeout=2) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001 — Worker-/health optional; Anker bleibt available
+        return True
+
+
+def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
+                               depth_bytes: Optional[bytes], fx: float, fy: float,
+                               cx: float, cy: float, iterations: int,
+                               top_n: Optional[int], want_pointcloud: bool,
+                               seg_prompts: Optional[str]) -> dict:
+    """Proxyt EINE der 6 NICHT-A-Kombis als multipart an gateway/predict und gibt die
+    rohe Gateway-Antwort (instances[].T_cam_obj + timings) zurueck. httpx nur Box-venv."""
+    import httpx
+    gw = _gwp.combo_to_gateway(combo_id)              # 4xx-Quelle: InvalidCombo → 400 oben
+    files = {"rgb": ("rgb.png", rgb_bytes, "image/png")}
+    if depth_bytes:
+        files["depth"] = ("depth.png", depth_bytes, "image/png")
+    data = {
+        "fx": str(fx), "fy": str(fy), "cx": str(cx), "cy": str(cy),
+        "iterations": str(iterations),
+        "want_pointcloud": str(bool(want_pointcloud)).lower(),
+        "seg_source": gw["seg_source"],
+        "pose_source": gw["pose_source"],
+    }
+    if top_n is not None:
+        data["top_n"] = str(top_n)
+    if seg_prompts:
+        data["seg_prompts"] = seg_prompts
+    with httpx.Client(timeout=GATEWAY_PREDICT_TIMEOUT) as client:
+        r = client.post(GATEWAY_URL + "/predict", data=data, files=files)
+        if r.status_code >= 400:
+            raise HTTPException(502, f"Gateway /predict ({combo_id}) Fehler {r.status_code}: "
+                                     f"{r.text[:300]}")
+        return r.json()
+
+
 # ── Static frontend (gemountet zuletzt, damit /api Vorrang hat) ──
 # /api/* zuerst definieren, dann StaticFiles auf "/" als Catch-all.
 
@@ -209,26 +289,162 @@ def metrics():
 
 @app.get("/api/pipelines")
 def pipelines():
-    """Registrierte Pose-Pipelines fuer den Vergleich (Dropdown + Harness).
+    """Die 7-Kombi-Whitelist fuer das FE (2 Dropdowns + Gating, Mia S-010).
 
-    Fallback wenn das Seam-Paket fehlt: nur die gdrnpp-Referenz. Der Web-Viewer
-    befuellt das Modell-Dropdown hieraus (verfuegbar=enabled, sonst disabled)."""
-    if _pipe_registry is None:
+    Pro Kombi (Quelle = combos.COMBO_WHITELIST + gateway/health, S-013):
+      id, name, description, seg, pose, needs_depth, is_pipeline_a,
+      available (bool), unavailable_reason (enum service_down|training|null).
+
+    `unavailable_reason` ist Mias Pflicht-Feld (S-010 §12): das FE muss „Dienst nicht
+    aktiv" von „Modell trainiert noch" unterscheiden, sonst kann es Available-disabled
+    nicht von Gating-disabled trennen.
+
+    Kombi 1 (gdrnpp/yolo-obb = Pipeline A) haengt NICHT am Mesh — sie ist available,
+    solange der :8078-Live-Worker lebt. Die 6 NICHT-A-Kombis pollen gateway/health.
+
+    Back-compat: alte Felder (`seam`, je Pipeline `id/name/description/available`)
+    bleiben erhalten; FE-Code, der nur die alten Felder liest, funktioniert weiter."""
+    if _gwp is None:
+        # Proxy-Seam fehlt → minimaler Fallback (nur Pipeline A, wie frueher).
         return {"seam": "unavailable",
-                "pipelines": [{"id": "gdrnpp", "name": "GDRNPP (RGB)",
-                               "description": "Referenz/Baseline", "available": True}]}
-    return {"seam": "ok", "pipelines": _pipe_registry.all_pipelines()}
+                "pipelines": [{"id": "gdrnpp", "name": "GDRNPP (yolo-obb, Pipeline A)",
+                               "description": "Referenz/Baseline", "seg": "yolo-obb",
+                               "pose": "GDRNPP", "needs_depth": False,
+                               "is_pipeline_a": True, "available": True,
+                               "unavailable_reason": None}]}
+    plist = _gwp.pipelines_status(
+        gateway_health=_gateway_health(),
+        live_pipeline_a_available=_live_pipeline_a_available(),
+        training_segs=KIP_TRAINING_SEGS,
+    )
+    return {"seam": "ok", "pipelines": plist}
 
 
 @app.get("/api/compare")
 def compare(scene: int = 0, im: int = -1, pipelines: str = ""):
-    """STUB: Multi-Pipeline-Side-by-Side. Aktiv sobald >=2 Pipelines verfuegbar sind
+    """STUB: Multi-Pipeline-Side-by-Side. Aktiv (= 501 „folgt") sobald >=2 Kombis
+    available sind; davor 501 „braucht >=2". Side-by-Side-Verdrahtung folgt in S-014+
     (siehe docs/PIPELINE_INTEGRATION.md + compare_pipelines.py)."""
-    avail = _pipe_registry.available_ids() if _pipe_registry else ["gdrnpp"]
+    if _gwp is None:
+        avail = ["gdrnpp"]
+    else:
+        avail = _gwp.available_combo_ids(_gwp.pipelines_status(
+            gateway_health=_gateway_health(),
+            live_pipeline_a_available=_live_pipeline_a_available(),
+            training_segs=KIP_TRAINING_SEGS,
+        ))
     if len(avail) < 2:
-        raise HTTPException(501, f"Vergleich braucht >=2 verfuegbare Pipelines; aktuell verfuegbar: "
-                                 f"{avail}. Fremde Pipelines werden via pipelines/<id>/ angebunden.")
+        raise HTTPException(501, f"Vergleich braucht >=2 verfuegbare Kombis; aktuell verfuegbar: "
+                                 f"{avail}. Sobald ein zweites Mesh-Kombi hochkommt, wird der "
+                                 f"Vergleich aktiv.")
     raise HTTPException(501, "Side-by-Side-Verdrahtung folgt (siehe docs/PIPELINE_INTEGRATION.md).")
+
+
+@app.post("/api/predict")
+async def predict(
+    image: UploadFile = File(...),
+    depth: UploadFile | None = File(None),
+    pipeline: str = Form("gdrnpp"),
+    seg: str | None = Form(None),
+    pose: str | None = Form(None),
+    fx: float | None = Form(None),
+    fy: float | None = Form(None),
+    cx: float | None = Form(None),
+    cy: float | None = Form(None),
+    cam_R_w2c: str | None = Form(None),
+    cam_t_w2c: str | None = Form(None),
+    iterations: int = Form(5),
+    top_n: int | None = Form(None),
+    want_pointcloud: bool = Form(False),
+    seg_prompts: str | None = Form(None),
+):
+    """EINE Origin fuers FE — die unified Inferenz-Naht (S-013, Mia S-010).
+
+    Routing (AK 1):
+      * `pipeline=gdrnpp` ODER `seg=yolo-obb & pose=gdrnpp` (oder leer = Default)
+        → **UNVERAENDERTER Live-Pfad** (Pipeline A). Der Guard returnt frueh und
+        delegiert byte-identisch an den bestehenden `_real_infer_job`-Thread (die
+        feste Zivid-Kamera + warmer :8078-GDRNPP-Worker, exakt wie heute). Antwort
+        `{job}` — das FE pollt `/api/real/job/<id>` wie gewohnt.
+      * Eine der 6 NICHT-A-Kombis (per `pipeline=<combo_id>` ODER `seg=&pose=`)
+        → Proxy an `gateway:8000/predict` (httpx), Antwort (instances[].T_cam_obj)
+        → ueber dieselbe composed.py-Mapping-Mathematik → pose_result-Doc. EINE
+        Origin (Caddy /KIP), kein zweiter Tunnel.
+      * Ungueltige (nicht-Whitelist) Kombi → 400 (Mia „niemals 12 Kombis").
+    """
+    if _gwp is None:
+        raise HTTPException(501, "Proxy-Seam nicht verfuegbar (pipelines.gateway_proxy fehlt).")
+
+    # ── Guard: Pipeline A → unveraenderter Live-Pfad (frueh raus, byte-identisch) ──
+    if _gwp.is_pipeline_a(pipeline=pipeline, seg=seg, pose=pose):
+        job = uuid.uuid4().hex[:8]
+        _job_set(job, phase="Upload empfangen", pct=5)
+        img_bytes = await image.read()
+        fname = image.filename or "upload.png"
+        # Delegiert an den UNVERAENDERTEN Live-GDRNPP-Job (identisch zu
+        # /api/real/infer_async, pipeline=gdrnpp). Live-Pfad heilig.
+        threading.Thread(target=_real_infer_job, args=(job, img_bytes, fname), daemon=True).start()
+        return {"job": job, "pipeline": "gdrnpp", "mode": "live", "is_pipeline_a": True,
+                "poll_url": f"api/real/job/{job}"}
+
+    # ── 6 NICHT-A-Kombis → Gateway-Proxy ──
+    try:
+        combo_id = _gwp.resolve_combo_id(pipeline=pipeline, seg=seg, pose=pose)
+    except _gwp.InvalidCombo as e:
+        raise HTTPException(400, str(e))
+
+    gw = _gwp.combo_to_gateway(combo_id)
+    if None in (fx, fy, cx, cy):
+        raise HTTPException(400, "fx,fy,cx,cy (Kamera-Intrinsik) sind fuer die Mesh-Kombis Pflicht.")
+    depth_bytes = await depth.read() if depth is not None else b""
+    if gw["needs_depth"] and not depth_bytes:
+        raise HTTPException(400, f"Kombi '{combo_id}' braucht ein Tiefenbild (needs_depth=true).")
+    rgb_bytes = await image.read()
+
+    # Welt-Extrinsics fuer den T_cam_obj→Welt-Schritt. Default = feste Zivid-Kamera
+    # (Live/Sim teilen sie); der Upload-Tab kann sie via cam_R_w2c/cam_t_w2c override.
+    R_w2c, t_w2c = _extrinsics_or_zivid(cam_R_w2c, cam_t_w2c)
+    camera = {"cam_K": [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0],
+              "cam_R_w2c": R_w2c, "cam_t_w2c": t_w2c}
+
+    gateway_resp = _gateway_predict_multipart(
+        combo_id, rgb_bytes=rgb_bytes, depth_bytes=(depth_bytes or None),
+        fx=fx, fy=fy, cx=cx, cy=cy, iterations=iterations, top_n=top_n,
+        want_pointcloud=want_pointcloud, seg_prompts=seg_prompts)
+
+    table_origin = _table_origin()
+    doc = _gwp.gateway_predict_to_pose_result(
+        gateway_resp, camera=camera, table_origin=table_origin,
+        source_image=f"predict_{combo_id}")
+    return {
+        "pipeline": combo_id, "mode": "mesh", "is_pipeline_a": False,
+        "seg_source": gw["seg_source"], "pose_source": gw["pose_source"],
+        "pose_result": doc,
+        "timings": gateway_resp.get("timings", {}),
+        "num_detections": gateway_resp.get("num_detections"),
+    }
+
+
+def _extrinsics_or_zivid(cam_R_w2c: str | None, cam_t_w2c: str | None):
+    """Welt-Extrinsics fuer den Proxy-Mapping-Schritt. Default = feste Zivid-Kamera
+    (Live/Sim, wie der Live-Pfad). Optional via Form-Felder override (Upload-Tab mit
+    eigener Kamera). Kommagetrennte 9 (R) bzw. 3 (t in mm) Werte."""
+    if cam_R_w2c and cam_t_w2c:
+        try:
+            R = [float(v) for v in cam_R_w2c.replace(",", " ").split()]
+            t = [float(v) for v in cam_t_w2c.replace(",", " ").split()]
+            if len(R) == 9 and len(t) == 3:
+                return R, t
+        except Exception:  # noqa: BLE001 — bei Parse-Fehler auf Zivid-Default zurueck
+            pass
+    try:
+        cam = _zivid_cam()
+        return cam["cam_R_w2c"], cam["cam_t_w2c"]
+    except Exception as e:  # noqa: BLE001 — Zivid-Template fehlt (kein val) → klare 400
+        raise HTTPException(
+            400, "Keine Welt-Extrinsics: Zivid-Template (val/000000) fehlt und es wurden "
+                 "keine cam_R_w2c/cam_t_w2c uebergeben. Im Upload-Tab beide Felder mitschicken."
+        ) from e
 
 
 # ── Live-Tab: on-demand Proxy zum Jetson-Zellen-Controller ──────────────────
@@ -1174,7 +1390,10 @@ _GEN_SCRIPT   = "/mnt/data/kip_pose/box_src/gen_sdg_arm_visible.py"
 _CONV_SCRIPT  = "/mnt/data/kip_pose/box_src/isaac_to_bop.py"
 _SCENE_USD    = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files/GST_Scene.usd"
 _USD_DIR      = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files"
-_LIVE_ROOT    = pathlib.Path("/mnt/data/kip_pose/project/temp/kip_live")
+# Box-Default; env-overridebar (KIP_LIVE_ROOT) damit der Modul-Import auch ausserhalb
+# der Box laeuft (Tests/CI haben kein /mnt). Auf der Box bleibt der Default unveraendert.
+_LIVE_ROOT    = pathlib.Path(os.environ.get(
+    "KIP_LIVE_ROOT", "/mnt/data/kip_pose/project/temp/kip_live"))
 _LIVE_ROOT.mkdir(parents=True, exist_ok=True)
 
 
