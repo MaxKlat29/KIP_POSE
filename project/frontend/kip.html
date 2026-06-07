@@ -29,15 +29,23 @@
           <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
           <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
           <button id="tab-live" class="kip-tab" role="tab">Live (Anlage)</button>
+          <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
         </nav>
-        <label class="kip-model">Modell
-          <select id="model-sel" class="kip-sel" title="Architektur zur Posenschätzung">
-            <option value="gdrnpp">GDRNPP (RGB)</option>
-            <option value="" disabled>frei — Architektur-Vergleich</option>
-            <option value="" disabled>frei — Architektur-Vergleich</option>
-            <option value="" disabled>frei — Architektur-Vergleich</option>
-          </select>
-        </label>
+        <!-- Pipeline-Auswahl: zwei gekoppelte Selects (Seg → Post) ergeben genau die
+             7 validen Kombis (S-010). Ersetzt das alte Einzel-"Modell"-Dropdown. -->
+        <div class="kip-pipe" id="pipe-group" role="group" aria-label="Pipeline-Auswahl">
+          <span class="kip-pipe__lbl" id="pipe-label">Pipeline:</span>
+          <label class="kip-pipe__field">
+            <span class="kip-pipe__sub">Segmentierung</span>
+            <select id="seg-sel" class="kip-sel" aria-label="Segmentierung"></select>
+          </label>
+          <span class="kip-pipe__arrow" aria-hidden="true">→</span>
+          <label class="kip-pipe__field">
+            <span class="kip-pipe__sub">Lageschätzung</span>
+            <select id="post-sel" class="kip-sel" aria-label="Lageschätzung"></select>
+          </label>
+        </div>
+        <p id="pipe-ctx" class="kip-pipe__ctx" aria-live="polite"></p>
         <button id="reset-view" class="kip-btn" title="Kameraperspektive auf Standardansicht zurücksetzen">Ansicht zurücksetzen</button>
         <span id="kip-gpu" class="kip-gpu" title="Status der Workstation">Status wird geladen</span>
       </header>
@@ -51,6 +59,17 @@
             <span class="kip-drop__icon">+</span>
             <span class="kip-drop__txt">Foto auswählen oder hierher ziehen</span>
           </label>
+          <!-- Tiefenbild (progressive disclosure): erscheint nur, wenn die aktuelle
+               Kombi needs_depth verlangt (S-010 §5.2). Bei Kombi 1/5/7 ausgeblendet. -->
+          <div id="real-depth-wrap" hidden>
+            <p class="kip-drop__label">Tiefenbild <span class="kip-drop__req">erforderlich</span></p>
+            <label class="kip-drop kip-drop--depth" id="real-depth-drop">
+              <input id="real-depth-file" type="file" accept=".png,image/png" hidden />
+              <span class="kip-drop__icon">+</span>
+              <span class="kip-drop__txt">Tiefenbild auswählen oder hierher ziehen</span>
+            </label>
+            <p class="kip-hint">16-bit PNG in Millimeter.</p>
+          </div>
           <div class="kip-row">
             <label class="kip-chk"><input type="checkbox" id="real-tta" /> Test-Zeit-Augmentierung</label>
           </div>
@@ -95,6 +114,41 @@
           </div>
           <div id="live-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
           <p id="live-status" class="kip-status"></p>
+        </div>
+      </section>
+
+      <!-- Ansicht: Batch-Eval — Pipeline-Vergleich über 7 Configs × 20 Szenen (S-011) -->
+      <section id="screen-batch" class="kip-screen kip-screen--wide" hidden>
+        <div class="kip-card kip-card--wide">
+          <h2 class="kip-card__h">Pipeline-Vergleich</h2>
+          <p class="kip-card__sub" id="batch-scope">7 Konfigurationen × 20 Szenen · nur Anker_Kurz / Anker_Lang</p>
+          <div class="kip-row kip-row--batch">
+            <label class="kip-pipe__field kip-pipe__field--run">
+              <span class="kip-pipe__sub">Lauf</span>
+              <select id="eval-run-sel" class="kip-sel" aria-label="Lauf wählen"></select>
+            </label>
+            <span id="eval-run-meta" class="kip-hint kip-hint--inline"></span>
+            <button id="eval-run-btn" class="kip-btn kip-btn--primary">Neuen Lauf starten</button>
+          </div>
+          <div id="eval-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
+          <p id="eval-run-hint" class="kip-hint" hidden>Vollständiger Lauf dauert je nach Auslastung 20–60 min.</p>
+          <p id="eval-status" class="kip-status" aria-live="polite"></p>
+
+          <!-- Mobile-Sortierung (nur <760px sichtbar) -->
+          <label class="kip-pipe__field kip-eval-sortm" id="eval-sort-mobile-wrap">
+            <span class="kip-pipe__sub">Sortieren nach</span>
+            <select id="eval-sort-mobile" class="kip-sel" aria-label="Sortieren nach"></select>
+          </label>
+
+          <div id="eval-table-wrap" class="kip-eval-wrap">
+            <table class="kip-eval" id="eval-table">
+              <caption class="sr-only">Pipeline-Vergleich, AR IC-BIN und Laufzeit über 20 Szenen</caption>
+              <thead id="eval-thead"></thead>
+              <tbody id="eval-tbody"></tbody>
+            </table>
+          </div>
+          <p id="eval-empty" class="kip-status kip-eval-empty" hidden></p>
+          <p class="kip-hint kip-eval-foot">image-only — Posen aus Detektor/Seg, keine Ground-Truth-Leaks. 20 Seeds, AR nach BOP IC-BIN-Protokoll (symmetrie-bewusst).</p>
         </div>
       </section>
 
