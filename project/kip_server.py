@@ -1174,7 +1174,10 @@ _GEN_SCRIPT   = "/mnt/data/kip_pose/box_src/gen_sdg_arm_visible.py"
 _CONV_SCRIPT  = "/mnt/data/kip_pose/box_src/isaac_to_bop.py"
 _SCENE_USD    = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files/GST_Scene.usd"
 _USD_DIR      = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files"
-_LIVE_ROOT    = pathlib.Path("/mnt/data/kip_pose/project/temp/kip_live")
+# Env-overridebar (Box hat /mnt, lokale Tests/CI nicht) — Modul-Import muss ueberall
+# laufen. Default bleibt der Box-Pfad. (Gleicher Guard wie S-013.)
+_LIVE_ROOT    = pathlib.Path(
+    os.environ.get("KIP_LIVE_ROOT", "/mnt/data/kip_pose/project/temp/kip_live"))
 _LIVE_ROOT.mkdir(parents=True, exist_ok=True)
 
 
@@ -1437,6 +1440,107 @@ def sim_generate(n_scenes: int = Form(1), force: bool = Form(False)):
     # S-KIP-4: gen_sdg_arm_visible.py (1 Szene) -> BOP-convert -> e2e infer
     #          -> render_gt_vs_pred -> blau/rot pose_result für den Viewer.
     raise HTTPException(501, "Live-SDG-Pipeline wird in S-KIP-4 verdrahtet.")
+
+
+# ── Batch-Eval (S-012 / T-138): 7 Kombis × N SDG-Seeds → AR IC-BIN + Runtime ─────
+# Duenne FastAPI-Schicht ueber dem fastapi-freien `eval.batch_eval`-Kern. Felder =
+# Lenas batch.js-Contract (Mia §14): runs/result/run/job, coverage/crash 0..1, job =
+# gleiches {pct,phase}-Schema wie die sim-job. Der reale 7×20-Lauf braucht best.pt +
+# deployte Services (Gateway/predict) — Code jetzt, GPU-Lauf post-Training.
+import sys as _sys
+_PROJECT_DIR = str(HERE)
+if _PROJECT_DIR not in _sys.path:
+    _sys.path.insert(0, _PROJECT_DIR)
+
+EVAL_OUT = TEMP / "batch_eval"          # project/temp/batch_eval/<run-id>/
+EVAL_OUT.mkdir(parents=True, exist_ok=True)
+# Gateway-/predict-Basis (Env-overridebar; all-resident auf der Box, S006-VRAM).
+MESH_GATEWAY_URL = os.environ.get("MESH_GATEWAY_URL", "http://localhost:8090")
+# BOP-GT-Dataset fuer eval_bop --icbin (nur auf der Box vorhanden).
+EVAL_DATASET_DIR = os.environ.get(
+    "EVAL_DATASET_DIR", "/mnt/data/kip_pose/project/bop/pose_isaac")
+EVAL_SPLIT = os.environ.get("EVAL_SPLIT", "val")
+
+
+@app.get("/api/eval/runs")
+def eval_runs():
+    """Alle persistierten Batch-Eval-Laeufe, neuester zuerst (FE-Run-Dropdown).
+
+    -> {"runs": [{run_id, date, duration_s, n_configs}]}  (Lena batch.js)."""
+    from eval import batch_eval as _be
+    return {"runs": _be.list_runs(EVAL_OUT)}
+
+
+@app.get("/api/eval/result/{run_id}")
+def eval_result(run_id: str):
+    """Die 7-Config-Vergleichstabelle eines Laufs.
+
+    -> {"run_id",...,"configs":[{seg,pose,ar_mean,ar_std,seg_ms,pose_ms,coverage,
+       crash_rate,note,is_pipeline_a,run_config_id,per_class?}]}. coverage/crash 0..1."""
+    from eval import batch_eval as _be
+    res = _be.load_run(EVAL_OUT, run_id)
+    if res is None:
+        raise HTTPException(404, f"Eval-Lauf '{run_id}' nicht gefunden")
+    return res
+
+
+def _eval_run_job(job: str, seeds: int, iterations: int, top_n):
+    """Hintergrund-Thread: faehrt run_batch seriell + meldet pct/phase in _JOBS.
+
+    Respektiert den Training-Guard: laeuft ein GDRNPP-Training, koennen die schweren
+    Pose-Services 503 liefern — die werden pro (config,szene) als Crash gezaehlt
+    (Crash-Rate-Achse), kein Job-Abbruch. all-resident sonst (S006-VRAM)."""
+    from eval import batch_eval as _be
+    try:
+        _job_set(job, phase="Szenen suchen", pct=3)
+        # discover_scenes toleriert ein fehlendes VAL_ROOT (gibt [] zurueck) — kein
+        # extra exists()-Gate (das wuerde Test-Mocks von discover_scenes aushebeln).
+        scenes = _be.discover_scenes(str(VAL_ROOT), seeds=seeds)
+        if not scenes:
+            _job_set(job, phase=f"Keine SDG-Seed-Szenen mit GT unter {VAL_ROOT}",
+                     pct=-1, error="no_scenes")
+            return
+        predict_fn = _be.http_predict(MESH_GATEWAY_URL, iterations=iterations, top_n=top_n)
+        eval_fn = _be.subprocess_eval(EVAL_DATASET_DIR, split=EVAL_SPLIT)
+
+        def _prog(pct, phase):
+            _job_set(job, phase=phase, pct=int(pct))
+
+        results = _be.run_batch(
+            _be.EVAL_CONFIGS, scenes, predict_fn, eval_fn, EVAL_OUT,
+            progress=_prog, warn=lambda m: None)
+        _job_set(job, phase="Fertig", pct=100,
+                 result_url=f"eval/result/{results['run_id']}",
+                 run_id=results["run_id"], n_configs=results["n_configs"],
+                 n_scenes=results["n_scenes"])
+    except Exception as e:  # noqa: BLE001
+        import traceback; traceback.print_exc()
+        _job_set(job, phase=f"Fehler: {e}", pct=-1, error=str(e))
+
+
+@app.post("/api/eval/run")
+def eval_run(seeds: int = Form(20), iterations: int = Form(5),
+             top_n: Optional[int] = Form(None), force: bool = Form(False)):
+    """Startet einen Batch-Eval-Lauf im Hintergrund (async → Job).
+
+    Guard: laeuft ein Training, verweigern (override force=true) — der Lauf zieht
+    die schweren Pose-Services, die das Training crashen koennten. -> {"job": <id>},
+    Frontend pollt /api/eval/job/<id> (gleiches Schema wie sim-job)."""
+    if _gpu_busy_with_training() and not force:
+        raise HTTPException(
+            503, "GPU trainiert gerade — Batch-Eval spaeter (override force=true).")
+    job = uuid.uuid4().hex[:8]
+    _job_set(job, phase="Lauf startet", pct=2)
+    threading.Thread(target=_eval_run_job, args=(job, seeds, iterations, top_n),
+                     daemon=True).start()
+    return {"job": job}
+
+
+@app.get("/api/eval/job/{job}")
+def eval_job_status(job: str):
+    """Job-Fortschritt (gleiches {pct,phase,...}-Schema wie /api/sim/job)."""
+    st = _job_get(job)
+    return st or {"error": "unknown job"}
 
 
 # ── Frontend entry: "/" -> kip.html (2-Screen-Shell). Der alte Single-Viewer
