@@ -42,6 +42,8 @@ YOLO_URL = os.environ.get("YOLO_URL", "http://yolo-svc:8001")
 FP_URL = os.environ.get("FP_URL", "http://fp-svc:8002")
 GIGAPOSE_URL = os.environ.get("GIGAPOSE_URL", "http://gigapose-svc:8003")
 SAM3_URL = os.environ.get("SAM3_URL", "http://sam3-svc:8004")
+YOLO_OBB_URL = os.environ.get("YOLO_OBB_URL", "http://yolo-obb-svc:8011")
+GDRNPP_URL = os.environ.get("GDRNPP_URL", "http://gdrnpp-svc:8012")
 
 # ── Segmentation-source registry (the mask-source dropdown) ─────────────────
 # A segmentation source produces per-instance masks. INFER sources are HTTP
@@ -51,6 +53,10 @@ SAM3_URL = os.environ.get("SAM3_URL", "http://sam3-svc:8004")
 INFER_SOURCES = {
     "yolo": {"label": "YOLO26n-seg (infer masks)", "url": YOLO_URL},
     "sam3": {"label": "SAM3 (promptable concept masks)", "url": SAM3_URL},
+    # yolo-obb is the ORIENTED-box detector. It is the ONLY source that carries an
+    # `obb` field, which GDRNPP (Pipeline A) consumes instead of a mask (CONTRACT
+    # §4). It is hard-coupled to the gdrnpp pose source (see GDRNPP_COUPLED_SEG).
+    "yolo-obb": {"label": "YOLO26-OBB (oriented boxes → GDRNPP)", "url": YOLO_OBB_URL},
 }
 # "gt" is a special non-inference source: the caller supplies ground-truth masks
 # (the sim instance segmentation) directly in the request, so no model is run.
@@ -69,6 +75,18 @@ GT_SOURCE = {"id": "gt", "label": "Ground-truth masks (sim)"}
 # a 'pipeline' selector that the svc uses to derive its depth/Kabsch tail branch.
 # To add a future estimator: stand up a /pose service and add an entry here.
 POSE_SOURCES = {
+    # gdrnpp = Pipeline A (combo 1, the accuracy main line). It is RGB (CONTRACT §5:
+    # needs_depth=no; depth is only an optional refine we do not forward). It reads
+    # the `obb` oriented box from each instance, NOT a mask, so it is hard-coupled to
+    # the yolo-obb seg source (GDRNPP_COUPLED_SEG below). rgb_only=True relaxes the
+    # FE depth guard: combo 1 is selectable without a depth upload.
+    "gdrnpp": {
+        "label": "GDRNPP (Pipeline A, RGB — yolo-obb only)",
+        "url": GDRNPP_URL,
+        "endpoint": "/pose",
+        "needs_depth": False,
+        "rgb_only": True,
+    },
     "foundationpose": {
         "label": "FoundationPose (RGB-D)",
         "url": FP_URL,
@@ -95,6 +113,14 @@ POSE_SOURCES = {
         "rgb_only": True,
     },
 }
+
+# ── GDRNPP coupling (CONTRACT §4) ────────────────────────────────────────────
+# GDRNPP (= Pipeline A) is the ONLY non-freely-combinable pose source: it consumes
+# the oriented box `obb`, which only yolo-obb emits. So when pose_source=gdrnpp the
+# seg_source is forced to GDRNPP_COUPLED_SEG and the obb field is forwarded into the
+# /pose instances. This is the server side of the 7-combo whitelist (CONTRACT §5):
+# the only valid gdrnpp combo is yolo-obb → gdrnpp.
+GDRNPP_COUPLED_SEG = "yolo-obb"
 
 # Pose estimation can take minutes for many instances; be generous.
 POSE_TIMEOUT = httpx.Timeout(connect=10.0, read=900.0, write=60.0, pool=10.0)
@@ -304,11 +330,14 @@ async def health():
     fp = await ping(FP_URL)
     gigapose = await ping(GIGAPOSE_URL)
     sam3 = await ping(SAM3_URL)
-    # fp + yolo must be up for the default pipeline; gigapose and sam3 are
-    # reported but do not gate overall health (either may be intentionally not
-    # running to save VRAM).
+    yolo_obb = await ping(YOLO_OBB_URL)
+    gdrnpp = await ping(GDRNPP_URL)
+    # fp + yolo must be up for the default pipeline; the others (gigapose, sam3,
+    # yolo-obb, gdrnpp) are reported but do not gate overall health — any may be
+    # intentionally not running to save VRAM (VRAM-lifecycle, ADR-021).
     ok = bool(yolo.get("ok")) and bool(fp.get("ok"))
-    return {"ok": ok, "yolo": yolo, "fp": fp, "gigapose": gigapose, "sam3": sam3}
+    return {"ok": ok, "yolo": yolo, "fp": fp, "gigapose": gigapose, "sam3": sam3,
+            "yolo_obb": yolo_obb, "gdrnpp": gdrnpp}
 
 
 @app.get("/sources")
@@ -477,6 +506,21 @@ async def predict(
     if pose is None:
         raise HTTPException(status_code=400, detail=f"unknown pose_source '{pose_source}'")
 
+    # GDRNPP coupling (CONTRACT §4/§5): gdrnpp consumes the obb, which only yolo-obb
+    # emits, so it is hard-coupled to that seg source. If the caller picked gdrnpp
+    # but a different seg_source (or none), force it to yolo-obb — this is the server
+    # side of the 7-combo whitelist (yolo-obb → gdrnpp is the only valid gdrnpp combo).
+    if pose_source == "gdrnpp" and seg_source != GDRNPP_COUPLED_SEG:
+        seg_source = GDRNPP_COUPLED_SEG
+    # And the inverse guard: yolo-obb's oriented boxes are only meaningful for gdrnpp;
+    # any mask-consuming pose source would ignore the obb. Reject the off-whitelist mix
+    # rather than silently produce a mask-based pose from an obb-only detector.
+    if seg_source == GDRNPP_COUPLED_SEG and pose_source != "gdrnpp":
+        raise HTTPException(
+            status_code=400,
+            detail=f"seg_source '{GDRNPP_COUPLED_SEG}' is only valid with "
+                   f"pose_source 'gdrnpp' (CONTRACT §4 GDRNPP coupling).")
+
     # depth is required only when the chosen pose source consumes it (and for a
     # point cloud). The RGB-only GigaPose path runs with no depth upload at all.
     depth_bytes = await depth.read() if depth is not None else b""
@@ -504,11 +548,15 @@ async def predict(
     if top_n is not None and top_n >= 0:
         detections = sorted(detections, key=lambda d: d.get("conf", 0.0), reverse=True)[:top_n]
 
-    # 3. build instances + pose
-    instances = [
-        {"id": d["id"], "class": d["class"], "mask_b64": d["mask_b64"]}
-        for d in detections
-    ]
+    # 3. build instances + pose. Forward the `obb` field when the detection carries
+    #    one (yolo-obb only); gdrnpp reads it instead of the mask (CONTRACT §4). Other
+    #    pose sources ignore the extra key.
+    instances = []
+    for d in detections:
+        inst = {"id": d["id"], "class": d["class"], "mask_b64": d.get("mask_b64")}
+        if d.get("obb") is not None:
+            inst["obb"] = d["obb"]
+        instances.append(inst)
     conf_by_id = {d["id"]: d.get("conf") for d in detections}
 
     K = [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0]
