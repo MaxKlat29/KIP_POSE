@@ -1,0 +1,7 @@
+ultralytics
+fastapi
+uvicorn[standard]
+pydantic>=2
+opencv-python-headless
+numpy
+python-multipart

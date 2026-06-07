@@ -19,6 +19,9 @@
 #   GIGAPOSE_DIR        GigaPose checkout (code, pretrained/, datasets/, templates)
 #   YOLO_WEIGHTS_PT     YOLO26n-seg checkpoint (.pt); a copy is bundled at
 #                       ./assets/weights/best.pt
+#   YOLO_OBB_WEIGHTS_PT YOLOv8-OBB detector checkpoint (.pt) for yolo-obb-svc;
+#                       default ./assets/weights/detector.pt (e.g. the box copy
+#                       /mnt/data/kip_pose/data/detector_armvis/detector.pt)
 #   HF_CACHE_DIR        HuggingFace cache holding the gated facebook/sam3
 #                       snapshot (for sam3-svc; offline at runtime)
 #
@@ -36,6 +39,32 @@ services:
       # YOLO segmentation weights, read-only. Default: copy bundled in this repo;
       # override YOLO_WEIGHTS_PT in .env to use a checkpoint from a training run.
       - ${YOLO_WEIGHTS_PT:-./assets/weights/best.pt}:/weights/best.pt:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  yolo-obb-svc:
+    # 3rd seg source: YOLOv8-OBB detector -> oriented boxes (combo 1 / Pipeline A,
+    # feeds GDRNPP). LIGHTWEIGHT base (stock pytorch CUDA + ultralytics, sm_86
+    # kernels ship in the torch wheel) — does NOT need foundationpose/gigapose
+    # heavy bases. Measured VRAM ~0.5 GB (S-005 smoke), the cheapest service.
+    build: ./yolo-obb-svc
+    ports:
+      - "8011:8011"
+    environment:
+      YOLO_OBB_WEIGHTS: /weights/detector.pt
+      YOLO_OBB_CONF: ${YOLO_OBB_CONF:-0.40}
+      YOLO_OBB_IMGSZ: ${YOLO_OBB_IMGSZ:-1280}
+    volumes:
+      # YOLOv8-OBB detector weights, read-only. Override YOLO_OBB_WEIGHTS_PT in
+      # .env to point at a training run, e.g. the arm-visible retrain on the box
+      # (/mnt/data/kip_pose/data/detector_armvis/detector.pt).
+      - ${YOLO_OBB_WEIGHTS_PT:-./assets/weights/detector.pt}:/weights/detector.pt:ro
     ipc: host
     deploy:
       resources:
@@ -119,11 +148,15 @@ services:
       - "8000:8000"
     environment:
       YOLO_URL: http://yolo-svc:8001
+      # yolo-obb seg source (combo 1 -> GDRNPP). The gateway INFER_SOURCES['yolo-obb']
+      # registry entry is added in S-004 (gateway extension); the URL is wired here.
+      YOLO_OBB_URL: http://yolo-obb-svc:8011
       FP_URL: http://fp-svc:8002
       GIGAPOSE_URL: http://gigapose-svc:8003
       SAM3_URL: http://sam3-svc:8004
     depends_on:
       - yolo-svc
+      - yolo-obb-svc
       - fp-svc
       - gigapose-svc
       - sam3-svc
