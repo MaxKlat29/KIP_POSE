@@ -60,6 +60,32 @@ services:
               count: all
               capabilities: [gpu]
 
+  yolo-obb-svc:
+    # 3rd seg source: YOLOv8-OBB detector -> oriented boxes (combo 1 / Pipeline A,
+    # feeds GDRNPP). LIGHTWEIGHT base (stock pytorch CUDA + ultralytics, sm_86
+    # kernels ship in the torch wheel) — does NOT need foundationpose:ampere /
+    # gigapose:ampere. Measured VRAM ~0.5 GB (S-005 smoke), the cheapest service.
+    build: ./yolo-obb-svc
+    ports:
+      - "8011:8011"
+    environment:
+      YOLO_OBB_WEIGHTS: /weights/detector.pt
+      YOLO_OBB_CONF: ${YOLO_OBB_CONF:-0.40}
+      YOLO_OBB_IMGSZ: ${YOLO_OBB_IMGSZ:-1280}
+    volumes:
+      # YOLOv8-OBB detector weights, read-only. Override YOLO_OBB_WEIGHTS_PT in
+      # .env to point at a training run, e.g. the arm-visible retrain on the box
+      # (/mnt/data/kip_pose/data/detector_armvis/detector.pt).
+      - ${YOLO_OBB_WEIGHTS_PT:-./assets/weights/detector.pt}:/weights/detector.pt:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   fp-svc:
     build: ./fp-svc
     ports:
@@ -125,20 +151,29 @@ services:
     environment:
       # facebook/sam3 is gated on HF: weights must already sit in the mounted
       # cache (accept the license + download once on the host). Offline mode
-      # keeps the service from ever touching the network.
-      HF_HOME: /hf-cache
+      # keeps the service from ever touching the network. HF_HOME must equal the
+      # container mount point below (/hf_cache) so the offline resolver finds the
+      # hub/ layout — see S-009 (Bruno): snapshot lives at
+      # /mnt/data/kip_pose_weights/hf_cache/hub/models--facebook--sam3 (3.3 GB,
+      # safetensors only, NO pickle .pt — RCE vector excluded).
+      HF_HOME: /hf_cache
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
       # Tuning knobs (see sam3-svc/app.py). NOTE: the per-class text prompts
       # find armature instances well but do NOT reliably separate anker_kurz
       # from anker_lang (measured: a mixed scene came back all-anker_lang).
       # Treat SAM3 classes as approximate; YOLO remains the classifying source.
+      # SAM3_CONF default is 0.2, NOT the 0.5 docs value (ML_RECON/yannic falle):
+      # SAM3 scores run low on these out-of-domain images.
       SAM3_CONF: ${SAM3_CONF:-0.2}
       SAM3_NMS_IOU: ${SAM3_NMS_IOU:-0.5}
       SAM3_PROMPTS: ${SAM3_PROMPTS:-}
     volumes:
-      # Host HuggingFace cache with the facebook/sam3 snapshot, read-only.
-      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/hf-cache:ro
+      # Host HuggingFace cache with the facebook/sam3 snapshot, read-only. The
+      # container mount point MUST equal HF_HOME above. Default = the box path
+      # Bruno populated (S-009); override HF_CACHE_DIR in .env elsewhere.
+      - ${HF_CACHE_DIR:-/mnt/data/kip_pose_weights/hf_cache}:/hf_cache:ro
     ipc: host
     deploy:
       resources:
@@ -154,11 +189,15 @@ services:
       - "8000:8000"
     environment:
       YOLO_URL: http://yolo-svc:8001
+      # yolo-obb seg source (combo 1 -> GDRNPP). The gateway INFER_SOURCES['yolo-obb']
+      # registry entry is added in S-004 (gateway extension); the URL is wired here.
+      YOLO_OBB_URL: http://yolo-obb-svc:8011
       FP_URL: http://fp-svc:8002
       GIGAPOSE_URL: http://gigapose-svc:8003
       SAM3_URL: http://sam3-svc:8004
     depends_on:
       - yolo-svc
+      - yolo-obb-svc
       - fp-svc
       - gigapose-svc
       - sam3-svc
