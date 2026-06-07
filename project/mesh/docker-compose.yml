@@ -1,0 +1,129 @@
+# kip-pose-viewer orchestration.
+#
+# NOTE: yolo-svc and fp-svc build FROM the locally-built `foundationpose:blackwell`
+#       image (torch 2.11.0+cu128 for Blackwell sm_120, opencv, numpy). Build that
+#       image first (docker/Dockerfile.blackwell in the FoundationPose checkout).
+#       gigapose-svc builds FROM the locally-built `gigapose:blackwell` image (a
+#       SEPARATE base — GigaPose pins xformers/pytorch-lightning against an older
+#       torch and cannot reuse foundationpose:blackwell); build that image too
+#       (docker/Dockerfile.blackwell in the GigaPose checkout), and make sure the
+#       GigaPose checkout has rendered templates before starting gigapose-svc.
+#       All GPU services also require the NVIDIA Container Toolkit
+#       (nvidia-container-toolkit) so Docker can expose the GPU.
+#
+# Host paths are configurable via .env (copy .env.example to .env and adjust).
+# The defaults assume FoundationPose/ and GigaPose/ are checked out as siblings
+# of this repo; relative paths are resolved against the directory containing
+# this compose file.
+#   FOUNDATIONPOSE_DIR  FoundationPose checkout (code + weights)
+#   GIGAPOSE_DIR        GigaPose checkout (code, pretrained/, datasets/, templates)
+#   YOLO_WEIGHTS_PT     YOLO26n-seg checkpoint (.pt); a copy is bundled at
+#                       ./assets/weights/best.pt
+#   HF_CACHE_DIR        HuggingFace cache holding the gated facebook/sam3
+#                       snapshot (for sam3-svc; offline at runtime)
+#
+# The frontend is run separately in dev mode (cd frontend && npm install && npm run dev)
+# and is not part of this compose file.
+
+services:
+  yolo-svc:
+    build: ./yolo-svc
+    ports:
+      - "8001:8001"
+    environment:
+      YOLO_WEIGHTS: /weights/best.pt
+    volumes:
+      # YOLO segmentation weights, read-only. Default: copy bundled in this repo;
+      # override YOLO_WEIGHTS_PT in .env to use a checkpoint from a training run.
+      - ${YOLO_WEIGHTS_PT:-./assets/weights/best.pt}:/weights/best.pt:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  fp-svc:
+    build: ./fp-svc
+    ports:
+      - "8002:8002"
+    volumes:
+      # FoundationPose code + weights, read-only. Default: sibling checkout.
+      - ${FOUNDATIONPOSE_DIR:-../FoundationPose}:/workspace/FoundationPose:ro
+      # CAD meshes (metres), read-only.
+      - ./assets/meshes:/assets/meshes:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  gigapose-svc:
+    build: ./gigapose-svc
+    ports:
+      - "8003:8003"
+    volumes:
+      # GigaPose checkout: code + checkpoints (pretrained/), CAD (datasets/kip2/models),
+      # rendered templates (datasets/templates/kip2) and the DINOv2 torch-hub cache
+      # (torch_cache/). Mounted rw so the template loader can write its preprocessed
+      # cache; all weights stay on the host (not baked into the image).
+      # Default: sibling checkout.
+      - ${GIGAPOSE_DIR:-../GigaPose}:/workspace/GigaPose
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  sam3-svc:
+    build: ./sam3-svc
+    ports:
+      - "8004:8004"
+    environment:
+      # facebook/sam3 is gated on HF: weights must already sit in the mounted
+      # cache (accept the license + download once on the host). Offline mode
+      # keeps the service from ever touching the network.
+      HF_HOME: /hf-cache
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      # Tuning knobs (see sam3-svc/app.py). NOTE: the per-class text prompts
+      # find armature instances well but do NOT reliably separate anker_kurz
+      # from anker_lang (measured: a mixed scene came back all-anker_lang).
+      # Treat SAM3 classes as approximate; YOLO remains the classifying source.
+      SAM3_CONF: ${SAM3_CONF:-0.2}
+      SAM3_NMS_IOU: ${SAM3_NMS_IOU:-0.5}
+      SAM3_PROMPTS: ${SAM3_PROMPTS:-}
+    volumes:
+      # Host HuggingFace cache with the facebook/sam3 snapshot, read-only.
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/hf-cache:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "8000:8000"
+    environment:
+      YOLO_URL: http://yolo-svc:8001
+      FP_URL: http://fp-svc:8002
+      GIGAPOSE_URL: http://gigapose-svc:8003
+      SAM3_URL: http://sam3-svc:8004
+    depends_on:
+      - yolo-svc
+      - fp-svc
+      - gigapose-svc
+      - sam3-svc

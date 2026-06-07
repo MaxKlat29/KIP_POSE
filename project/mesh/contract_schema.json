@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kip-pose-mesh-contract/v1",
+  "title": "Multi-Pipeline-POSE Mesh HTTP Contract (FROZEN v1)",
+  "description": "Wire-Contract der /segment + /pose Endpoints. Single-Source = CONTRACT.md. Eingefroren 2026-06-07 (T-128). Aenderung = v2-Bump + ADR.",
+  "contract_version": "v1",
+  "frozen": "2026-06-07",
+  "class_scope": ["anker_kurz", "anker_lang"],
+  "gpu_target": "sm_86 (RTX 3090, Ampere)",
+
+  "$defs": {
+    "class_name": {
+      "type": "string",
+      "enum": ["anker_kurz", "anker_lang"],
+      "description": "lowercase Mesh-Klasse. Map auf Registry-Part (CamelCase Anker_Kurz/Anker_Lang) via bop_adapter.part_for_obj_id(CLASS_TO_OBJ_ID[cls]). obj_id: anker_kurz=1, anker_lang=2."
+    },
+    "obj_id": {
+      "type": "integer",
+      "enum": [1, 2],
+      "description": "BOP obj_id (1-basiert): anker_kurz=1, anker_lang=2. Konsistent ueber alle Services."
+    },
+    "K_flat9": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 9,
+      "maxItems": 9,
+      "description": "[fx,0,cx, 0,fy,cy, 0,0,1] flat, row-major."
+    },
+    "T_cam_obj": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "array",
+        "minItems": 4,
+        "maxItems": 4,
+        "items": {"type": "number"}
+      },
+      "description": "4x4 row-major, mesh->cam (object->camera), OpenCV-Cam-Frame (x rechts, y runter, +z vorwaerts), Meter. NICHT pose_result (das ist Welt-Frame)."
+    },
+    "obb": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"type": "number"},
+      "description": "[cx, cy, w, h, theta] Oriented Box, theta in rad. NUR yolo-obb liefert es; NUR gdrnpp konsumiert es (GDRNPP-Kopplung, CONTRACT.md §4)."
+    }
+  },
+
+  "segment": {
+    "endpoint": "POST /segment",
+    "content_type": "application/json",
+    "request": {
+      "type": "object",
+      "required": ["rgb_b64"],
+      "additionalProperties": false,
+      "properties": {
+        "rgb_b64": {"type": "string", "description": "base64 PNG, uint8 RGB. PFLICHT."},
+        "prompts": {
+          "type": "object",
+          "additionalProperties": {"type": "string"},
+          "description": "optional {class: concept text}. NUR sam3 (yolo ignoriert)."
+        },
+        "K": {"$ref": "#/$defs/K_flat9", "description": "optional, NUR Quellen die K brauchen (sam3 depth-PCA-Upgrade, noch nicht impl)."},
+        "depth_b64": {"type": "string", "description": "optional base64 PNG uint16 mm, NUR Quellen die Depth brauchen (sam3 2-pass-upgrade, noch nicht impl)."}
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["detections"],
+      "properties": {
+        "detections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "class", "conf", "mask_b64"],
+            "properties": {
+              "id": {"type": "integer", "description": "stabil, Gateway mergt Pose per id."},
+              "class": {"$ref": "#/$defs/class_name"},
+              "conf": {"type": "number", "minimum": 0, "maximum": 1},
+              "mask_b64": {"type": "string", "description": "base64 PNG single-channel 0/255, VOLLE Bild-Maske (kein crop). PFLICHT - einzige Pose-Init."},
+              "obb": {"$ref": "#/$defs/obb"}
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "pose": {
+    "endpoint": "POST /pose",
+    "content_type": "application/json",
+    "request": {
+      "type": "object",
+      "required": ["rgb_b64", "K", "instances"],
+      "properties": {
+        "rgb_b64": {"type": "string", "description": "base64 PNG uint8 RGB. PFLICHT."},
+        "depth_b64": {"type": ["string", "null"], "description": "base64 PNG uint16 mm. PFLICHT bei needs_depth=true (FoundationPose, gigapose pipeline=rgbd), sonst weglassen/null. Intern /1000 -> Meter."},
+        "K": {"$ref": "#/$defs/K_flat9"},
+        "iterations": {"type": "integer", "default": 5, "description": "Refiner-Iterationen."},
+        "hypotheses": {"type": "integer", "default": 5, "description": "NUR gigapose: coarse top-K in Refinement."},
+        "pipeline": {"type": "string", "enum": ["rgbd", "rgb"], "default": "rgbd", "description": "NUR gigapose: gated Depth/Kabsch-Tail. rgbd=needs_depth, rgb=rgb_only."},
+        "instances": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "class"],
+            "properties": {
+              "id": {"type": "integer", "description": "= Seg-Detection-id."},
+              "class": {"$ref": "#/$defs/class_name"},
+              "class_name": {"$ref": "#/$defs/class_name", "description": "gigapose akzeptiert class_name als Alias fuer class."},
+              "mask_b64": {"type": "string", "description": "base64 PNG 0/255. PFLICHT fuer fp/gigapose (Init-Maske). Bei gdrnpp weglassbar (nutzt obb)."},
+              "obb": {"$ref": "#/$defs/obb"}
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["poses"],
+      "properties": {
+        "poses": {
+          "type": "array",
+          "description": "Kann KUERZER sein als instances (unbekannte Klasse / leere Maske wird still uebersprungen).",
+          "items": {
+            "type": "object",
+            "required": ["id", "class", "T_cam_obj"],
+            "properties": {
+              "id": {"type": "integer"},
+              "class": {"$ref": "#/$defs/class_name"},
+              "T_cam_obj": {"$ref": "#/$defs/T_cam_obj"},
+              "score": {"type": "number", "description": "optional (fp laesst weg, gigapose liefert)."},
+              "stage": {"type": "string", "enum": ["coarse", "refined", "refined+kabsch"], "description": "optional, NUR gigapose."}
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "combos": {
+    "description": "Die 7 validen Seg x Pose Kombis (Whitelist). GDRNPP nur mit yolo-obb (CONTRACT.md §4).",
+    "items": [
+      {"n": 1, "seg": "yolo-obb", "pose": "gdrnpp",         "pipeline": null,   "needs_depth": false, "rgb_only": true,  "note": "Pipeline A (Hauptlinie). gdrnpp-svc = S-001."},
+      {"n": 2, "seg": "yolo-seg", "pose": "foundationpose", "pipeline": null,   "needs_depth": true,  "rgb_only": false, "note": "FP RGB-D-only."},
+      {"n": 3, "seg": "sam3",     "pose": "foundationpose", "pipeline": null,   "needs_depth": true,  "rgb_only": false, "note": "sam3 trennt kurz/lang nicht zuverlaessig."},
+      {"n": 4, "seg": "yolo-seg", "pose": "gigapose_rgbd",  "pipeline": "rgbd", "needs_depth": true,  "rgb_only": false, "note": "coarse+GenFlow+Kabsch."},
+      {"n": 5, "seg": "yolo-seg", "pose": "gigapose_rgb",   "pipeline": "rgb",  "needs_depth": false, "rgb_only": true,  "note": "coarse+GenFlow, kein Depth."},
+      {"n": 6, "seg": "sam3",     "pose": "gigapose_rgbd",  "pipeline": "rgbd", "needs_depth": true,  "rgb_only": false, "note": ""},
+      {"n": 7, "seg": "sam3",     "pose": "gigapose_rgb",   "pipeline": "rgb",  "needs_depth": false, "rgb_only": true,  "note": ""}
+    ]
+  }
+}
