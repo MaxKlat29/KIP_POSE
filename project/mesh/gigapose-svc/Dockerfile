@@ -1,4 +1,4 @@
-FROM gigapose:blackwell
+FROM gigapose:ampere
 
 WORKDIR /svc
 

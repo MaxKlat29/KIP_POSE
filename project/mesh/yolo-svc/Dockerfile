@@ -1,4 +1,4 @@
-FROM foundationpose:blackwell
+FROM foundationpose:ampere
 
 # Keep the base image's prebuilt venv (torch cu128, opencv, numpy) on PATH.
 ENV PATH="/opt/venv/bin:${PATH}"

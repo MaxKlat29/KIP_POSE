@@ -1,15 +1,25 @@
 # kip-pose-viewer orchestration.
 #
-# NOTE: yolo-svc and fp-svc build FROM the locally-built `foundationpose:blackwell`
-#       image (torch 2.11.0+cu128 for Blackwell sm_120, opencv, numpy). Build that
-#       image first (docker/Dockerfile.blackwell in the FoundationPose checkout).
-#       gigapose-svc builds FROM the locally-built `gigapose:blackwell` image (a
+# NOTE: yolo-svc and fp-svc build FROM the locally-built `foundationpose:ampere`
+#       image (torch cu128, opencv, numpy; sm_86 source-built pytorch3d/nvdiffrast
+#       for the RTX 3090 — see S-001 / recon/S001_BUILD_REPORT.md). Build that
+#       image first (docker/Dockerfile.ampere in the FoundationPose checkout).
+#       gigapose-svc builds FROM the locally-built `gigapose:ampere` image (a
 #       SEPARATE base — GigaPose pins xformers/pytorch-lightning against an older
-#       torch and cannot reuse foundationpose:blackwell); build that image too
-#       (docker/Dockerfile.blackwell in the GigaPose checkout), and make sure the
-#       GigaPose checkout has rendered templates before starting gigapose-svc.
+#       torch and cannot reuse foundationpose:ampere); build that image too
+#       (docker/Dockerfile.ampere in the GigaPose checkout), and make sure the
+#       GigaPose checkout has rendered templates (datasets/templates/kip2) before
+#       starting gigapose-svc.
 #       All GPU services also require the NVIDIA Container Toolkit
 #       (nvidia-container-toolkit) so Docker can expose the GPU.
+#
+# WEIGHTS (S-006/S-009): pretrained weights live OUTSIDE the repo at
+#       /mnt/data/kip_pose_weights (read-only) and are bind-mounted into the
+#       service-expected layout. fp-svc mounts the FoundationPose `weights/` dir;
+#       gigapose-svc gets gigaPose_v1.ckpt + the megapose-models symlink wired
+#       into its checkout's pretrained/ (the store is mounted at the same absolute
+#       path inside the container so those symlinks resolve). Override via .env
+#       (FP_WEIGHTS_DIR, GIGAPOSE_WEIGHTS_STORE, BOP_WEIGHTS_DIR).
 #
 # Host paths are configurable via .env (copy .env.example to .env and adjust).
 # The defaults assume FoundationPose/ and GigaPose/ are checked out as siblings
@@ -35,6 +45,11 @@ services:
     volumes:
       # YOLO segmentation weights, read-only. Default: copy bundled in this repo;
       # override YOLO_WEIGHTS_PT in .env to use a checkpoint from a training run.
+      # S-006 NOTE: the only interim weight on the box (/mnt/data/kip_pose/yolo26n.pt)
+      # is STOCK COCO (task=detect, 80 classes) — it produces NO anker masks. A real
+      # anker instance-seg model (S-008 / T-134, YOLO26m-seg, 2 classes) is the actual
+      # source for combos 2/4/5. yolo-seg-svc is infra-green (build/health/request) but
+      # needs that checkpoint before it returns useful masks.
       - ${YOLO_WEIGHTS_PT:-./assets/weights/best.pt}:/weights/best.pt:ro
     ipc: host
     deploy:
@@ -50,10 +65,21 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      # FoundationPose code + weights, read-only. Default: sibling checkout.
+      # FoundationPose code, read-only. Default: sibling checkout.
+      # NOTE: the foundationpose:ampere image is a BASE image (no FP repo baked);
+      # the FP code (incl. the mycpp C++ extension) comes from this mount. mycpp
+      # must be compiled once into the checkout (bash build_mycpp.sh -> mycpp/build/
+      # *.so) or fp-svc fails at startup with "module 'mycpp' has no attribute
+      # 'cluster_poses'". See S-006 report.
       - ${FOUNDATIONPOSE_DIR:-../FoundationPose}:/workspace/FoundationPose:ro
+      # Pretrained FP refiner+scorer weights, read-only, mounted into the layout
+      # the estimator expects (FP_REPO/weights/<timestamp>/model_best.pth).
+      # S-009 placed them at /mnt/data/kip_pose_weights/foundationpose/weights.
+      # The host FP checkout must contain an (empty) weights/ dir as the mountpoint,
+      # because this overlays a subdir of the read-only FP repo mount above.
+      - ${FP_WEIGHTS_DIR:-/mnt/data/kip_pose_weights/foundationpose/weights}:/workspace/FoundationPose/weights:ro
       # CAD meshes (metres), read-only.
-      - ./assets/meshes:/assets/meshes:ro
+      - ${FP_MESH_DIR:-./assets/meshes}:/assets/meshes:ro
     ipc: host
     deploy:
       resources:
@@ -73,7 +99,16 @@ services:
       # (torch_cache/). Mounted rw so the template loader can write its preprocessed
       # cache; all weights stay on the host (not baked into the image).
       # Default: sibling checkout.
+      # NOTE (S-006): templates were NOT pre-rendered on the box — render once with
+      #   python -m src.scripts.render_custom_templates custom_dataset_name=kip2
+      # (panda3d/EGL, ~13s for 2 objects x 162 views) before first start.
       - ${GIGAPOSE_DIR:-../GigaPose}:/workspace/GigaPose
+      # Pretrained store (S-009), read-only, at the SAME absolute path so the
+      # symlinks pretrained/gigaPose_v1.ckpt + pretrained/megapose-models (which
+      # point at /mnt/data/kip_pose_weights/...) resolve inside the container.
+      - ${GIGAPOSE_WEIGHTS_STORE:-/mnt/data/kip_pose_weights}:/mnt/data/kip_pose_weights:ro
+      # megapose-models live on /mnt/data/bop/weights (the symlink target), also ro.
+      - ${BOP_WEIGHTS_DIR:-/mnt/data/bop/weights}:/mnt/data/bop/weights:ro
     ipc: host
     deploy:
       resources:

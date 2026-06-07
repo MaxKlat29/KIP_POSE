@@ -1,4 +1,4 @@
-FROM foundationpose:blackwell
+FROM foundationpose:ampere
 
 WORKDIR /app
 
