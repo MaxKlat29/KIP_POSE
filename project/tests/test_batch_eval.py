@@ -4,7 +4,8 @@
 Kein GPU/Gateway/best.pt noetig (Code-now/run-later). Prueft den fastapi-freien
 `eval.batch_eval`-Kern + die kip_server-/api/eval/*-Endpoints (TestClient, gemockt):
 
-  * EVAL_CONFIGS = genau die 7 Kombis, Kombi 1 = Pipeline A (Referenz).
+  * EVAL_CONFIGS = ALLE feasiblen Kombis (~12, registry-Kreuzprodukt), kuratierte 7
+    = recommended-Subset, Kombi 1 = Pipeline A (Referenz). [T-138-PIVOT]
   * instances_to_doc: Gateway-/predict T_cam_obj → pose_result-Welt-Doc, §6-Klassen-
     mapping (lowercase → CamelCase-Part → obj_id), 2-Klassen-Scope filtert Fremdes.
   * Coord-Frame Round-Trip (S-003): world_to_bop_cam(instances_to_doc(T)) == T-Translation.
@@ -100,29 +101,53 @@ def _gateway_reply(n_anker=2, seg_ms=12.0, pose_ms=340.0, with_foreign=False):
                                            "num_posed": n_anker}}
 
 
-# ── 1) Die 7 Configs + Pipeline A ───────────────────────────────────────────────
-def test_seven_configs_pipeline_a_is_reference():
-    assert len(be.EVAL_CONFIGS) == 7
+# ── 1) Die ~12 feasiblen Configs (PIVOT) + Pipeline A + Recommended-7 ────────────
+def test_feasible_configs_pipeline_a_and_recommended():
+    # PIVOT (T-138): ALLE feasiblen Kombis (3 seg × 4 pose = 12), NICHT fix 7.
+    assert len(be.EVAL_CONFIGS) == 12
     a = [c for c in be.EVAL_CONFIGS if c["is_pipeline_a"]]
     assert len(a) == 1 and a[0]["n"] == 1
     assert a[0]["seg"] == "yolo-obb" and a[0]["pose"] == "GDRNPP"
+    # Genau 7 sind RECOMMENDED (die kuratierte Whitelist).
+    rec = [c for c in be.EVAL_CONFIGS if c["recommended"]]
+    assert len(rec) == 7
     # FE-Labels muessen Lenas POST_L/SEG_L-Maps treffen.
     segs = {c["seg"] for c in be.EVAL_CONFIGS}
     poses = {c["pose"] for c in be.EVAL_CONFIGS}
     assert segs == {"yolo-obb", "yolo-seg", "sam3"}
     assert poses == {"GDRNPP", "FoundationPose", "GigaPose-2D", "GigaPose-3D"}
-    # run_config_id stabil + eindeutig.
+    # run_config_id eindeutig ueber alle 12 (combo-id, nicht Gateway-source-Label).
     keys = [be.config_key(c) for c in be.EVAL_CONFIGS]
-    assert len(set(keys)) == 7
+    assert len(set(keys)) == 12
+
+
+def test_recommended_match_combo_whitelist():
+    # Die Recommended-Configs == genau die combos.COMBO_WHITELIST-ids.
+    from pipelines.combos import COMBO_WHITELIST
+    rec_ids = {be.config_key(c) for c in be.EVAL_CONFIGS if c["recommended"]}
+    assert rec_ids == {c["id"] for c in COMBO_WHITELIST}
+
+
+def test_pivot_flags_present():
+    by_key = {be.config_key(c): c for c in be.EVAL_CONFIGS}
+    # GDRNPP mit nicht-OBB-seg → degraded (AABB-aus-Maske), nicht recommended.
+    assert by_key["yolo_seg__gdrnpp"]["degraded"] is True
+    assert by_key["yolo_seg__gdrnpp"]["degraded_reason"] == "aabb_from_mask"
+    assert by_key["yolo_seg__gdrnpp"]["recommended"] is False
+    # sam3-Kombis → class_ambiguity (S006).
+    assert by_key["sam3__foundationpose"]["class_ambiguity"] is True
+    assert by_key["yolo_seg__foundationpose"]["class_ambiguity"] is False
+    # Pipeline A nicht degraded.
+    assert by_key["gdrnpp"]["degraded"] is False
 
 
 def test_needs_depth_matches_contract():
     # §5: FP + GigaPose-3D brauchen Depth; GigaPose-2D + GDRNPP nicht.
     by_key = {be.config_key(c): c for c in be.EVAL_CONFIGS}
-    assert by_key["yolo__foundationpose"]["needs_depth"] is True
+    assert by_key["yolo_seg__foundationpose"]["needs_depth"] is True
     assert by_key["sam3__gigapose_rgbd"]["needs_depth"] is True
-    assert by_key["yolo__gigapose_rgb"]["needs_depth"] is False
-    assert by_key["gdrnpp__gdrnpp"]["needs_depth"] is False
+    assert by_key["yolo_seg__gigapose_rgb"]["needs_depth"] is False
+    assert by_key["gdrnpp"]["needs_depth"] is False
 
 
 # ── 2) instances_to_doc: §6-Klassenmapping + 2-Klassen-Scope ────────────────────
@@ -190,7 +215,7 @@ def test_write_bop_csv_roundtrips(tmp_path):
 
 # ── 5) aggregate_config: coverage/crash 0..1, Pipeline-A-no-gateway-Sonderfall ──
 def test_aggregate_config_coverage_crash_and_timings():
-    cfg = be.EVAL_CONFIGS[1]                            # yolo__foundationpose
+    cfg = _cfg("yolo_seg__foundationpose")
     per_scene = [
         {"ok": True, "seg_ms": 10.0, "pose_ms": 300.0, "n_instances": 2, "error": None, "rows": []},
         {"ok": True, "seg_ms": 14.0, "pose_ms": 340.0, "n_instances": 0, "error": None, "rows": []},
@@ -208,11 +233,11 @@ def test_aggregate_config_coverage_crash_and_timings():
     assert row["coverage"] == pytest.approx(0.5)
     assert 0.0 <= row["crash_rate"] <= 1.0 and 0.0 <= row["coverage"] <= 1.0
     assert row["is_pipeline_a"] is False
-    assert row["run_config_id"] == "yolo__foundationpose"
+    assert row["run_config_id"] == "yolo_seg__foundationpose"
 
 
 def test_aggregate_config_pipeline_a_no_gateway_not_counted():
-    cfg = be.EVAL_CONFIGS[0]                            # Pipeline A
+    cfg = _cfg("gdrnpp")  # Pipeline A
     per_scene = [
         {"ok": False, "seg_ms": None, "pose_ms": None, "n_instances": 0,
          "error": "pipeline_a_no_gateway", "rows": []} for _ in range(5)
@@ -224,7 +249,7 @@ def test_aggregate_config_pipeline_a_no_gateway_not_counted():
 
 
 def test_aggregate_all_none_timings():
-    cfg = be.EVAL_CONFIGS[2]
+    cfg = _cfg("sam3__foundationpose")
     per_scene = [{"ok": False, "seg_ms": None, "pose_ms": None, "n_instances": 0,
                   "error": "boom", "rows": []}]
     row = be.aggregate_config(cfg, per_scene, ar_mean=None)
@@ -234,7 +259,7 @@ def test_aggregate_all_none_timings():
 
 # ── 6) run_one: Crash-Handling + Pipeline-A-Sonderfall ──────────────────────────
 def test_run_one_catches_crash(tmp_path):
-    cfg = be.EVAL_CONFIGS[1]
+    cfg = _cfg("yolo_seg__foundationpose")
     scene = _scene(tmp_path)
 
     def boom(_cfg, _scene):
@@ -246,7 +271,7 @@ def test_run_one_catches_crash(tmp_path):
 
 
 def test_run_one_pipeline_a_no_gateway(tmp_path):
-    cfg = be.EVAL_CONFIGS[0]                            # Pipeline A
+    cfg = _cfg("gdrnpp")  # Pipeline A
     scene = _scene(tmp_path)
 
     def predict(_cfg, _scene):
@@ -257,7 +282,7 @@ def test_run_one_pipeline_a_no_gateway(tmp_path):
 
 
 def test_run_one_success_builds_rows(tmp_path):
-    cfg = be.EVAL_CONFIGS[1]
+    cfg = _cfg("yolo_seg__foundationpose")
     scene = _scene(tmp_path)
     res = be.run_one(cfg, scene, lambda c, s: _gateway_reply(n_anker=2))
     assert res["ok"] is True and res["n_instances"] == 2
@@ -306,15 +331,20 @@ def test_run_batch_end_to_end(tmp_path):
 
     results = be.run_batch(be.EVAL_CONFIGS, scenes, predict, _mock_eval_fn, out,
                            run_id="run-test")
-    # Struktur (Lena batch.js / Mia §14).
+    # Struktur (Lena batch.js / Mia §14). PIVOT: 12 feasible, 7 recommended.
     assert results["run_id"] == "run-test"
-    assert results["n_configs"] == 7 and results["n_scenes"] == 3
+    assert results["n_configs"] == 12 and results["n_scenes"] == 3
     cfgs = results["configs"]
-    assert len(cfgs) == 7
+    assert len(cfgs) == 12
+    assert sum(1 for c in cfgs if c["recommended"]) == 7
     a = [c for c in cfgs if c["is_pipeline_a"]][0]
     assert a["crash_rate"] is None                      # Pipeline A: kein Gateway → n_real 0
-    non_a = [c for c in cfgs if not c["is_pipeline_a"]]
-    for c in non_a:
+    # Gateway-Kombis (pose_source != gdrnpp) sind gescort; gdrnpp-Kombis (A + die 2
+    # degraded) gehen ueber PipelineANotOnGateway → ar_mean None (kein Gateway).
+    gw = [c for c in cfgs if not c["run_config_id"].endswith("gdrnpp")
+          and c["run_config_id"] != "gdrnpp"]
+    assert len(gw) == 9                                 # 12 - 3 gdrnpp-Kombis
+    for c in gw:
         assert c["ar_mean"] is not None                # gescort
         assert 0.0 <= c["coverage"] <= 1.0 and 0.0 <= c["crash_rate"] <= 1.0
         assert c["seg_ms"] == pytest.approx(12.0)
@@ -326,7 +356,7 @@ def test_run_batch_end_to_end(tmp_path):
     assert "AR IC-BIN" in md.read_text()
     # Discovery.
     runs = be.list_runs(out)
-    assert runs and runs[0]["run_id"] == "run-test" and runs[0]["n_configs"] == 7
+    assert runs and runs[0]["run_id"] == "run-test" and runs[0]["n_configs"] == 12
     assert be.load_run(out, "run-test")["run_id"] == "run-test"
     assert be.load_run(out, "nope") is None
 
@@ -342,7 +372,7 @@ def test_run_batch_idempotent_patch(tmp_path):
     # Re-run mit gleicher id → genau EIN Run-Dir (kein Doppel-Append).
     assert len(list(out.glob("*/results.json"))) == 1
     second = json.loads((out / "run-x" / "results.json").read_text())
-    assert second["n_configs"] == first["n_configs"] == 7
+    assert second["n_configs"] == first["n_configs"] == 12
 
 
 def test_discover_scenes(tmp_path):
@@ -369,6 +399,11 @@ def _scene_camera():
     return {"cam_K": [600, 0, 320, 0, 600, 240, 0, 0, 1],
             "cam_R_w2c": [1, 0, 0, 0, 1, 0, 0, 0, 1],
             "cam_t_w2c": [0, 0, 500]}
+
+
+def _cfg(combo_id):
+    """Config-dict per combo-id (robust gg Reihenfolge der ~12 feasiblen)."""
+    return next(c for c in be.EVAL_CONFIGS if be.config_key(c) == combo_id)
 
 
 if __name__ == "__main__":

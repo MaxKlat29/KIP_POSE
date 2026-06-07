@@ -145,6 +145,105 @@ COMBO_WHITELIST = [
     {"n": 7, "seg": "sam3", "pose": "GigaPose-2D", "id": "sam3__gigapose_rgb",
      "pipeline": "rgb", "needs_depth": False, "is_pipeline_a": False},
 ]
+# RECOMMENDED-Subset = die kuratierten 7 (Default-Highlight im FE). Quelle: combo-id.
+RECOMMENDED_COMBO_IDS = frozenset(c["id"] for c in COMBO_WHITELIST)
+
+
+# ── Feasibility-Kreuzprodukt (T-138-PIVOT, Max 2026-06-07) ────────────────────
+# Statt einer fix-7-Liste leiten wir die Kombis aus den Seg- + Pose-REGISTRIES ab
+# (Kreuzprodukt, gefiltert durch ein feasibility-Predicate). Ein neues Seg-/Pose-
+# Modul taucht damit AUTOMATISCH auf — KEINE hardcoded list mehr (Extensibilitaet).
+# Die kuratierten 7 (COMBO_WHITELIST) bleiben als RECOMMENDED-Subset bestehen.
+#
+# Seg-Source-Registry: id (Mesh-/FE-Name), pose-Kopplung. yolo-obb liefert eine OBB
+# (+ rasterisierte Maske), yolo-seg/sam3 liefern Masken. sam3 ist klassen-ambig
+# (S006-Befund: trennt kurz/lang nicht zuverlaessig) → class_ambiguity-Flag.
+SEG_SOURCES = [
+    {"id": "yolo-obb", "label": "YOLOv8-OBB", "gives_obb": True,
+     "class_ambiguity": False},
+    {"id": "yolo-seg", "label": "YOLO26m-seg", "gives_obb": False,
+     "class_ambiguity": False},
+    {"id": "sam3", "label": "SAM3 (prompt)", "gives_obb": False,
+     "class_ambiguity": True},
+]
+# Pose-Source-Registry: id (combo-id-Suffix / Gateway-pose-id), FE-Label, needs_depth,
+# pipeline-Variante (rgb/rgbd), wants_obb (gdrnpp ist nativ OBB-gekoppelt §4).
+POSE_SOURCES = [
+    {"id": "gdrnpp", "label": "GDRNPP", "needs_depth": False, "pipeline": None,
+     "wants_obb": True},
+    {"id": "foundationpose", "label": "FoundationPose", "needs_depth": True,
+     "pipeline": None, "wants_obb": False},
+    {"id": "gigapose_rgbd", "label": "GigaPose-3D", "needs_depth": True,
+     "pipeline": "rgbd", "wants_obb": False},
+    {"id": "gigapose_rgb", "label": "GigaPose-2D", "needs_depth": False,
+     "pipeline": "rgb", "wants_obb": False},
+]
+
+
+def feasibility(seg: dict, pose: dict) -> "dict | None":
+    """Ist die (seg × pose)-Kombi machbar? None = ausgeschlossen, sonst Flags-dict.
+
+    Max-Regeln (T-138-PIVOT):
+      * GDRNPP koppelt mit ALLEN 3 seg. Mit yolo-obb = nativ (§4). Mit yolo-seg/sam3
+        nutzt gdrnpp-svc den AABB-aus-Maske-Fallback → `degraded` (nicht ausschliessen).
+      * yolo-obb koppelt mit ALLEN 4 pose (liefert rasterisierte Maske fuer FP/GigaPose).
+      * FP + GigaPose-3D brauchen Depth (auf SDG erfuellt → kein Ausschluss, nur needs_depth).
+      * sam3-Kombis: class-ambiguity-Flag (kurz/lang-Trennung schwach, S006).
+    Aktuell schliesst KEINE Kombi hart aus (3×4 = 12 feasible); Flags markieren die
+    degradierten/ambigen. Das Predicate ist die EINE Stelle fuer kuenftige harte
+    Ausschluesse (z.B. ein Pose-Modell, das zwingend OBB braucht)."""
+    flags = {"degraded": False, "degraded_reason": None,
+             "class_ambiguity": bool(seg["class_ambiguity"])}
+    # GDRNPP + nicht-OBB-seg → AABB-aus-Maske-Fallback = degraded.
+    if pose["wants_obb"] and not seg["gives_obb"]:
+        flags["degraded"] = True
+        flags["degraded_reason"] = "aabb_from_mask"   # gdrnpp-svc AABB-Fallback
+    return flags
+
+
+def _combo_id(seg_id: str, pose: dict) -> str:
+    """Kanonische combo-id. Pipeline A (yolo-obb→gdrnpp) = "gdrnpp" (Monolith);
+    sonst "<seg_with_underscore>__<pose_id>" (== COMBO_WHITELIST-Konvention)."""
+    if seg_id == "yolo-obb" and pose["id"] == "gdrnpp":
+        return "gdrnpp"
+    return f"{seg_id.replace('-', '_')}__{pose['id']}"
+
+
+def build_feasible_combos() -> "list[dict]":
+    """Das feasibility-gefilterte Kreuzprodukt SEG_SOURCES × POSE_SOURCES.
+
+    Liefert Metadaten-dicts (reine Konstruktion, kein Netz) — die Super-Menge der
+    COMBO_WHITELIST. Jeder Eintrag: {n, id, seg, pose, seg_id, pose_id, pipeline,
+    needs_depth, is_pipeline_a, recommended, degraded, degraded_reason,
+    class_ambiguity}. `recommended` markiert die kuratierten 7 (RECOMMENDED_COMBO_IDS).
+    """
+    out, n = [], 0
+    for seg in SEG_SOURCES:
+        for pose in POSE_SOURCES:
+            flags = feasibility(seg, pose)
+            if flags is None:
+                continue                              # hart ausgeschlossen
+            n += 1
+            cid = _combo_id(seg["id"], pose)
+            is_a = (cid == "gdrnpp")
+            out.append({
+                "n": n, "id": cid,
+                "seg": seg["id"], "pose": pose["label"],
+                "seg_id": seg["id"], "pose_id": pose["id"],
+                "pipeline": pose["pipeline"], "needs_depth": pose["needs_depth"],
+                "is_pipeline_a": is_a,
+                "recommended": cid in RECOMMENDED_COMBO_IDS,
+                "degraded": flags["degraded"],
+                "degraded_reason": flags["degraded_reason"],
+                "class_ambiguity": flags["class_ambiguity"],
+            })
+    return out
+
+
+# Alle feasiblen Kombis (~12). Super-Menge von COMBO_WHITELIST; recommended-Flag
+# markiert die kuratierten 7. Single-Source fuer den Batch-Eval-Runner (S-012) +
+# das relaxte FE-Gating (S-010).
+FEASIBLE_COMBOS = build_feasible_combos()
 
 
 def register_combos() -> None:

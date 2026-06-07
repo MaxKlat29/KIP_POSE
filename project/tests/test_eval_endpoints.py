@@ -62,7 +62,7 @@ def _persist_fixture_run(out_dir: pathlib.Path, run_id="run-fixture"):
             "run_config_id": be.config_key(cfg),
         })
     results = {"run_id": run_id, "date": "2026-06-07T18:00:00Z",
-               "duration_s": 1234.5, "n_configs": 7, "n_scenes": 20,
+               "duration_s": 1234.5, "n_configs": len(configs), "n_scenes": 20,
                "configs": configs}
     rd = out_dir / run_id
     rd.mkdir(parents=True, exist_ok=True)
@@ -88,7 +88,7 @@ def test_runs_lists_persisted(client):
     for x in body["runs"]:
         # Genau Lenas runs-Form.
         assert set(x.keys()) >= {"run_id", "date", "duration_s", "n_configs"}
-        assert x["n_configs"] == 7
+        assert x["n_configs"] == 12
 
 
 # ── result ──────────────────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ def test_result_schema(client):
     body = client.get("/api/eval/result/run-fixture").json()
     assert body["run_id"] == "run-fixture"
     cfgs = body["configs"]
-    assert len(cfgs) == 7
+    assert len(cfgs) == 12
     # Pflicht-Felder (Lena batch.js): seg,pose,ar_mean,ar_std,seg_ms,pose_ms,
     # coverage,crash_rate,note,is_pipeline_a.
     for c in cfgs:
@@ -177,9 +177,12 @@ def test_full_async_run_through_endpoints(client, tmp_path, monkeypatch):
     run_id = st["run_id"]
     # Ergebnis ist sofort ueber /api/eval/result abrufbar (Lena's loadRuns-Flow).
     res = client.get(f"/api/eval/result/{run_id}").json()
-    assert res["n_configs"] == 7 and res["n_scenes"] == 2
-    non_a = [c for c in res["configs"] if not c["is_pipeline_a"]]
-    assert all(c["ar_mean"] is not None for c in non_a)
+    assert res["n_configs"] == 12 and res["n_scenes"] == 2
+    # Gateway-Kombis (pose != gdrnpp) sind gescort; die 3 gdrnpp-Kombis (A + 2 degraded)
+    # gehen ueber PipelineANotOnGateway → ar_mean None.
+    gw = [c for c in res["configs"] if not c["run_config_id"].endswith("gdrnpp")
+          and c["run_config_id"] != "gdrnpp"]
+    assert len(gw) == 9 and all(c["ar_mean"] is not None for c in gw)
     # Und im runs-Dropdown.
     runs = client.get("/api/eval/runs").json()["runs"]
     assert any(x["run_id"] == run_id for x in runs)

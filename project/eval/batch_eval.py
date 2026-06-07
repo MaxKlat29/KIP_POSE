@@ -50,37 +50,43 @@ if str(_PROJECT) not in sys.path:
 from compare_pipelines import doc_to_bop_rows  # noqa: E402
 
 
-# ── Die 7 Configs — ABGELEITET aus combos.COMBO_WHITELIST (Single-Source CONTRACT.md
-# §5). Die Whitelist liefert n/seg/pose/id/needs_depth/is_pipeline_a; wir reichern NUR
-# die Gateway-ids (seg_source/pose_source, mesh/gateway/app.py) + die FE-Verfahren-Note
-# an. So kann EVAL_CONFIGS nie von der 7-Kombi-Wahrheit driften (Anti-Drift). ───────
+# ── Die Configs — ABGELEITET aus combos.FEASIBLE_COMBOS (T-138-PIVOT: ALLE feasible
+# Kombis ~12, registry-Kreuzprodukt, NICHT fix 7). combos liefert n/id/seg/pose/seg_id/
+# pose_id/needs_depth/is_pipeline_a/recommended/degraded/class_ambiguity; wir reichern
+# NUR die Gateway-seg_source/pose_source (mesh/gateway/app.py) + die FE-Verfahren-Note
+# an. So driftet EVAL_CONFIGS nie von der feasibility-Wahrheit (Anti-Drift); ein neues
+# Seg-/Pose-Modul in combos.SEG_SOURCES/POSE_SOURCES taucht automatisch auf. ─────────
 
-# FE-seg-Label (COMBO_WHITELIST['seg']) → Gateway-seg_source (INFER_SOURCES-id).
-# Pipeline A (yolo-obb→GDRNPP) hat kein Gateway-seg (Live-Monolith) → "gdrnpp".
-_SEG_SOURCE = {"yolo-obb": "gdrnpp", "yolo-seg": "yolo", "sam3": "sam3"}
-# COMBO_WHITELIST['id'] (= combo-id) → Gateway-pose_source (POSE_SOURCES-id).
-# Die combo-id traegt schon die rgb/rgbd-Variante (gigapose_rgbd/_rgb).
-_POSE_SOURCE = {
-    "gdrnpp": "gdrnpp",
-    "yolo_seg__foundationpose": "foundationpose", "sam3__foundationpose": "foundationpose",
-    "yolo_seg__gigapose_rgbd": "gigapose_rgbd", "sam3__gigapose_rgbd": "gigapose_rgbd",
-    "yolo_seg__gigapose_rgb": "gigapose_rgb", "sam3__gigapose_rgb": "gigapose_rgb",
-}
-# FE-Verfahren-Note (Lena batch.js NOTE_BY-Degrade-Fallback) pro pose_source.
+# combos-seg-id (Mesh-/FE-Name) → Gateway-seg_source (INFER_SOURCES-id, app.py).
+# yolo-obb hat kein Gateway-seg (Pipeline-A-Live-Monolith bzw. obb-Maske) → "yolo".
+_SEG_SOURCE = {"yolo-obb": "yolo", "yolo-seg": "yolo", "sam3": "sam3"}
+# FE-Verfahren-Note (Lena batch.js NOTE_BY-Degrade-Fallback) pro pose_id.
 _NOTE = {"gdrnpp": "Pipeline A", "foundationpose": "RGB-D 6DoF",
          "gigapose_rgbd": "coarse+ICP", "gigapose_rgb": "coarse"}
 
 
 def _build_eval_configs():
-    from pipelines.combos import COMBO_WHITELIST
+    from pipelines.combos import FEASIBLE_COMBOS
     out = []
-    for w in COMBO_WHITELIST:
-        pose_source = _POSE_SOURCE[w["id"]]
+    for w in FEASIBLE_COMBOS:
+        pose_source = "gdrnpp" if w["is_pipeline_a"] else w["pose_id"]
+        # Pipeline A (yolo-obb→gdrnpp) hat KEIN Gateway-/predict → seg_source=gdrnpp
+        # signalisiert den Live-Monolith-Pfad (PipelineANotOnGateway im Runner).
+        seg_source = "gdrnpp" if w["is_pipeline_a"] else _SEG_SOURCE[w["seg_id"]]
+        # Verfahren-Note: "Pipeline A" NUR fuer die echte Kombi 1; die degradierten
+        # GDRNPP-Kombis (yolo-seg/sam3 → gdrnpp) sind NICHT Pipeline A.
+        note = _NOTE[w["pose_id"]]
+        if w["pose_id"] == "gdrnpp" and not w["is_pipeline_a"]:
+            note = "GDRNPP (degr.)"
         out.append({
-            "n": w["n"], "seg": w["seg"], "pose": w["pose"],
-            "seg_source": _SEG_SOURCE[w["seg"]], "pose_source": pose_source,
+            "n": w["n"], "id": w["id"], "seg": w["seg"], "pose": w["pose"],
+            "seg_source": seg_source, "pose_source": pose_source,
             "needs_depth": w["needs_depth"], "is_pipeline_a": w["is_pipeline_a"],
-            "note": _NOTE[pose_source],
+            "note": note,
+            # PIVOT-Flags für die Tabelle (FE markiert recommended/degraded/ambig).
+            "recommended": w["recommended"],
+            "degraded": w["degraded"], "degraded_reason": w["degraded_reason"],
+            "class_ambiguity": w["class_ambiguity"],
         })
     return out
 
@@ -99,7 +105,14 @@ TABLE_ORIGIN_M = (0.0, 0.0, 0.08)   # e2e_infer.TABLE_ORIGIN_SCENE (Welt-Nullpun
 
 
 def config_key(cfg: dict) -> str:
-    """Stabiler run_config_id (FE: `run_config_id`, fuers BEST-Highlight/Sortier-Key)."""
+    """Stabiler, EINDEUTIGER run_config_id (FE: `run_config_id`, BEST-Highlight/Sort).
+
+    Nutzt die combo-`id` (combos.FEASIBLE_COMBOS, = "<seg_id>__<pose_id>" bzw. "gdrnpp")
+    — die ist ueber alle ~12 feasiblen Kombis eindeutig. Die Gateway-source-Labels
+    (seg_source/pose_source) sind es NICHT (yolo-obb + yolo-seg teilen seg_source 'yolo')."""
+    cid = cfg.get("id")
+    if cid:
+        return cid
     return f"{cfg['seg_source']}__{cfg['pose_source']}"
 
 
@@ -379,6 +392,12 @@ def aggregate_config(cfg: dict, per_scene: list, ar_mean=None, ar_std=None,
         "note": cfg.get("note"),
         "is_pipeline_a": bool(cfg.get("is_pipeline_a")),
         "run_config_id": config_key(cfg),
+        # PIVOT-Flags (T-138): FE markiert recommended (kuratierte 7) + degraded
+        # (gdrnpp AABB-aus-Maske) + class_ambiguity (sam3 kurz/lang schwach, S006).
+        "recommended": bool(cfg.get("recommended")),
+        "degraded": bool(cfg.get("degraded")),
+        "degraded_reason": cfg.get("degraded_reason"),
+        "class_ambiguity": bool(cfg.get("class_ambiguity")),
         "n_scenes": n, "n_real": n_real, "n_ok": len(oks), "n_crash": n_crash,
     }
     if per_class:
@@ -481,14 +500,17 @@ def _persist(run_dir: pathlib.Path, results: dict) -> None:
 
 
 def render_markdown(results: dict) -> str:
-    """EVAL.md — eine Zeile pro Config, Pipeline A als Referenz markiert."""
+    """EVAL.md — eine Zeile pro feasibler Config. Pipeline A = Referenz, kuratierte
+    7 = RECOMMENDED (★), degraded (gdrnpp AABB-aus-Maske) + class-ambig (sam3) markiert."""
+    n_rec = sum(1 for c in results["configs"] if c.get("recommended"))
     lines = [
         f"# Batch-Eval {results['run_id']}", "",
         f"- Datum: {results['date']}",
-        f"- Configs: {results['n_configs']} · Szenen/Seeds: {results['n_scenes']} "
-        f"· Dauer: {results['duration_s']} s", "",
-        "| # | Seg | Pose | AR IC-BIN | ±std | seg ms | pose ms | Coverage | Crash | Verfahren |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        f"- Configs: {results['n_configs']} feasible ({n_rec} recommended) "
+        f"· Szenen/Seeds: {results['n_scenes']} · Dauer: {results['duration_s']} s", "",
+        "| # | Seg | Pose | AR IC-BIN | ±std | seg ms | pose ms | Coverage | Crash "
+        "| Verfahren | Flags |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
 
     def _f(v, nd=3):
@@ -502,13 +524,23 @@ def render_markdown(results: dict) -> str:
 
     for i, c in enumerate(results["configs"], 1):
         ref = " (Ref)" if c.get("is_pipeline_a") else ""
+        flags = []
+        if c.get("recommended"):
+            flags.append("★empf.")
+        if c.get("degraded"):
+            flags.append(f"degr.({c.get('degraded_reason') or 'ja'})")
+        if c.get("class_ambiguity"):
+            flags.append("klassen-ambig")
         lines.append(
             f"| {i}{ref} | {c['seg']} | {c['pose']} | {_f(c['ar_mean'])} "
             f"| {_f(c['ar_std'])} | {_ms(c['seg_ms'])} | {_ms(c['pose_ms'])} "
-            f"| {_pct(c['coverage'])} | {_pct(c['crash_rate'])} | {c.get('note') or '—'} |"
+            f"| {_pct(c['coverage'])} | {_pct(c['crash_rate'])} | {c.get('note') or '—'} "
+            f"| {', '.join(flags) or '—'} |"
         )
     lines += ["", "_AR IC-BIN: offizielles BOP19/IC-BIN-Localisation-Protokoll "
-              "(sym-aware, 2 Anker-Klassen D1). Coverage/Crash ∈ 0..1._", ""]
+              "(sym-aware, 2 Anker-Klassen D1). Coverage/Crash ∈ 0..1. ★empf. = "
+              "kuratierte Recommended-7; degr. = GDRNPP AABB-aus-Maske; klassen-ambig "
+              "= sam3 trennt kurz/lang schwach (S006)._", ""]
     return "\n".join(lines)
 
 
