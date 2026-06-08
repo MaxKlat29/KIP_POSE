@@ -200,8 +200,10 @@ services:
     # reach it on the host at 127.0.0.1:8000. Binding 0.0.0.0 would expose the
     # whole mesh to the internet (the box has no forward_auth). Override the host
     # bind via GATEWAY_BIND in .env if a non-loopback interface is ever needed.
+    # GATEWAY_PORT overrides the HOST port (default 8000) — on the box this is set
+    # to 8090 because :8000 is taken by an unrelated civion-api service.
     ports:
-      - "${GATEWAY_BIND:-127.0.0.1}:8000:8000"
+      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8000}:8000"
     environment:
       YOLO_URL: http://yolo-svc:8001
       # yolo-obb seg source (combo 1 -> GDRNPP). The gateway INFER_SOURCES['yolo-obb']
