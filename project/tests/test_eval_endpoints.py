@@ -190,7 +190,7 @@ def test_full_async_run_through_endpoints(client, tmp_path, monkeypatch):
 
 # ── T-153: /api/eval/job liefert den Live-Scoreboard-Contract ────────────────────
 _STANDINGS_KEYS = {
-    "rank", "config_key", "seg", "pose", "ar", "ar_std", "n_scenes",
+    "rank", "config_key", "seg", "pose", "modality", "ar", "ar_std", "n_scenes",
     "seg_ms", "pose_ms", "coverage", "crash_rate", "recommended", "degraded",
     "degraded_reason", "class_ambiguity", "is_pipeline_a",
 }
