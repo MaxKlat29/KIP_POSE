@@ -1693,6 +1693,12 @@ def eval_result(run_id: str):
 
     -> {"run_id",...,"configs":[{seg,pose,ar_mean,ar_std,seg_ms,pose_ms,coverage,
        crash_rate,note,is_pipeline_a,run_config_id,per_class?}]}. coverage/crash 0..1."""
+    import re as _re
+    # M2 (SECURITY_GATE, Bruno T-145): validate run_id BEFORE load_run. The id is a
+    # generated run-folder name (run_<ts>); restrict to a safe charset so a crafted
+    # path (e.g. "../../etc") can never escape EVAL_OUT via load_run's join.
+    if not _re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):
+        raise HTTPException(400, "ungueltige run_id")
     from eval import batch_eval as _be
     res = _be.load_run(EVAL_OUT, run_id)
     if res is None:

@@ -41,8 +41,11 @@
 services:
   yolo-svc:
     build: ./yolo-svc
-    ports:
-      - "8001:8001"
+    # M1 (SECURITY_GATE, Bruno T-145): NO host port. yolo-svc is reached by the
+    # gateway over the compose network as http://yolo-svc:8001. Exposing it on the
+    # host (0.0.0.0:8001) would make an internal-only service internet-reachable.
+    expose:
+      - "8001"
     environment:
       YOLO_WEIGHTS: /weights/best.pt
     volumes:
@@ -69,8 +72,9 @@ services:
     # kernels ship in the torch wheel) — does NOT need foundationpose:ampere /
     # gigapose:ampere. Measured VRAM ~0.5 GB (S-005 smoke), the cheapest service.
     build: ./yolo-obb-svc
-    ports:
-      - "8011:8011"
+    # M1: internal-only, gateway reaches it as http://yolo-obb-svc:8011.
+    expose:
+      - "8011"
     environment:
       YOLO_OBB_WEIGHTS: /weights/detector.pt
       YOLO_OBB_CONF: ${YOLO_OBB_CONF:-0.40}
@@ -91,8 +95,9 @@ services:
 
   fp-svc:
     build: ./fp-svc
-    ports:
-      - "8002:8002"
+    # M1: internal-only, gateway reaches it as http://fp-svc:8002.
+    expose:
+      - "8002"
     volumes:
       # FoundationPose code, read-only. Default: sibling checkout.
       # NOTE: the foundationpose:ampere image is a BASE image (no FP repo baked);
@@ -120,8 +125,9 @@ services:
 
   gigapose-svc:
     build: ./gigapose-svc
-    ports:
-      - "8003:8003"
+    # M1: internal-only, gateway reaches it as http://gigapose-svc:8003.
+    expose:
+      - "8003"
     volumes:
       # GigaPose checkout: code + checkpoints (pretrained/), CAD (datasets/kip2/models),
       # rendered templates (datasets/templates/kip2) and the DINOv2 torch-hub cache
@@ -149,8 +155,9 @@ services:
 
   sam3-svc:
     build: ./sam3-svc
-    ports:
-      - "8004:8004"
+    # M1: internal-only, gateway reaches it as http://sam3-svc:8004.
+    expose:
+      - "8004"
     environment:
       # facebook/sam3 is gated on HF: weights must already sit in the mounted
       # cache (accept the license + download once on the host). Offline mode
@@ -188,8 +195,13 @@ services:
 
   gateway:
     build: ./gateway
+    # M1 (SECURITY_GATE, Bruno T-145): bind to LOOPBACK only. The gateway is the
+    # single mesh entry point; the native kip_server (:8077) and the eval runner
+    # reach it on the host at 127.0.0.1:8000. Binding 0.0.0.0 would expose the
+    # whole mesh to the internet (the box has no forward_auth). Override the host
+    # bind via GATEWAY_BIND in .env if a non-loopback interface is ever needed.
     ports:
-      - "8000:8000"
+      - "${GATEWAY_BIND:-127.0.0.1}:8000:8000"
     environment:
       YOLO_URL: http://yolo-svc:8001
       # yolo-obb seg source (combo 1 -> GDRNPP). The gateway INFER_SOURCES['yolo-obb']
