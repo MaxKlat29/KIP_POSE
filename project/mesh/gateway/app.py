@@ -278,12 +278,16 @@ def _convert_sdg_to_overlay(bbox, inst_img, id2prim, T_world2cvcam, K):
     return out
 
 
-def _backproject_pointcloud(depth_bytes: bytes, rgb_bgr: np.ndarray, K: dict):
-    """Decimated back-projection of a uint16-mm depth PNG to camera-frame metres."""
+def _backproject_pointcloud(depth_bytes: bytes, rgb_bgr: np.ndarray, K: dict,
+                            depth_scale: float = 1.0):
+    """Decimated back-projection of a uint16 depth PNG to camera-frame metres.
+
+    depth_scale maps the raw uint16 to millimetres (metres = png*depth_scale/1000).
+    Default 1.0 = mm sensors (Zivid/Realsense); BOP/SDG frames pass 0.1 (T-156)."""
     depth = cv2.imdecode(np.frombuffer(depth_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
     if depth is None:
         return None
-    depth_m = depth.astype(np.float32) / 1000.0  # mm -> m
+    depth_m = depth.astype(np.float32) * depth_scale / 1000.0  # png*scale -> mm -> m
 
     fx, fy, cx, cy = K["fx"], K["fy"], K["cx"], K["cy"]
     h, w = depth_m.shape[:2]
@@ -502,6 +506,12 @@ async def predict(
     gt_masks: str | None = Form(None),
     seg_prompts: str | None = Form(None),
     degraded: bool = Form(False),
+    # uint16-depth -> millimetres factor (metres = png*depth_scale/1000). Default 1.0
+    # = real mm sensors (the historical assumption); BOP/SDG depth PNGs carry a
+    # depth_scale (0.1: png*0.1 = mm) in their scene_camera.json and MUST pass it,
+    # else the RGB-D pose is off by exactly that factor (T-156: 0.1 dropped -> depth
+    # 10x too far -> ~2.4m lateral X for every RGB-D combo).
+    depth_scale: float = Form(1.0),
 ):
     pose = POSE_SOURCES.get(pose_source)
     if pose is None:
@@ -582,6 +592,9 @@ async def predict(
     }
     if pose["needs_depth"]:
         pose_payload["depth_b64"] = depth_b64
+        # Forward the depth_scale so the refiner decodes png*depth_scale/1000 = metres.
+        # Without this BOP/SDG frames (depth_scale=0.1) are decoded 10x too far (T-156).
+        pose_payload["depth_scale"] = depth_scale
     if "pipeline" in pose:
         pose_payload["pipeline"] = pose["pipeline"]
     if "hypotheses" in pose:
@@ -618,7 +631,8 @@ async def predict(
     pointcloud = None
     if want_pointcloud and depth_bytes:
         pointcloud = _backproject_pointcloud(
-            depth_bytes, rgb_bgr, {"fx": fx, "fy": fy, "cx": cx, "cy": cy}
+            depth_bytes, rgb_bgr, {"fx": fx, "fy": fy, "cx": cx, "cy": cy},
+            depth_scale=depth_scale,
         )
 
     return {

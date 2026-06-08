@@ -6,7 +6,8 @@ estimator per CAD mesh at startup, then poses each supplied instance mask.
 POST /pose
   {
     "rgb_b64":   <base64 PNG, uint8 RGB>,
-    "depth_b64": <base64 PNG, uint16 millimetres>,
+    "depth_b64": <base64 PNG, uint16>,
+    "depth_scale": 1.0,   # uint16 -> millimetres factor; metres = png*depth_scale/1000
     "K":         [fx, 0, cx, 0, fy, cy, 0, 0, 1],
     "iterations": 5,
     "instances": [ {"id": 0, "class": "anker_kurz", "mask_b64": <base64 PNG, 0/255>}, ... ]
@@ -66,6 +67,11 @@ def load_models():
 class PoseReq(BaseModel):
     rgb_b64: str
     depth_b64: str
+    # uint16-depth -> millimetres factor. Real mm-depth sensors (Zivid/Realsense)
+    # use 1.0 (= the historical default). BOP/SDG depth PNGs are written with a
+    # depth_scale (e.g. 0.1: png*0.1 = mm) and MUST forward it or the back-projected
+    # cloud is off by exactly that factor (T-156: 0.1 dropped -> depth 10x -> ~2.4m X).
+    depth_scale: float = 1.0
     K: list[float]
     iterations: int = 5
     instances: list[dict]
@@ -79,7 +85,9 @@ def health():
 @app.post("/pose")
 def pose(req: PoseReq):
     rgb = cv2.cvtColor(_png_b64_to_array(req.rgb_b64, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
-    depth = _png_b64_to_array(req.depth_b64, cv2.IMREAD_UNCHANGED).astype(np.float32) / 1000.0  # mm->m
+    # png(uint16) * depth_scale = millimetres; /1000 -> metres. depth_scale default
+    # 1.0 keeps the mm-sensor path byte-identical; BOP/SDG frames pass 0.1 (T-156).
+    depth = _png_b64_to_array(req.depth_b64, cv2.IMREAD_UNCHANGED).astype(np.float32) * req.depth_scale / 1000.0
     K = np.array(req.K, dtype=np.float64).reshape(3, 3)
     out = []
     for inst in req.instances:

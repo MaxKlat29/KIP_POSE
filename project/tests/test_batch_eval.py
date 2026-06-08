@@ -80,6 +80,7 @@ def _scene(tmp: pathlib.Path, scene_id=0, with_depth=True):
     return {"scene_id": scene_id, "im_id": 0,
             "rgb": str(sd / "rgb" / "000000.png"),
             "depth": str(sd / "depth" / "000000.png") if with_depth else None,
+            "depth_scale": 0.1,   # BOP/SDG convention (png*0.1 = mm), T-156
             "camera": camera, "K": {"fx": 600.0, "fy": 600.0, "cx": 320.0, "cy": 240.0},
             "dir": str(sd)}
 
@@ -396,7 +397,7 @@ def test_run_batch_idempotent_patch(tmp_path):
 
 
 def test_discover_scenes(tmp_path):
-    # 4 Szenen anlegen, scene_camera mit Extrinsics.
+    # 4 Szenen anlegen, scene_camera mit Extrinsics + BOP-depth_scale.
     for i in range(4):
         sd = tmp_path / f"{i:06d}"
         (sd / "rgb").mkdir(parents=True, exist_ok=True)
@@ -404,7 +405,7 @@ def test_discover_scenes(tmp_path):
         (sd / "rgb" / "000000.png").write_bytes(_png_bytes())
         (sd / "depth" / "000000.png").write_bytes(_png_bytes())
         (sd / "scene_camera.json").write_text(json.dumps({"0": {
-            "cam_K": [600, 0, 320, 0, 600, 240, 0, 0, 1],
+            "cam_K": [600, 0, 320, 0, 600, 240, 0, 0, 1], "depth_scale": 0.1,
             "cam_R_w2c": [1, 0, 0, 0, 1, 0, 0, 0, 1], "cam_t_w2c": [0, 0, 500]}}))
     scenes = be.discover_scenes(tmp_path, seeds=2)
     assert len(scenes) == 2                             # seeds cappt
@@ -412,6 +413,109 @@ def test_discover_scenes(tmp_path):
     assert s["K"] == {"fx": 600.0, "fy": 600.0, "cx": 320.0, "cy": 240.0}
     assert s["camera"]["cam_R_w2c"] == [1, 0, 0, 0, 1, 0, 0, 0, 1]
     assert pathlib.Path(s["rgb"]).exists() and pathlib.Path(s["depth"]).exists()
+    # T-156: the BOP depth_scale MUST be surfaced so the gateway/refiner decode the
+    # right metres (png*depth_scale/1000). Dropping it = depth 10x too far -> ~2.4m X.
+    assert s["depth_scale"] == 0.1
+
+
+def test_discover_scenes_depth_scale_defaults_to_one(tmp_path):
+    # scene_camera without a depth_scale (real-mm convention) -> 1.0 (status quo).
+    sd = tmp_path / "000000"
+    (sd / "rgb").mkdir(parents=True, exist_ok=True)
+    (sd / "depth").mkdir(parents=True, exist_ok=True)
+    (sd / "rgb" / "000000.png").write_bytes(_png_bytes())
+    (sd / "depth" / "000000.png").write_bytes(_png_bytes())
+    (sd / "scene_camera.json").write_text(json.dumps({"0": {
+        "cam_K": [600, 0, 320, 0, 600, 240, 0, 0, 1],
+        "cam_R_w2c": [1, 0, 0, 0, 1, 0, 0, 0, 1], "cam_t_w2c": [0, 0, 500]}}))
+    s = be.discover_scenes(tmp_path)[0]
+    assert s["depth_scale"] == 1.0
+
+
+# ── T-156: depth_scale propagation (the ~2.4m RGB-D X-bug) ───────────────────────
+def test_http_predict_forwards_depth_scale_for_rgbd():
+    """The runner MUST send depth_scale to the gateway for depth-consuming combos,
+    else the BOP png*0.1 depth is decoded as png/1000 (10x too far) -> the ~2.4m
+    lateral X that zeroed every RGB-D combo's AR (T-156). RGB-only combos send none."""
+    captured = {}
+
+    class _FakeResp:
+        status_code = 200
+        def raise_for_status(self): pass
+        def json(self): return {"instances": [], "timings": {}}
+
+    class _FakeClient:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, url, data=None, files=None):
+            captured["data"] = data
+            captured["has_depth_file"] = files is not None and "depth" in files
+            return _FakeResp()
+
+    import types
+    fake_httpx = types.SimpleNamespace(Client=lambda *a, **k: _FakeClient())
+    real_import = __builtins__["__import__"] if isinstance(__builtins__, dict) \
+        else __builtins__.__import__
+
+    def _patched_import(name, *a, **k):
+        if name == "httpx":
+            return fake_httpx
+        return real_import(name, *a, **k)
+
+    import builtins, tempfile
+    with tempfile.TemporaryDirectory() as td:
+        scene = _scene(pathlib.Path(td))   # carries depth_scale=0.1, needs depth
+        predict = be.http_predict("http://gw:8090")
+        rgbd_cfg = _cfg("yolo_seg__foundationpose")   # needs_depth=True
+        builtins.__import__ = _patched_import
+        try:
+            predict(rgbd_cfg, scene)
+            assert captured["has_depth_file"], "RGB-D combo must upload depth"
+            assert "depth_scale" in captured["data"], "depth_scale must be forwarded"
+            assert float(captured["data"]["depth_scale"]) == 0.1
+            # RGB-only combo (no depth) must NOT forward depth_scale.
+            captured.clear()
+            rgb_cfg = _cfg("yolo_seg__gigapose_rgb")   # needs_depth=False
+            predict(rgb_cfg, scene)
+            assert "depth_scale" not in captured["data"]
+        finally:
+            builtins.__import__ = real_import
+
+
+def test_depth_decode_backprojection_honours_depth_scale():
+    """End-to-end numeric guard on the depth-decode formula shared by the gateway
+    pointcloud + both refiners: metres = png * depth_scale / 1000.
+
+    Mirrors box scene 000000: a uint16 depth of 11131 at a pixel that GT projects to,
+    with K (fx=1322.67, cx=640) and depth_scale=0.1, MUST back-project to ~the GT
+    translation (-0.296,-0.205,1.059) m (within a few cm — the depth samples the part
+    SURFACE, not its centroid). The pre-fix decode (png/1000, depth_scale dropped)
+    lands at (-3.1,-2.2,11.1) m — the exact 10x / ~2.4m-X regression. This test goes
+    RED against the old `png/1000` path and GREEN with `png*depth_scale/1000`."""
+    fx = fy = 1322.6666666666667
+    cx, cy = 640.0, 360.0
+    depth_scale = 0.1
+    png_raw = 11131.0
+    # The pixel GT obj1 (-296.3,-204.7,1058.9 mm) projects to (measured on box).
+    u, v = 269.9, 104.3
+    gt_m = np.array([-0.2963, -0.2047, 1.0589])
+
+    def _backproject(png, scale):
+        z = png * scale / 1000.0
+        x = (u - cx) * z / fx
+        y = (v - cy) * z / fy
+        return np.array([x, y, z])
+
+    # Correct decode (depth_scale honoured) recovers GT to within a few cm (surface vs
+    # centroid). The key guard: it is metres, not tens of metres.
+    p_ok = _backproject(png_raw, depth_scale)
+    assert np.allclose(p_ok, gt_m, atol=0.10), f"correct decode off: {p_ok} vs {gt_m}"
+    # The dropped-depth_scale decode (the bug) is exactly 10x off — X alone ~2.8 m away.
+    p_bug = _backproject(png_raw, 1.0)
+    assert np.allclose(p_bug, p_ok * 10.0, atol=1e-9), f"bug decode not 10x: {p_bug}"
+    assert abs(p_bug[0] - gt_m[0]) > 2.0, "the bug must show the multi-metre X error"
+    assert p_bug[2] > 10.0, "the bug must place the surface >10 m away (10x of ~1.1 m)"
 
 
 # ── Helper ──────────────────────────────────────────────────────────────────────

@@ -66,9 +66,12 @@ def _decode_rgb(b64: str) -> np.ndarray:
     return np.array(img)
 
 
-def _decode_depth(b64: str) -> np.ndarray:
+def _decode_depth(b64: str, depth_scale: float = 1.0) -> np.ndarray:
+    # png(uint16) * depth_scale = millimetres; /1000 -> metres. depth_scale default
+    # 1.0 keeps the mm-sensor path byte-identical; BOP/SDG frames pass 0.1 (T-156:
+    # the 0.1 was being dropped -> depth 10x too far -> ~2.4m lateral X error).
     img = Image.open(io.BytesIO(base64.b64decode(b64)))
-    return np.array(img).astype(np.float32) / 1000.0  # uint16 mm -> metres
+    return np.array(img).astype(np.float32) * depth_scale / 1000.0
 
 
 def _decode_mask(b64: str) -> np.ndarray:
@@ -80,6 +83,7 @@ def _decode_mask(b64: str) -> np.ndarray:
 class PoseReq(BaseModel):
     rgb_b64: str
     depth_b64: Optional[str] = None   # required for pipeline=='rgbd', null for 'rgb'
+    depth_scale: float = 1.0          # uint16->mm factor (metres = png*depth_scale/1000)
     K: list[float]                    # flat 9, row-major
     iterations: int = 5              # refiner n_iterations
     hypotheses: int = 5              # coarse top-K carried into refinement
@@ -125,7 +129,7 @@ def pose(req: PoseReq):
         if not req.depth_b64:
             raise HTTPException(status_code=400, detail="depth_b64 required for pipeline='rgbd'")
         try:
-            depth = _decode_depth(req.depth_b64)
+            depth = _decode_depth(req.depth_b64, req.depth_scale)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=f"bad depth: {e}")
 
