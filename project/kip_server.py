@@ -194,7 +194,8 @@ def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
                                depth_bytes: Optional[bytes], fx: float, fy: float,
                                cx: float, cy: float, iterations: int,
                                top_n: Optional[int], want_pointcloud: bool,
-                               seg_prompts: Optional[str]) -> dict:
+                               seg_prompts: Optional[str],
+                               depth_scale: float = 1.0) -> dict:
     """Proxyt EINE der NICHT-A feasible-Kombis als multipart an gateway/predict und gibt die
     rohe Gateway-Antwort (instances[].T_cam_obj + timings) zurueck. httpx nur Box-venv."""
     import httpx
@@ -208,6 +209,8 @@ def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
         "want_pointcloud": str(bool(want_pointcloud)).lower(),
         "seg_source": gw["seg_source"],
         "pose_source": gw["pose_source"],
+        # uint16->mm depth factor (T-156); 1.0 = mm sensors, BOP/SDG uploads pass 0.1.
+        "depth_scale": str(depth_scale),
     }
     # GDRNPP-degraded-Kombis (yolo-seg/sam3 → gdrnpp): das Gateway braucht degraded=true,
     # sonst forced es seg→yolo-obb und die Maske geht verloren (T-153-Opt-in, default-off;
@@ -370,6 +373,10 @@ async def predict(
     top_n: int | None = Form(None),
     want_pointcloud: bool = Form(False),
     seg_prompts: str | None = Form(None),
+    # uint16-depth -> mm factor (metres = png*depth_scale/1000). Default 1.0 = real
+    # mm sensors (Zivid live path, unchanged); BOP/SDG depth uploads pass 0.1 so the
+    # RGB-D combos don't decode depth 10x too far (T-156).
+    depth_scale: float = Form(1.0),
 ):
     """EINE Origin fuers FE — die unified Inferenz-Naht (S-013, Mia S-010).
 
@@ -425,7 +432,8 @@ async def predict(
     gateway_resp = _gateway_predict_multipart(
         combo_id, rgb_bytes=rgb_bytes, depth_bytes=(depth_bytes or None),
         fx=fx, fy=fy, cx=cx, cy=cy, iterations=iterations, top_n=top_n,
-        want_pointcloud=want_pointcloud, seg_prompts=seg_prompts)
+        want_pointcloud=want_pointcloud, seg_prompts=seg_prompts,
+        depth_scale=depth_scale)
 
     table_origin = _table_origin()
     doc = _gwp.gateway_predict_to_pose_result(

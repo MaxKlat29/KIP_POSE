@@ -255,6 +255,12 @@ def http_predict(gateway_url: str, iterations: int = 5, top_n=None, timeout: flo
             "iterations": iterations,
             "seg_source": cfg["seg_source"], "pose_source": cfg["pose_source"],
         }
+        # BOP/SDG depth PNGs are written with a depth_scale (png*depth_scale = mm).
+        # Forward it so the gateway+refiner decode metres = png*depth_scale/1000.
+        # Dropping it decodes depth 10x too far (depth_scale=0.1) -> the ~2.4m
+        # lateral X error that zeroed every RGB-D combo's AR (T-156).
+        if cfg["needs_depth"] and scene.get("depth_scale") is not None:
+            data["depth_scale"] = scene["depth_scale"]
         # degraded gdrnpp-Kombis: opt-in, damit das Gateway den mask-seg_source nicht
         # auf yolo-obb zurueckzwingt (mask→gdrnpp AABB-Fallback).
         if cfg["pose_source"] == "gdrnpp" and not cfg.get("is_pipeline_a"):
@@ -839,6 +845,10 @@ def discover_scenes(scenes_dir, seeds=None, split_layout=True) -> list:
         out.append({
             "scene_id": int(sd.name), "im_id": im_id,
             "rgb": str(rgb), "depth": str(depth) if depth.exists() else None,
+            # BOP depth PNGs encode metres = png*depth_scale/1000 (Isaac/SDG writes
+            # 0.1). Carry it so the gateway+refiner decode the right scale (T-156);
+            # default 1.0 (mm) when scene_camera omits it.
+            "depth_scale": float(cam.get("depth_scale", 1.0)),
             "camera": camera, "K": K, "dir": str(sd),
         })
     if seeds is not None:
