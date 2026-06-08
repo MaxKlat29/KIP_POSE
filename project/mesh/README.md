@@ -15,6 +15,7 @@ Docker-Compose-Mesh). Hierher gebracht in T-128 (S-002, 2026-06-07, Viktor).
 | `fp-svc/` | FoundationPose `/pose` (RGB-D) | Port 8002 |
 | `gigapose-svc/` | GigaPose `/pose` (2D+3D via `pipeline`-Flag) | Port 8003 |
 | `sam3-svc/` | facebook/sam3 promptable `/segment` | Port 8004 |
+| `gdrnpp-svc/` | **GDRNPP `/pose` (Pipeline A, liest `obb`)** — S-004, native venv (kein Docker) | Port 8012 |
 | `tools/` | `sdg_to_gt_overlay.py`, `usd_scene_to_glb.py` (uv-CLIs) | — |
 | `docker-compose.yml`, `.env.example` | Orchestrierung (Mounts via .env) | — |
 
@@ -37,8 +38,12 @@ Docker-Compose-Mesh). Hierher gebracht in T-128 (S-002, 2026-06-07, Viktor).
 ## ⚠️ Noch zu bauen (eigene Stories, NICHT Teil von S-002)
 
 - **S-001 (Sam, läuft):** `foundationpose:ampere` + `gigapose:ampere` Base-Images (sm_86 rebuild).
-- `gdrnpp-svc` (liest `obb`, per-Objekt-Checkpoints) + `yolo-obb-svc` (liefert `obb`).
-- Gateway: `POSE_SOURCES["gdrnpp"]` + `INFER_SOURCES["yolo-obb"]` + GDRNPP-Kopplungs-Gating.
+- ~~`gdrnpp-svc` (liest `obb`, per-Objekt-Checkpoints)~~ **✓ S-004** — `gdrnpp-svc/` (Port 8012, native
+  venv, det-getrieben/T-115-safe, Round-Trip-exakt vs Live-:8078, Kombi-1-E2E grün).
+- `yolo-obb-svc` (liefert `obb`) — **✓ S-005** (Port 8011).
+- ~~Gateway: `POSE_SOURCES["gdrnpp"]` + `INFER_SOURCES["yolo-obb"]` + GDRNPP-Kopplungs-Gating~~
+  **✓ S-004** (gateway/app.py: gdrnpp+yolo-obb registriert, §4-Kopplung erzwungen + off-whitelist
+  abgewiesen, `obb`-Forward).
 - VRAM-Lifecycle (ADR-021): persistente Seg + LRU=1 Pose-Swap.
 
 > **Dieses Verzeichnis startet KEINE Services.** Das Mesh läuft auf der Box (S-006). Hier liegt
