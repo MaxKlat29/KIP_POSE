@@ -1,16 +1,19 @@
-// pipeline.js — S-010 + T-147-RELAX: 2 gekoppelte Dropdowns (Seg → Post) + Gating
-// auf die VOLLE Feasibility-Matrix (12 Kombis, nicht mehr nur die kuratierten 7).
+// pipeline.js — S-010 + T-147 + T-158: 2 gekoppelte Dropdowns (Seg → Post) + Gating
+// auf die VOLLE Feasibility-Matrix (12 Kombis).
 //
 // REGEL-QUELLE: project/pipelines/combos.py (FEASIBLE_COMBOS = SEG_SOURCES × POSE_SOURCES,
 // gefiltert durch das feasibility-Predicate). Das FE erfindet KEINE Gating-Regeln — es
-// spiegelt die Matrix. Die GDRNPP↔yolo-obb-Kopplung wird NICHT mehr hart hardcoded:
-// GDRNPP koppelt jetzt mit ALLEN 3 Seg-Quellen (mit yolo-obb nativ, mit yolo-seg/sam3
-// `degraded` = AABB-aus-Maske). Die kuratierten 7 (`recommended`) sind Default/Highlight,
-// die 5 zusaetzlichen sind waehlbar mit degraded/class-ambiguity-Hinweis (kein Wegblenden).
+// spiegelt die Matrix. Die GDRNPP↔yolo-obb-Kopplung wird NICHT hart hardcoded:
+// GDRNPP koppelt mit ALLEN 3 Seg-Quellen (mit yolo-obb nativ, mit yolo-seg/sam3 degraded
+// = AABB-aus-Maske).
 //
-// Idealerweise kaeme die Matrix aus /api/pipelines (T-147: liefert jetzt alle 12 inkl.
-// recommended/degraded/class_ambiguity-Flags). Bis das FE komplett darauf umgestellt ist,
-// spiegeln wir die Feasibility-Konstruktion hier (dieselbe Logik wie combos.feasibility);
+// T-158 (Max): das Dropdown-Gating ist jetzt DREISTUFIG und MARKEN-FREI:
+//   • sauber (clean)         → wählbar, CLEAN Name (kein Hinweis, kein degr-Suffix)
+//   • nicht-sauber           → AUSGEGRAUT (disabled), OHNE Text-Label/Badge/Grund
+//       (degraded GDRNPP-via-AABB, unavailable/service_down, Tiefenbild fehlt)
+//   • logisch unmöglich      → AUSGEBLENDET (gar nicht in der Option-Liste)
+// Keine "(degradiert)"/"(AABB aus Maske)"-Suffixe mehr, kein "— Grund"-Anhängsel.
+//
 // `available`/`unavailable_reason` + die Flags werden zur Laufzeit aus /api/pipelines per
 // `id` darübergelegt (graceful: fehlende Felder = stiller Degrade). Keine Emojis.
 
@@ -39,12 +42,6 @@ const RECOMMENDED_IDS = new Set([
   "sam3__gigapose_rgbd", "sam3__gigapose_rgb",
 ]);
 
-// Verfahren-Notiz pro Pose (Kontextzeile). degraded/ambig kommen als eigener Hinweis.
-const POSE_NOTE = {
-  "gdrnpp": "GDRNPP", "foundationpose": "6-DoF", "gigapose_rgbd": "coarse+GenFlow+Kabsch",
-  "gigapose_rgb": "coarse+GenFlow",
-};
-
 // Kanonische combo-id (== combos._combo_id): Pipeline A = "gdrnpp"; sonst seg__pose.
 function comboId(segId, poseId) {
   if (segId === "yolo-obb" && poseId === "gdrnpp") return "gdrnpp";
@@ -63,7 +60,8 @@ function feasibility(seg, pose) {
 }
 
 // ── Die volle Feasibility-Matrix (12 Kombis) ──────────────────────────────────
-// Super-Menge der kuratierten 7. Jeder Eintrag trägt note + die T-147-Flags.
+// Super-Menge der kuratierten 7. Jeder Eintrag trägt die T-147-Flags (intern fürs
+// Gating; T-158: nicht mehr als sichtbares Badge gerendert).
 export const WHITELIST = (() => {
   const out = [];
   let n = 0;
@@ -80,7 +78,6 @@ export const WHITELIST = (() => {
         recommended: RECOMMENDED_IDS.has(id),
         degraded: flags.degraded, degraded_reason: flags.degraded_reason,
         class_ambiguity: flags.class_ambiguity,
-        note: POSE_NOTE[pose.id] || pose.pose,
       });
     }
   }
@@ -103,51 +100,19 @@ const comboOf = (seg, pose) => WHITELIST.find((c) => c.seg === seg && c.pose ===
 export const isValid = (seg, pose) => !!comboOf(seg, pose);
 export const findCombo = comboOf;
 
-// Hinweis-Text für eine NICHT-recommended (degraded/ambig) aber wählbare Kombi.
-// Kurzer Sub-Hinweis, der die Achse markiert ohne sie zu blockieren (Max: waehlbar
-// mit Hinweis). Keine Emojis.
-export function comboHint(combo) {
-  if (!combo) return "";
-  const bits = [];
-  if (combo.degraded && combo.degraded_reason === "aabb_from_mask") {
-    bits.push("degradiert · AABB aus Maske statt OBB");
-  } else if (combo.degraded) {
-    bits.push("degradiert");
-  }
-  if (combo.class_ambiguity) bits.push("Klassen-Ambiguität (kurz/lang)");
-  return bits.join(" · ");
-}
-
-// Grund-Texte: Gating (logisch unmöglich, ändert sich nie) vs Available (Zustand).
-// T-147: die einzige logisch-unmögliche Achse ist „Pose braucht eine Service-Quelle,
-// die das Mesh nicht liefert" — das deckt jetzt `available` ab, nicht das Gating.
-// Reines Gating bleibt nur als Fallback (sollte mit 12-Matrix nie greifen).
-function gatingReason(seg, pose) {
-  return "nicht kombinierbar";
-}
-
-// Available-Grund aus /api/pipelines (graceful: unavailable_reason evtl. (noch) nicht da).
-function availReason(meta) {
-  if (!meta) return "Dienst nicht aktiv";
-  switch (meta.unavailable_reason) {
-    case "training":     return "Modell trainiert noch";
-    case "service_down": return "Dienst nicht aktiv";
-    default:             return "nicht verfügbar"; // generischer Degrade (Feld fehlt)
-  }
-}
-
 /**
  * Wertet das gesamte Gating aus.
  * @param {object} args
  *   sel: {seg, pose} — aktuelle Auswahl
  *   axis: "seg" | "post" | null — welche Achse zuletzt geändert wurde (für Spring-Richtung)
- *   mode: "real" | "sim" | "live" | "batch"
+ *   mode: "real" | "sim" | "batch"
  *   availById: Map id->{available, unavailable_reason, recommended, degraded, ...} aus /api/pipelines
  *   depthPresent: bool — ob im Upload-Tab ein Tiefenbild liegt
  * @returns {object}
- *   seg: [{value,label,disabled,reason}], post: [...], selected:{seg,pose},
+ *   seg: [{value,label,disabled}], post: [...] (T-158: nur Name, kein reason/note;
+ *   logisch unmögliche Kombis fehlen ganz), selected:{seg,pose},
  *   combo: WHITELIST-Eintrag, sprang: bool, springText: string|null,
- *   needsDepth: bool, anyAvailable: bool, ctx: string, hint: string
+ *   needsDepth: bool, anyAvailable: bool, ctx: string
  */
 export function evaluate({ sel, axis = null, mode = "real", availById = new Map(), depthPresent = false }) {
   const availOf = (combo) => {
@@ -159,14 +124,21 @@ export function evaluate({ sel, axis = null, mode = "real", availById = new Map(
   // Depth-Sperre nur im Upload (real) ohne Tiefenbild (Mia §5.2 Variante a).
   const depthBlocked = (combo) => mode === "real" && combo.needs_depth && !depthPresent;
 
-  // Pro (seg,pose) den finalen Zustand bestimmen.
+  // Pro (seg,pose) den finalen Zustand bestimmen (T-158: dreistufig, marken-frei).
+  //   hidden   → logisch unmögliche Kombi: gar nicht anzeigen (Gating).
+  //   disabled → nicht-saubere Kombi: ausgegraut, OHNE Grund-Text (degraded /
+  //              unavailable / service_down / Tiefenbild fehlt).
+  //   sonst    → sauber: wählbar, clean.
   function state(seg, pose) {
     const combo = comboOf(seg, pose);
-    if (!combo) return { disabled: true, reason: gatingReason(seg, pose), kind: "gating" };
+    if (!combo) return { hidden: true, disabled: true, kind: "gating" };
     const { available, meta } = availOf(combo);
-    if (!available) return { disabled: true, reason: availReason(meta), kind: "available", combo };
-    if (depthBlocked(combo)) return { disabled: true, reason: "Tiefenbild erforderlich", kind: "depth", combo };
-    return { disabled: false, reason: "", kind: "ok", combo };
+    if (!available) return { disabled: true, kind: "available", combo };
+    if (depthBlocked(combo)) return { disabled: true, kind: "depth", combo };
+    // T-158: degradierte Kombi (z.B. GDRNPP-via-AABB-aus-Maske) ist NICHT sauber
+    // → ausgegraut statt wählbar-mit-Hinweis.
+    if (combo.degraded) return { disabled: true, kind: "degraded", combo };
+    return { disabled: false, kind: "ok", combo };
   }
 
   // ── Auto-Spring: aktuelle Auswahl in einen gültigen Zustand zwingen ──
@@ -210,54 +182,48 @@ export function evaluate({ sel, axis = null, mode = "real", availById = new Map(
       : `Auswahl auf gültige Kombi ${segL} → ${postL} gesetzt`;
   }
 
-  // ── Options-Listen für beide Selects aufbauen ──
-  // Markiert disabled-mit-Grund (Available/Depth) UND, für gültige NICHT-recommended
-  // Kombis, einen degraded/ambig-Hinweis (wählbar bleiben, Max-Regel).
-  const segOpts = SEG_ORDER.map((s) => {
-    const stWithCurrent = state(s, pose);
-    const anyValid = POST_ORDER.some((p) => !state(s, p).disabled);
-    const disabled = !anyValid || stWithCurrent.disabled;
-    let reason = "";
-    if (disabled) reason = anyValid ? stWithCurrent.reason : "keine gültige Kombi";
-    return { value: s, label: SEG_LABELS[s], disabled, reason };
-  });
-  const postOpts = POST_ORDER.map((p) => {
-    const st = state(seg, p);
-    const combo = comboOf(seg, p);
-    const note = (!st.disabled && combo && !combo.recommended) ? comboHint(combo) : "";
-    return { value: p, label: POST_LABELS[p], disabled: st.disabled, reason: st.reason, note };
-  });
+  // ── Options-Listen für beide Selects aufbauen (T-158: marken-frei) ──
+  // Stufen: hidden (gar nicht listen) · disabled (ausgegraut, OHNE Grund-Text) · clean.
+  // Labels tragen NUR den Namen — kein "— Grund", kein "(degradiert)"/"(AABB)"-Suffix.
+  const segOpts = SEG_ORDER
+    .map((s) => {
+      // Eine Seg-Achse ist nur logisch unmöglich, wenn JEDE Pose mit ihr unmöglich ist.
+      const allHidden = POST_ORDER.every((p) => state(s, p).hidden);
+      if (allHidden) return null;
+      const stWithCurrent = state(s, pose);
+      const anySelectable = POST_ORDER.some((p) => !state(s, p).disabled);
+      const disabled = !anySelectable || stWithCurrent.disabled;
+      return { value: s, label: SEG_LABELS[s], disabled };
+    })
+    .filter(Boolean);
+  const postOpts = POST_ORDER
+    .map((p) => {
+      const st = state(seg, p);
+      if (st.hidden) return null;
+      return { value: p, label: POST_LABELS[p], disabled: st.disabled };
+    })
+    .filter(Boolean);
 
   const combo = comboOf(seg, pose);
   const anyAvailable = WHITELIST.some((c) => !state(c.seg, c.pose).disabled);
 
-  // ── Kontextzeile (ehrliche 1-Zeile: Modus · Tiefe · Verfahren) ──
+  // ── Kontextzeile (sachliche 1-Zeile: Modus · Tiefe — T-158: keine Marken/Hinweise) ──
+  // Es ist immer nur eine SAUBERE Kombi wählbar → kein degraded/ambig-Marker mehr.
   let ctx = "";
   if (combo) {
     const parts = [];
     if (combo.needs_depth) {
-      if (mode === "live") parts.push("RGB-D · Tiefe (Zivid)");
-      else if (mode === "sim") parts.push("RGB-D · Tiefe (Sim)");
-      else parts.push("RGB-D · Tiefe nötig");
+      parts.push(mode === "sim" ? "RGB-D · Tiefe (Sim)" : "RGB-D · Tiefe nötig");
     } else {
       parts.push("RGB");
-    }
-    parts.push(combo.is_pipeline_a ? "Pipeline A — Hauptlinie" : combo.note);
-    if (!combo.recommended) {
-      const hint = comboHint(combo);
-      if (hint) parts.push(hint);
     }
     ctx = parts.join(" · ");
   }
 
-  // Eigener Hinweis-String (für die kip.js-Kontextzeile / einen separaten Hinweis-Slot).
-  const hint = (combo && !combo.recommended) ? comboHint(combo) : "";
-
   return {
     seg: segOpts, post: postOpts, selected: { seg, pose }, combo,
     sprang, springText, needsDepth: !!(combo && combo.needs_depth),
-    anyAvailable, ctx, hint,
-    recommended: !!(combo && combo.recommended),
+    anyAvailable, ctx,
   };
 }
 
