@@ -28,7 +28,6 @@
         <nav class="kip-tabs" role="tablist">
           <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
           <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
-          <button id="tab-live" class="kip-tab" role="tab">Live (Anlage)</button>
           <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
         </nav>
         <!-- Pipeline-Auswahl: zwei gekoppelte Selects (Seg → Post) ergeben genau die
@@ -99,23 +98,6 @@
         </div>
       </section>
 
-      <!-- Ansicht: Live (echte Anlage) — on-demand Zivid-Live-Feed + Aufnehmen+Inferieren -->
-      <section id="screen-live" class="kip-screen" hidden>
-        <div class="kip-card">
-          <h2 class="kip-card__h">Live — echte Anlage (Zivid-Kamera)</h2>
-          <p class="kip-card__sub">Verbindet sich <strong>on demand</strong> mit dem Zellen-Controller,
-            zieht einen <strong>Live-Vorschau-Feed</strong> der Zivid-Kamera (unten in der Vorschau,
-            mit <span style="color:#ff2d2d">●&nbsp;LIVE</span>-Icon) und nimmt auf Knopfdruck die
-            <strong>aktuelle Szene</strong> auf, speichert sie und inferiert sie. Kein Dauer-Stream —
-            läuft nur, solange du verbunden bist.</p>
-          <div class="kip-row">
-            <button id="live-connect" class="kip-btn kip-btn--primary">Live verbinden</button>
-            <button id="live-capture" class="kip-btn" disabled>Aufnehmen + Inferieren</button>
-          </div>
-          <div id="live-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
-          <p id="live-status" class="kip-status"></p>
-        </div>
-      </section>
 
       <!-- Ansicht: Batch-Eval — Pipeline-Vergleich über 7 Configs × 20 Szenen (S-011) -->
       <section id="screen-batch" class="kip-screen kip-screen--wide" hidden>
@@ -149,6 +131,7 @@
                   <tr>
                     <th scope="col" class="kip-live__rankh">Rang</th>
                     <th scope="col">Konfiguration</th>
+                    <th scope="col">Input</th>
                     <th scope="col" class="kip-live__numh">AR IC-BIN</th>
                     <th scope="col" class="kip-live__numh">Szenen</th>
                   </tr>
@@ -178,7 +161,6 @@
 
       <!-- Eingebettete Vorschau (unten rechts): 2D-Detektion auf dem Originalbild -->
       <figure id="pip" class="pip" aria-label="2D-Detektion" hidden>
-        <span id="pip-live" hidden style="position:absolute;top:6px;left:6px;z-index:5;background:rgba(0,0,0,.7);color:#ff2d2d;font:600 12px/1 system-ui,sans-serif;padding:4px 7px;border-radius:4px;letter-spacing:.6px">● LIVE</span>
         <img id="pip__img" alt="2D-Detektion" data-plain="" data-boxen="" />
         <figcaption class="pip__cap">
           <span>2D-Detektion</span>

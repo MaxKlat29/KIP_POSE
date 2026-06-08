@@ -1,18 +1,21 @@
-// batch.js — S-011 + T-147: Batch-Eval-Reiter. Sortierbare semantische Tabelle (12
-// Configs + Pipeline-A-Referenz) PLUS ein LIVE-SCOREBOARD, das sich während eines Laufs
-// szene-für-szene neu sortiert (Max-Wunsch: live zuschauen, wie sich das Ranking aufbaut).
-// Keine Emojis.
+// batch.js — S-011 + T-147 + T-158: Batch-Eval-Reiter. Sortierbare Tabelle (12 Configs)
+// PLUS ein LIVE-SCOREBOARD, das sich während eines Laufs szene-für-szene neu sortiert
+// (Max-Wunsch: live zuschauen, wie sich das Ranking aufbaut). Keine Emojis.
+//
+// T-158 (Max): das Scoreboard + die finale Tabelle zeigen NUR Kombi-Name + Rang + Zahlen.
+// KEINE Marken/Badges mehr: kein BEST, kein "empfohlen", kein "degradiert · AABB",
+// kein "Klassen-ambig", kein "(Referenz)"/"Pipeline A"-Marker, KEINE Verfahren-Spalte.
+// Das Backend liefert diese Flag-Felder weiter — das FE rendert sie schlicht nicht.
 //
 // DATEN:
 //   /api/eval/runs   → runs:   [{run_id, date, duration_s, n_configs}]
 //   /api/eval/result → result: {configs:[{seg,pose,ar_mean,ar_std,seg_ms,pose_ms,coverage,
-//                       crash_rate,note?,is_pipeline_a?,recommended?,degraded?,...}]}
+//                       crash_rate,...}]}  (Flag-Felder werden ignoriert)
 //   /api/eval/run    → {job}
 //   /api/eval/job/<job> (T-153, Jonas) → live-Contract:
 //     {status, pct, phase, n_done, n_total:240, run_id,
 //      standings:[{rank, config_key, seg, pose, ar, ar_std, n_scenes, seg_ms, pose_ms,
-//                  coverage, crash_rate, recommended, degraded, degraded_reason,
-//                  class_ambiguity, is_pipeline_a}]}  — standings nach ar sortiert,
+//                  coverage, crash_rate, ...}]}  — standings nach ar sortiert,
 //     aktualisiert nach jeder Szene. Fehlt `standings` (alter Job-Endpoint), fällt das
 //     FE graceful auf das reine {pct,phase}-Verhalten zurück (kein Crash, kein Board).
 // coverage/crash_rate als 0..1 erwartet (FE formatiert auf %). Robust gg 0..100 (>1 → schon %).
@@ -21,18 +24,6 @@ const API = "./api";
 const SCENES_PER_CONFIG = 20;   // n_scenes/20 pro Zeile (Fortschritt je Kombi)
 const LIVE_POLL_MS = 2500;      // ~2-3 s Live-Poll (Max schaut zu, kein Flackern)
 
-// FE-Konstante für die Verfahren-Spalte (Degrade, falls `note` fehlt; Mia §14).
-const NOTE_BY = {
-  "yolo-obb|GDRNPP": "Pipeline A",
-  "yolo-seg|FoundationPose": "RGB-D 6DoF",
-  "sam3|FoundationPose": "RGB-D 6DoF",
-  "yolo-seg|GigaPose-3D": "coarse+ICP",
-  "sam3|GigaPose-3D": "coarse+ICP",
-  "yolo-seg|GigaPose-2D": "coarse",
-  "sam3|GigaPose-2D": "coarse",
-  "yolo-seg|GDRNPP": "AABB-aus-Maske",
-  "sam3|GDRNPP": "AABB-aus-Maske",
-};
 const SEG_L  = { "yolo-obb": "yolo-obb", "yolo-seg": "yolo-seg", "sam3": "sam3" };
 const POST_L = { "GDRNPP": "GDRNPP", "FoundationPose": "FoundationPose",
                  "GigaPose-2D": "GigaPose 2D", "GigaPose-3D": "GigaPose 3D",
@@ -41,18 +32,20 @@ const POST_L = { "GDRNPP": "GDRNPP", "FoundationPose": "FoundationPose",
 const fmtPct = (v) => v == null ? "—" : `${Math.round((v > 1 ? v : v * 100))} %`;
 const fmtMs  = (v) => v == null ? "—" : `${Math.round(v)}`;
 const fmtAr  = (m) => m == null ? "—" : m.toFixed(3);
+// T-160: Input-Spalte — schlichter Text "RGB"/"RGBD" aus dem modality-Feld (T-159).
+// Kein Badge, keine Emojis. Fehlt das Feld (alter Job-Endpoint) → em-dash, kein Crash.
+const fmtInput = (c) => c && c.modality ? c.modality : "—";
 const cfgName = (c) => `${SEG_L[c.seg] || c.seg} + ${POST_L[c.pose] || c.pose}`;
 const cfgKey  = (c) => c.config_key || `${c.seg}|${c.pose}`;
-const noteOf  = (c) => c.note || NOTE_BY[cfgKey(c)] || NOTE_BY[`${c.seg}|${c.pose}`] || "—";
-const isRef   = (c) => c.is_pipeline_a === true || (c.seg === "yolo-obb" && /gdrnpp/i.test(c.pose));
 
+// T-158: keine "Verfahren"-Spalte mehr — nur Name, Zahlen.
 const COLS = [
   { key: "config",   label: "Konfiguration", sortable: false, num: false },
+  { key: "input",    label: "Input",         sortable: false, num: false }, // T-160: RGB / RGBD (modality)
   { key: "ar",       label: "AR IC-BIN",     sortable: true,  num: true, sort: (c) => c.ar_mean ?? -1 },
   { key: "runtime",  label: "Laufzeit",      sortable: true,  num: true, sort: (c) => c.pose_ms ?? Infinity, dir0: "asc" },
   { key: "coverage", label: "Abdeckung",     sortable: true,  num: true, sort: (c) => c.coverage ?? -1 },
   { key: "crash",    label: "Absturz",       sortable: true,  num: true, sort: (c) => c.crash_rate ?? Infinity, dir0: "asc" },
-  { key: "note",     label: "Verfahren",     sortable: false, num: false },
 ];
 
 const CARET = {
@@ -63,18 +56,6 @@ const CARET = {
 // prefers-reduced-motion: einmal lesen, live re-evaluierbar (Media-Query-Listener).
 const reduceMotionMQ = window.matchMedia
   ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
-
-// Flag-Text-Badges (KEINE Emojis). recommended/degraded/class_ambiguity als kurze Pills.
-function flagBadges(c) {
-  const out = [];
-  if (c.recommended) out.push('<span class="kip-flag kip-flag--rec">empfohlen</span>');
-  if (c.degraded) {
-    const t = c.degraded_reason === "aabb_from_mask" ? "degradiert · AABB" : "degradiert";
-    out.push(`<span class="kip-flag kip-flag--deg" title="${c.degraded_reason || "degradiert"}">${t}</span>`);
-  }
-  if (c.class_ambiguity) out.push('<span class="kip-flag kip-flag--amb" title="kurz/lang-Trennung schwach">Klassen-ambig</span>');
-  return out.join("");
-}
 
 export function createBatch({ bar, pollJob, healthRef }) {
   const els = {
@@ -100,7 +81,6 @@ export function createBatch({ bar, pollJob, healthRef }) {
   let configs = [];
   let sortKey = "ar";
   let sortDir = "descending"; // AR default desc
-  let bestId = null;          // höchster AR (unabhängig von Sortierspalte)
   let inited = false;
   let running = false;
 
@@ -177,36 +157,23 @@ export function createBatch({ bar, pollJob, healthRef }) {
       return d !== 0 ? d : cfgName(a).localeCompare(cfgName(b)); // stabil
     });
     els.tbody.innerHTML = "";
+    // T-158: nur Name + Zahlen — keine BEST/Referenz/Flag-Marker, keine Verfahren-Spalte.
     for (const c of rows) {
-      const best = c.__id === bestId;
       const tr = document.createElement("tr");
-      if (best) {
-        tr.className = "kip-eval__row--best";
-        tr.setAttribute("aria-label", `Beste Konfiguration nach AR IC-BIN: ${cfgName(c)}`);
-      }
-      const pill = best ? '<span class="kip-eval__best-pill">BEST</span>' : "";
-      const ref = isRef(c) && !best ? '<span class="kip-eval__ref">(Referenz)</span>'
-                : isRef(c) && best ? '<span class="kip-eval__ref">Pipeline A</span>' : "";
-      const flags = flagBadges(c);
       tr.innerHTML =
-        `<td data-label="Konfiguration"><span class="kip-eval__cfg">${cfgName(c)}</span>${pill}${ref}${flags}</td>` +
+        `<td data-label="Konfiguration"><span class="kip-eval__cfg">${cfgName(c)}</span></td>` +
+        `<td data-label="Input">${fmtInput(c)}</td>` +
         `<td class="kip-eval__num" data-label="AR IC-BIN">${fmtAr(c.ar_mean)}` +
           (c.ar_std != null ? `<span class="kip-eval__std">±${c.ar_std.toFixed(3)}</span>` : "") + `</td>` +
         `<td class="kip-eval__num" data-label="Laufzeit">${fmtMs(c.seg_ms)} / ${fmtMs(c.pose_ms)} ms</td>` +
         `<td class="kip-eval__num" data-label="Abdeckung">${fmtPct(c.coverage)}</td>` +
-        `<td class="kip-eval__num" data-label="Absturz">${fmtPct(c.crash_rate)}</td>` +
-        `<td class="kip-eval__note" data-label="Verfahren">${noteOf(c)}</td>`;
+        `<td class="kip-eval__num" data-label="Absturz">${fmtPct(c.crash_rate)}</td>`;
       els.tbody.appendChild(tr);
     }
   }
 
   function setConfigs(list) {
     configs = (list || []).map((c, i) => ({ ...c, __id: c.run_config_id || c.config_key || `${cfgKey(c)}#${i}` }));
-    // Best = höchster AR (Negativ-Ehrlichkeit: nur Best positiv markiert, Rest neutral).
-    bestId = null; let bestAr = -Infinity;
-    for (const c of configs) {
-      if (c.ar_mean != null && c.ar_mean > bestAr) { bestAr = c.ar_mean; bestId = c.__id; }
-    }
     renderSortMobile();
     renderTable();
   }
@@ -234,24 +201,20 @@ export function createBatch({ bar, pollJob, healthRef }) {
   }
 
   // Baut/aktualisiert eine Live-Zeile (ohne sie umzusortieren — das macht reorderLive).
-  function fillLiveRow(tr, s, leading) {
+  // T-158: nur Rang-Nummer + Name + Zahlen. Kein BEST-Badge, kein Referenz-Tag,
+  // keine Flag-Badges, keine Best/Ref-Row-Hervorhebung.
+  function fillLiveRow(tr, s) {
     const ar = s.ar ?? s.ar_mean;
     const arStd = s.ar_std;
     const done = s.n_scenes ?? 0;
     const pctScene = Math.max(0, Math.min(100, (done / SCENES_PER_CONFIG) * 100));
-    const best = leading;
-    const ref = isRef(s);
-    tr.className = "kip-live__row" + (best ? " kip-live__row--best" : "") + (ref ? " kip-live__row--ref" : "");
-    if (best) tr.setAttribute("aria-label", `Aktuell führend nach AR IC-BIN: ${cfgName(s)}`);
-    else tr.removeAttribute("aria-label");
-    const rankBadge = best
-      ? '<span class="kip-live__rank kip-live__rank--best">BEST</span>'
-      : `<span class="kip-live__rank">${s.rank ?? "—"}</span>`;
-    const refTag = ref ? '<span class="kip-eval__ref">Pipeline A</span>' : "";
-    const flags = flagBadges(s);
+    tr.className = "kip-live__row";
+    tr.removeAttribute("aria-label");
+    const rank = `<span class="kip-live__rank">${s.rank ?? "—"}</span>`;
     tr.innerHTML =
-      `<td class="kip-live__rankc" data-label="Rang">${rankBadge}</td>` +
-      `<td data-label="Konfiguration"><span class="kip-eval__cfg">${cfgName(s)}</span>${refTag}${flags}</td>` +
+      `<td class="kip-live__rankc" data-label="Rang">${rank}</td>` +
+      `<td data-label="Konfiguration"><span class="kip-eval__cfg">${cfgName(s)}</span></td>` +
+      `<td data-label="Input">${fmtInput(s)}</td>` +
       `<td class="kip-live__numc" data-label="AR IC-BIN">` +
         `<span class="kip-live__ar">${fmtAr(ar)}</span>` +
         (arStd != null ? `<span class="kip-eval__std">±${arStd.toFixed(3)}</span>` : "") + `</td>` +
@@ -292,9 +255,9 @@ export function createBatch({ bar, pollJob, healthRef }) {
     if (!standings.length) return;
     showLive();
     els.liveProg.textContent = liveProgText(job);
-    // standings ist serverseitig nach ar sortiert → Index 0 = führend.
+    // standings ist serverseitig nach ar sortiert (Index 0 = Rang 1).
     const ordered = [];
-    standings.forEach((s, i) => {
+    standings.forEach((s) => {
       const key = cfgKey(s);
       let tr = liveRows.get(key);
       if (!tr) {
@@ -302,23 +265,22 @@ export function createBatch({ bar, pollJob, healthRef }) {
         liveRows.set(key, tr);
         els.liveTbody.appendChild(tr);
       }
-      fillLiveRow(tr, s, i === 0);
+      fillLiveRow(tr, s);
       ordered.push(tr);
     });
     reorderLive(ordered);
   }
 
   // Live-Standings → finale Config-Form (für nahtlosen Übergang zur S-011-Tabelle,
-  // falls /api/eval/result noch nicht bereit ist beim done-Tick).
+  // falls /api/eval/result noch nicht bereit ist beim done-Tick). T-158: nur die
+  // Felder, die die Tabelle rendert — Flag-Felder werden nicht mehr durchgereicht.
   function standingsToConfigs(standings) {
     return (standings || []).map((s) => ({
       seg: s.seg, pose: s.pose,
       ar_mean: s.ar ?? s.ar_mean, ar_std: s.ar_std,
       seg_ms: s.seg_ms, pose_ms: s.pose_ms,
       coverage: s.coverage, crash_rate: s.crash_rate,
-      is_pipeline_a: s.is_pipeline_a,
-      recommended: s.recommended, degraded: s.degraded,
-      degraded_reason: s.degraded_reason, class_ambiguity: s.class_ambiguity,
+      modality: s.modality, // T-160: Input-Spalte beim Live→final-Übergang erhalten
       config_key: s.config_key, run_config_id: s.config_key,
     }));
   }
@@ -476,5 +438,6 @@ export function createBatch({ bar, pollJob, healthRef }) {
     // Für Tests/Smoke: erlaubt das Rendern eines gemockten Job-Stands ohne echten Lauf.
     __renderLive: renderLive,
     __hideLive: hideLive,
+    __setConfigs: setConfigs,   // T-160: finale Tabelle aus gemockten configs (inkl. modality) rendern
   };
 }

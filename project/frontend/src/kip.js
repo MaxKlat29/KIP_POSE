@@ -5,7 +5,6 @@
 
 import { createViewer } from "./scene.js";
 import { createOriginMarker } from "./origin.js";
-import { createLive } from "./live.js";
 import {
   evaluate as evalGating, availMapFromResponse, DEFAULT as PIPE_DEFAULT, findCombo,
 } from "./pipeline.js";
@@ -98,24 +97,17 @@ function syncRealRunBtn() {
 function currentCombo() { return findCombo(pipeSel.seg, pipeSel.pose); }
 function currentPipeline() { return currentCombo()?.id || "gdrnpp"; }
 
-// Befüllt ein Select aus den Gating-Options (disabled-mit-Grund im Option-Text + title).
-// T-147: wählbare NICHT-recommended Kombis tragen einen degraded/ambig-Hinweis (o.note)
-// im Option-Text — wählbar bleiben, aber sichtbar markiert (kein Wegblenden).
+// Befüllt ein Select aus den Gating-Options (T-158: marken-frei). Logisch unmögliche
+// Kombis kommen gar nicht erst in `opts` (pipeline.js blendet sie aus). Nicht-saubere
+// Kombis sind `disabled` (ausgegraut) — OHNE Grund-Text/Suffix. Das Option-Label trägt
+// IMMER nur den reinen Namen.
 function fillSelect(sel, opts, value, labels) {
   sel.innerHTML = "";
   for (const o of opts) {
     const opt = document.createElement("option");
     opt.value = o.value;
     opt.disabled = o.disabled;
-    if (o.disabled) {
-      opt.textContent = `${o.label} — ${o.reason}`;
-      if (o.reason) opt.title = o.reason;
-    } else if (o.note) {
-      opt.textContent = `${o.label} (${o.note})`;
-      opt.title = o.note;
-    } else {
-      opt.textContent = o.label;
-    }
+    opt.textContent = o.label;
     if (o.value === value) opt.selected = true;
     sel.appendChild(opt);
   }
@@ -224,43 +216,36 @@ document.getElementById("reset-view").addEventListener("click", () => {
   viewer.resetView?.();
 });
 
-// ── Tab-Switch (Real / Simulation / Live / Batch-Eval) ──
+// ── Tab-Switch (Real / Simulation / Batch-Eval) ──
 const tabReal = document.getElementById("tab-real");
 const tabSim  = document.getElementById("tab-sim");
-const tabLive = document.getElementById("tab-live");
 const tabBatch = document.getElementById("tab-batch");
 const scrReal = document.getElementById("screen-real");
 const scrSim  = document.getElementById("screen-sim");
-const scrLive = document.getElementById("screen-live");
 const scrBatch = document.getElementById("screen-batch");
 const legend  = document.getElementById("legend");
-const live = createLive();
 let simInited = false;
 // Batch-Eval-Reiter (S-011). bar()/pollJob() werden geerbt; healthRef liefert den
 // letzten /api/health-Stand für den Training-Guard.
 const batch = createBatch({ bar, pollJob, healthRef: () => lastHealth });
+window.__KIP_BATCH__ = batch;          // QS/Smoke: erlaubt __renderLive/__hideLive ohne Lauf
 pollHealth(); setInterval(pollHealth, 30000);   // Start nach batch (Training-Guard-Sync)
 function showScreen(which) {
   pipeMode = which;                     // Gating je Tab (Upload: Depth-Regeln)
   tabReal.classList.toggle("kip-tab--active", which === "real");
   tabSim.classList.toggle("kip-tab--active", which === "sim");
-  tabLive.classList.toggle("kip-tab--active", which === "live");
   tabBatch.classList.toggle("kip-tab--active", which === "batch");
   scrReal.hidden = which !== "real";
   scrSim.hidden  = which !== "sim";
-  scrLive.hidden = which !== "live";
   scrBatch.hidden = which !== "batch";
   legend.hidden  = which !== "sim";     // blau/rot-Legende nur im Sim-Screen
   const pip = document.getElementById("pip");
-  if (which !== "live") live.onHide();  // Live-Polling stoppen beim Wegwechseln
   if (which === "real") {
     viewer.setParts([]);                // Real ohne Foto: nur Zelle, keine Geister
     if (!chosenFile) pip.hidden = true;
   } else if (which === "sim") {
     loadMetrics();
     simInited = true;
-  } else if (which === "live") {
-    live.onShow();
   } else if (which === "batch") {
     pip.hidden = true;                  // Batch ist Tabellen-Ansicht, kein 3D-Live
     viewer.setParts([]);
@@ -271,7 +256,6 @@ function showScreen(which) {
 }
 tabReal.addEventListener("click", () => showScreen("real"));
 tabSim.addEventListener("click", () => showScreen("sim"));
-tabLive.addEventListener("click", () => showScreen("live"));
 tabBatch.addEventListener("click", () => showScreen("batch"));
 
 // ── PiP-Controls: Boxen-Toggle + Foto-View + Vergroesserung ──

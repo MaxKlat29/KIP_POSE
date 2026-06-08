@@ -198,18 +198,7 @@
 }
 .kip-eval__num .kip-eval__std { color: var(--text-dim); font-size: 11px; margin-left: 3px; }
 .kip-eval__cfg { color: var(--text); font-weight: 600; }
-.kip-eval__note { color: var(--text-dim); }
 .kip-eval td { color: var(--text); }
-
-/* Best-Zeile: 3-fach (Pille BEST + Akzent-Border-left + aria-label). */
-.kip-eval__row--best td:first-child { border-left: 3px solid var(--origin); }
-.kip-eval__best-pill {
-  display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
-  color: rgb(140, 230, 170); background: rgba(52,211,153,0.18);
-  border: 1px solid rgba(52,211,153,0.4); vertical-align: middle;
-}
-.kip-eval__ref { color: var(--text-dim); font-size: 11px; margin-left: 6px; }
 
 .kip-eval-empty { font-style: italic; }
 .kip-eval-foot { margin-top: 14px; }
@@ -234,7 +223,6 @@
     content: attr(data-label); color: var(--text-dim); font-weight: 600; font-size: 11px;
   }
   .kip-eval td.kip-eval__num { text-align: right; }
-  .kip-eval__row--best td:first-child { border-left: 3px solid var(--origin); padding-left: 8px; }
   .kip-eval-sortm { display: flex; flex-direction: column; gap: 2px; }
 }
 
@@ -250,16 +238,6 @@
   .kip-pipe { flex-wrap: wrap; }
   .kip-pipe__arrow { display: none; }
 }
-
-/* ── Flag-Badges (T-147): recommended / degraded / class-ambig als Text-Pills ── */
-.kip-flag {
-  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; vertical-align: middle;
-  white-space: nowrap;
-}
-.kip-flag--rec { color: rgb(140, 230, 170); background: rgba(52,211,153,0.16); border: 1px solid rgba(52,211,153,0.34); }
-.kip-flag--deg { color: #f5cf8a; background: rgba(245,185,66,0.14); border: 1px solid rgba(245,185,66,0.34); }
-.kip-flag--amb { color: #c9b6e8; background: rgba(168,130,230,0.14); border: 1px solid rgba(168,130,230,0.34); }
 
 /* ── Live-Scoreboard (T-147): re-sortierende Tabelle während eines Eval-Laufs ── */
 .kip-live { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
@@ -288,13 +266,7 @@
   display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 999px;
   font-size: 10px; font-weight: 700; color: var(--text-dim); background: rgba(255,255,255,0.06);
 }
-.kip-live__rank--best {
-  color: rgb(140, 230, 170); background: rgba(52,211,153,0.2); border: 1px solid rgba(52,211,153,0.4);
-}
-.kip-live__row--best td { background: rgba(52,211,153,0.06); }
-.kip-live__row--best td:nth-child(2) { border-left: 3px solid var(--origin); }
 .kip-live__ar { color: var(--text); font-weight: 600; }
-.kip-live__row--best .kip-live__ar { color: rgb(140, 230, 170); }
 .kip-live__scenes { color: var(--text-dim); font-size: 11px; }
 /* Mini-Fortschrittsbalken pro Zeile (n_scenes/20). */
 .kip-live__minibar {
@@ -306,7 +278,6 @@
   background: linear-gradient(90deg, rgba(52,211,153,0.6), rgba(52,211,153,0.9));
   transition: width 0.3s ease;
 }
-.kip-live__row--ref .kip-live__rank { color: var(--text-dim); }
 
 @media (max-width: 760px) {
   .kip-live__minibar { display: none; }
