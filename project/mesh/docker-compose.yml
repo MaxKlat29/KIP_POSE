@@ -206,13 +206,13 @@ services:
       - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8000}:8000"
     environment:
       YOLO_URL: http://yolo-svc:8001
-      # yolo-obb seg source (combo 1 -> GDRNPP). The gateway INFER_SOURCES['yolo-obb']
-      # registry entry is added in S-004 (gateway extension); the URL is wired here.
-      YOLO_OBB_URL: http://yolo-obb-svc:8011
       FP_URL: http://fp-svc:8002
       GIGAPOSE_URL: http://gigapose-svc:8003
       SAM3_URL: http://sam3-svc:8004
-      # yolo-obb-svc (S-005) is a compose service (Dockerized ultralytics-OBB).
+      # yolo-obb seg source (combo 1 -> GDRNPP). The gateway INFER_SOURCES['yolo-obb']
+      # registry entry is added in S-004 (gateway extension); the yolo-obb-svc (S-005)
+      # is a Dockerized ultralytics-OBB compose service. (Merge T-151: this key was
+      # duplicated across the S-004/S-005 merges — de-duped to the env-overridable form.)
       YOLO_OBB_URL: ${YOLO_OBB_URL:-http://yolo-obb-svc:8011}
       # gdrnpp-svc (S-004, Pipeline A) is NOT a compose service: GDRNPP runs as a
       # NATIVE process in the box-native /mnt/data/bop/gdrnpp-venv (detectron2 + the
