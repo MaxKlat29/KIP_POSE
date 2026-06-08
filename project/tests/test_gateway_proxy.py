@@ -27,7 +27,7 @@ sys.path.insert(0, str(_PROJECT))
 
 from pipelines import contract  # noqa: E402
 from pipelines import gateway_proxy as g  # noqa: E402
-from pipelines.combos import COMBO_WHITELIST  # noqa: E402
+from pipelines.combos import FEASIBLE_COMBOS  # noqa: E402
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -58,8 +58,12 @@ def _gateway_resp(*classes):
 
 
 # ── 1) Kombi-id ↔ Gateway-source-Map ──────────────────────────────────────────
-def test_combo_to_gateway_covers_exactly_6_non_a():
-    assert len(g.COMBO_TO_GATEWAY) == 6, "genau die 6 NICHT-A-Kombis proxyen (Pipeline A nicht)"
+def test_combo_to_gateway_covers_all_non_a_feasible():
+    # T-155: ALLE NICHT-A feasible-Kombis proxyen (11 = 12 FEASIBLE_COMBOS minus
+    # Pipeline A). Vorher nur die kuratierten 6 → 5 fehlten → InvalidCombo.
+    non_a = {c["id"] for c in FEASIBLE_COMBOS if not c["is_pipeline_a"]}
+    assert set(g.COMBO_TO_GATEWAY) == non_a
+    assert len(g.COMBO_TO_GATEWAY) == 11, "alle 11 NICHT-A feasible-Kombis proxyen"
     assert "gdrnpp" not in g.COMBO_TO_GATEWAY, "Kombi 1 (Pipeline A) laeuft NICHT ueber das Gateway"
 
 
@@ -75,10 +79,30 @@ def test_pose_source_is_combo_id_suffix():
     assert g.combo_to_gateway("sam3__gigapose_rgb")["pose_source"] == "gigapose_rgb"
 
 
-def test_needs_depth_matches_whitelist():
-    by_id = {c["id"]: c for c in COMBO_WHITELIST}
+def test_needs_depth_matches_feasible():
+    by_id = {c["id"]: c for c in FEASIBLE_COMBOS}
     for cid, gw in g.COMBO_TO_GATEWAY.items():
         assert gw["needs_depth"] == bool(by_id[cid]["needs_depth"]), cid
+
+
+def test_degraded_flag_only_on_gdrnpp_degraded_combos():
+    # T-155: nur die 2 GDRNPP-degraded-Kombis (yolo-seg/sam3 → gdrnpp) tragen
+    # degraded=True (Gateway-Opt-in: Maske bleibt → AABB-aus-Maske). Alle anderen
+    # NICHT-A-Kombis (FP/GigaPose, inkl. der 3 yolo-obb-Mesh) sind degraded=False.
+    degraded = {cid for cid, gw in g.COMBO_TO_GATEWAY.items() if gw["degraded"]}
+    assert degraded == {"yolo_seg__gdrnpp", "sam3__gdrnpp"}
+    for cid in degraded:
+        assert g.COMBO_TO_GATEWAY[cid]["pose_source"] == "gdrnpp"
+
+
+def test_yolo_obb_mesh_combos_route_via_yolo_seg_source():
+    # T-155: die 3 yolo-obb-Mesh-Kombis nutzen seg_source 'yolo' (mask-emittierend),
+    # NICHT 'yolo-obb' — identisch zum Runner (batch_eval._SEG_SOURCE) und vom Gateway
+    # akzeptiert (der §4-Inverse-Guard lehnt seg='yolo-obb' mit non-gdrnpp-pose ab).
+    for cid in ("yolo_obb__foundationpose", "yolo_obb__gigapose_rgbd", "yolo_obb__gigapose_rgb"):
+        gw = g.combo_to_gateway(cid)
+        assert gw["seg_source"] == "yolo", cid
+        assert gw["degraded"] is False, cid
 
 
 def test_combo_to_gateway_rejects_pipeline_a_and_unknown():
@@ -125,13 +149,30 @@ def test_resolve_combo_id_by_seg_pose_axes():
 
 
 def test_resolve_combo_id_invalid_raises():
-    # yolo-obb nur mit gdrnpp (§4) — yolo-obb + FoundationPose ist KEINE Whitelist-Kombi.
+    # T-155: yolo-obb → FoundationPose ist jetzt eine FEASIBLE Kombi (yolo-obb liefert
+    # rasterisierte Maske, FP nutzt sie) → kein InvalidCombo mehr. Wirklich ungueltig:
     with pytest.raises(g.InvalidCombo):
-        g.resolve_combo_id(seg="yolo-obb", pose="FoundationPose")
+        g.resolve_combo_id(seg="bogus", pose="FoundationPose")     # unbekannte Seg-Quelle
     with pytest.raises(g.InvalidCombo):
-        g.resolve_combo_id(seg="bogus", pose="FoundationPose")
+        g.resolve_combo_id(seg="yolo-seg", pose="NoSuchPose")      # unbekannte Pose
     with pytest.raises(g.InvalidCombo):
-        g.resolve_combo_id(pipeline="not_a_combo")
+        g.resolve_combo_id(pipeline="not_a_combo")                 # unbekannte Pipeline-id
+
+
+def test_resolve_combo_id_yolo_obb_mesh_combos():
+    # T-155: die 3 yolo-obb-Mesh-Kombis resolven jetzt (vorher InvalidCombo).
+    assert g.resolve_combo_id(pipeline="yolo_obb__foundationpose") == "yolo_obb__foundationpose"
+    assert g.resolve_combo_id(seg="yolo-obb", pose="FoundationPose") == "yolo_obb__foundationpose"
+    assert g.resolve_combo_id(seg="yolo-obb", pose="GigaPose-3D") == "yolo_obb__gigapose_rgbd"
+    assert g.resolve_combo_id(seg="yolo-obb", pose="GigaPose-2D") == "yolo_obb__gigapose_rgb"
+
+
+def test_resolve_combo_id_gdrnpp_degraded_combos():
+    # T-155: yolo-seg/sam3 → gdrnpp resolven (degraded), aber bleiben NICHT Pipeline A.
+    assert g.resolve_combo_id(pipeline="yolo_seg__gdrnpp") == "yolo_seg__gdrnpp"
+    assert g.resolve_combo_id(seg="yolo-seg", pose="GDRNPP") == "yolo_seg__gdrnpp"
+    assert g.resolve_combo_id(seg="sam3", pose="GDRNPP") == "sam3__gdrnpp"
+    assert not g.is_pipeline_a(seg="yolo-seg", pose="gdrnpp")    # degraded != Live-Monolith
 
 
 # ── 4) gateway_predict_to_pose_result (Mapping) ───────────────────────────────
@@ -260,6 +301,93 @@ def test_available_combo_ids_helper():
     assert "yolo_seg__foundationpose" in avail        # yolo+fp up
     assert "sam3__foundationpose" not in avail        # sam3 down
     assert "yolo_seg__gigapose_rgbd" not in avail     # gigapose error
+
+
+# ── 6) DIE Invariante (T-155): alle 12 feasible-Kombis routen ─────────────────
+def test_all_feasible_combos_resolve_never_invalid():
+    """DIE Anti-Drift-Invariante (T-155): JEDE der 12 FEASIBLE_COMBOS ist ENTWEDER
+    Pipeline A (Live-Monolith) ODER in COMBO_TO_GATEWAY aufloesbar — NIE InvalidCombo.
+
+    Damit kann das nie wieder still kaputtgehen: kommt ein neues Seg-/Pose-Modul in
+    combos.SEG_SOURCES/POSE_SOURCES dazu, taucht es in FEASIBLE_COMBOS auf und dieser
+    Test FAELLT, bis `_SEG_COMBO_TO_GATEWAY`/die Routing-Map mitwaechst. Der 12x20-Eval
+    bekommt fuer JEDE Kombi eine Tabellenzeile (keine leeren Zellen)."""
+    assert len(FEASIBLE_COMBOS) == 12, "Feasibility-Matrix = 3 Seg × 4 Pose = 12"
+    for c in FEASIBLE_COMBOS:
+        cid = c["id"]
+        # (a) per combo-id-Form:
+        resolved = g.resolve_combo_id(pipeline=cid)
+        assert resolved == cid, f"{cid}: resolve(pipeline) ergab {resolved!r}"
+        # (b) per 2-Achsen-Form (FE schickt seg-id + pose-Label):
+        resolved2 = g.resolve_combo_id(seg=c["seg_id"], pose=c["pose"])
+        assert resolved2 == cid, f"{cid}: resolve(seg,pose) ergab {resolved2!r}"
+        # (c) Jede ist entweder Pipeline A ODER eine Gateway-Kombi (kein InvalidCombo).
+        if c["is_pipeline_a"]:
+            assert g.is_pipeline_a(pipeline=cid)
+            assert cid not in g.COMBO_TO_GATEWAY     # Pipeline A NIE ueber Gateway
+        else:
+            gw = g.combo_to_gateway(cid)             # wirft NICHT (registriert)
+            assert gw["pose_source"] == c["pose_id"], cid
+            assert gw["seg_source"] in ("yolo", "sam3"), cid
+            assert gw["degraded"] == bool(c["degraded"]), cid
+
+
+def test_pipelines_status_no_combo_falls_through_to_defensive_branch():
+    """Mit voller Gesundheit MUSS jede NICHT-A-Mesh-Kombi ueber ihren registrierten
+    COMBO_TO_GATEWAY-Eintrag laufen (nicht den defensiven else-Zweig) — d.h. alle 12
+    erscheinen in /api/pipelines mit konsistentem available."""
+    gh = {"ok": True, "yolo": {"ok": True}, "fp": {"ok": True},
+          "gigapose": {"status": "ok"}, "sam3": {"ok": True},
+          "yolo_obb": {"ok": True}, "gdrnpp": {"ok": True}}
+    ps = g.pipelines_status(gateway_health=gh, live_pipeline_a_available=True)
+    assert len(ps) == 12
+    by = {p["id"]: p for p in ps}
+    # die 3 yolo-obb-Mesh-Kombis sind jetzt available (vorher faelschlich service_down).
+    for cid in ("yolo_obb__foundationpose", "yolo_obb__gigapose_rgbd", "yolo_obb__gigapose_rgb"):
+        assert by[cid]["available"] is True, cid
+        assert by[cid]["unavailable_reason"] is None, cid
+    # die 2 GDRNPP-degraded sind available (seg up + Live-Worker up) und degraded-markiert.
+    for cid in ("yolo_seg__gdrnpp", "sam3__gdrnpp"):
+        assert by[cid]["available"] is True, cid
+        assert by[cid]["degraded"] is True, cid
+
+
+# ── 7) _gateway_service_up: alle 4 Seg + 4 Pose Health-Knoten gemappt (T-155) ──
+def test_service_up_maps_all_seg_and_pose_nodes():
+    gh = {"ok": True, "yolo": {"ok": True}, "fp": {"ok": True},
+          "gigapose": {"status": "ok"}, "sam3": {"ok": True},
+          "yolo_obb": {"ok": True}, "gdrnpp": {"ok": True}}
+    up = g._gateway_service_up(gh)
+    # alle 4 Seg-Quellen:
+    for k in ("yolo", "sam3", "yolo-obb"):
+        assert up.get(k) is True, f"Seg-Knoten {k} fehlt/false"
+    # alle 4 Pose-Modelle:
+    for k in ("foundationpose", "gigapose_rgbd", "gigapose_rgb", "gdrnpp"):
+        assert up.get(k) is True, f"Pose-Knoten {k} fehlt/false"
+
+
+def test_service_up_yolo_obb_node_underscore_to_dash():
+    # Gateway-Health-Knoten heisst `yolo_obb` (Underscore); unsere source-id `yolo-obb`.
+    up = g._gateway_service_up({"ok": True, "yolo_obb": {"ok": True},
+                                "yolo": {"ok": False}, "fp": {"ok": False},
+                                "gigapose": {"status": "error"}, "sam3": {"ok": False},
+                                "gdrnpp": {"ok": False}})
+    assert up["yolo-obb"] is True
+    assert up["yolo"] is False
+
+
+def test_service_up_gdrnpp_node_mapped():
+    up = g._gateway_service_up({"ok": True, "gdrnpp": {"ok": True},
+                                "yolo": {"ok": False}, "fp": {"ok": False},
+                                "gigapose": {"status": "error"}, "sam3": {"ok": False},
+                                "yolo_obb": {"ok": False}})
+    assert up["gdrnpp"] is True
+    assert up["foundationpose"] is False
+
+
+def test_service_up_empty_health_is_empty_map():
+    assert g._gateway_service_up(None) == {}
+    assert g._gateway_service_up({}) == {}
 
 
 if __name__ == "__main__":

@@ -1,31 +1,34 @@
 """gateway_proxy.py — pure (fastapi-/httpx-freie) Logik fuer den kip_server-Proxy (S-013).
 
 `kip_server:8077` bleibt der **Live-Pipeline-A-Pfad** (`pipeline=gdrnpp` = byte-identisch,
-Guard returnt frueh). Fuer die **6 NICHT-A-Kombis** proxyt kip_server zum `gateway:8000`,
-damit das FE EINE Origin behaelt (Caddy `/KIP`, kein zweiter Tunnel). Dieses Modul ist die
-**testbare Naht** dafuer — bewusst OHNE fastapi/httpx-Import (die liegen nur in der Box-venv;
-die lokalen pipelines-Tests laufen stdlib+numpy):
+Guard returnt frueh). Fuer ALLE **NICHT-A feasible-Kombis** (T-155: 11 = 12 FEASIBLE_COMBOS
+minus Pipeline A, inkl. der 3 yolo-obb-Mesh + 2 gdrnpp-degraded) proxyt kip_server zum
+`gateway:8000`, damit das FE EINE Origin behaelt (Caddy `/KIP`, kein zweiter Tunnel). Dieses
+Modul ist die **testbare Naht** dafuer — bewusst OHNE fastapi/httpx-Import (die liegen nur in
+der Box-venv; die lokalen pipelines-Tests laufen stdlib+numpy):
 
-  * `COMBO_TO_GATEWAY`   — Map der 6 Kombi-ids → Gateway-`(seg_source, pose_source)`.
-                           (kip_server-Kombi-ids ≠ Gateway-source-ids; siehe unten.)
-  * `combo_to_gateway`   — Kombi-id → {seg_source, pose_source, needs_depth} (4xx bei ungueltig).
+  * `COMBO_TO_GATEWAY`   — Map ALLER NICHT-A-Kombi-ids → Gateway-`(seg_source, pose_source,
+                           needs_depth, degraded)`. (kip_server-Kombi-ids ≠ Gateway-source-ids.)
+  * `combo_to_gateway`   — Kombi-id → {seg_source, pose_source, needs_depth, degraded} (4xx
+                           bei ungueltig). `degraded=true` nur fuer die 2 gdrnpp-degraded.
   * `gateway_predict_to_pose_result` — Gateway-`/predict`-Antwort (`instances[].T_cam_obj`)
                            → frozen pose_result-Doc. Reused die EXAKTE composed.py-Mapping-
                            Mathematik (bop_pose_to_world mit t in **mm**, Boden-Snap,
                            Symmetrie-Kanonisierung ueber den CamelCase-Part, assemble_doc).
-  * `pipelines_status`   — die 7-Kombi-`/api/pipelines`-Payload mit `available` +
+  * `pipelines_status`   — die 12-Kombi-`/api/pipelines`-Payload mit `available` +
                            **`unavailable_reason`** (enum, Mia S-010 §12 Pflicht-Feld) +
-                           seg/pose/needs_depth/is_pipeline_a. Health-Probe injizierbar.
+                           seg/pose/needs_depth/is_pipeline_a/degraded. Health-Probe injizierbar.
   * `unavailable_reason` — die Enum-Logik (service_down | training | None).
 
-Quelle der Wahrheit: `combos.COMBO_WHITELIST` (combo-Metadaten) + `mesh/CONTRACT.md §5`
-(7 Kombis, needs_depth) + `mesh/gateway/app.py` (INFER_SOURCES × POSE_SOURCES).
+Quelle der Wahrheit: `combos.FEASIBLE_COMBOS` (alle ~12, registry-Kreuzprodukt) +
+`mesh/gateway/app.py` (INFER_SOURCES × POSE_SOURCES). `COMBO_WHITELIST` bleibt das
+kuratierte `recommended`-7-Subset.
 """
 from __future__ import annotations
 
 from typing import Callable, Optional
 
-from .combos import COMBO_WHITELIST, FEASIBLE_COMBOS
+from .combos import FEASIBLE_COMBOS
 
 # ── unavailable_reason-Enum (Mia S-010 §12) ───────────────────────────────────
 # Das FE muss „Dienst gerade nicht aktiv" von „Modell trainiert noch" unterscheiden
@@ -37,24 +40,53 @@ UNAVAILABLE_REASONS = (REASON_SERVICE_DOWN, REASON_TRAINING)
 
 # ── Kombi-id → Gateway-source-ids ─────────────────────────────────────────────
 # WICHTIG: die kip_server/combos-Kombi-ids sind NICHT die Gateway-source-ids.
-#   * combos.py-seg-Namen:  yolo-seg, sam3        (CONTRACT.md §2/§5)
-#   * Gateway INFER_SOURCES: "yolo", "sam3"       (gateway/app.py:51-54)  → yolo-seg == "yolo"
-#   * combos.py-pose-ids:    foundationpose, gigapose_rgbd, gigapose_rgb
-#   * Gateway POSE_SOURCES:  "foundationpose","gigapose_rgbd","gigapose_rgb" (1:1, §5)
+#   * combos.py-seg-ids:     yolo-obb, yolo-seg, sam3   (SEG_SOURCES / CONTRACT.md §2)
+#   * Gateway INFER_SOURCES:  "yolo", "sam3", "yolo-obb" (gateway/app.py:53-59)
+#       - yolo-seg == "yolo" (YOLO26m-seg, mask-emittierend)
+#       - yolo-obb → "yolo": die 3 yolo-obb-MESH-Kombis (FP/GigaPose nutzen die Maske)
+#         fahren ueber den mask-emittierenden yolo-seg-Service. Identisch zum Runner
+#         (`batch_eval._SEG_SOURCE = {"yolo-obb": "yolo", ...}`) → byte-gleiche
+#         Gateway-Anfrage Runner↔Proxy (Konsistenz T-155 §4). Der Gateway lehnt
+#         seg_source="yolo-obb" mit non-gdrnpp-pose hart ab (§4-Inverse-Guard,
+#         app.py:527) — "yolo" ist der korrekte mask-Pfad fuer FP/GigaPose.
+#   * combos.py-pose-ids:    foundationpose, gigapose_rgbd, gigapose_rgb, gdrnpp
+#   * Gateway POSE_SOURCES:  1:1 (gateway/app.py:77-) → pose-id == combo-id-Suffix
 # Die `pipeline`-Flagge (rgb/rgbd) traegt das Gateway selbst pro pose_source (§5) — wir
 # muessen sie NICHT mitschicken. Kombi 1 (gdrnpp/yolo-obb = Pipeline A) ist NICHT hier:
 # sie laeuft NIE ueber das Gateway (Live-Monolith, §4).
-_SEG_COMBO_TO_GATEWAY = {"yolo-seg": "yolo", "sam3": "sam3"}
+_SEG_COMBO_TO_GATEWAY = {"yolo-obb": "yolo", "yolo-seg": "yolo", "sam3": "sam3"}
 
+# Quelle der Wahrheit ist jetzt FEASIBLE_COMBOS (alle ~12 feasible Kombis, T-155) statt
+# nur der kuratierten 7-Whitelist. Sonst fehlen 5 Kombis (3 yolo-obb-Mesh + 2 gdrnpp-
+# degraded) → resolve_combo_id/combo_to_gateway werfen InvalidCombo bei direktem
+# Inferenz/Eval (Lena+Sam T-154-Befund). Pipeline A bleibt ausgenommen (Live-Pfad).
+# Ein neues Seg-/Pose-Modul in combos.SEG_SOURCES/POSE_SOURCES taucht damit
+# AUTOMATISCH auf — der 12-Kombi-Invarianten-Test (test_gateway_proxy) faengt, falls
+# `_SEG_COMBO_TO_GATEWAY` dann nicht mitwaechst.
 COMBO_TO_GATEWAY: "dict[str, dict]" = {}
-for _c in COMBO_WHITELIST:
+for _c in FEASIBLE_COMBOS:
     if _c["is_pipeline_a"]:
-        continue  # Kombi 1 = Pipeline A, kein Gateway-Proxy
+        continue  # Kombi 1 = Pipeline A, kein Gateway-Proxy (Live-Monolith)
     COMBO_TO_GATEWAY[_c["id"]] = {
-        "seg_source": _SEG_COMBO_TO_GATEWAY[_c["seg"]],
-        "pose_source": _c["id"].split("__", 1)[1],   # combo-id-Suffix == Gateway-pose-id
+        "seg_source": _SEG_COMBO_TO_GATEWAY[_c["seg_id"]],
+        "pose_source": _c["pose_id"],               # == combo-id-Suffix == Gateway-pose-id
         "needs_depth": bool(_c["needs_depth"]),
+        # GDRNPP-degraded (yolo-seg/sam3 → gdrnpp): das Gateway muss `degraded=true`
+        # bekommen, damit es den seg→yolo-obb-Force fuer pose=gdrnpp UEBERSPRINGT und
+        # die Maske erhaelt → gdrnpp-svc AABB-aus-Maske-Fallback (T-153-Gateway-Opt-in,
+        # default-off; deckt sich mit `batch_eval.http_predict`). Reine Mesh-Kombis
+        # (FP/GigaPose) + die yolo-obb-Mesh-Kombis setzen es NICHT.
+        "degraded": bool(_c["degraded"]),
     }
+
+
+# Nur die NICHT-A feasible-Kombis (Metadaten fuer resolve_combo_id 2-Achsen-Form):
+# {id, seg (= seg_id == Mesh-/FE-Name), pose (= FE-Label)}. Pipeline A ist hier NICHT
+# drin — die wird vom is_pipeline_a-Guard vorab erledigt.
+_NON_A_COMBOS = [
+    {"id": _c["id"], "seg": _c["seg_id"], "pose": _c["pose"]}
+    for _c in FEASIBLE_COMBOS if not _c["is_pipeline_a"]
+]
 
 
 # Die Pipeline-A-Identitaet (Live-Pfad). Sowohl die Kombi-id `gdrnpp` als auch das
@@ -74,22 +106,27 @@ def is_pipeline_a(*, pipeline: str | None = None,
 
     Akzeptiert beide FE-Aufruf-Formen (Mission AK 1):
       * `pipeline=gdrnpp`                         (heutiger Default-Param)
-      * `seg=yolo-obb & pose=gdrnpp`              (neue 2-Achsen-Form S-010)
+      * `seg=yolo-obb & pose=gdrnpp` ODER `pose=GDRNPP`  (2-Achsen-Form S-010; das FE
+        kann auf der pose-Achse die Gateway-id `gdrnpp` ODER das Label `GDRNPP` schicken)
     Ein leerer/fehlender pipeline-Param ohne seg/pose ist ebenfalls Pipeline A
     (Default, byte-identisch zu currentPipeline()→"gdrnpp")."""
     pid = (pipeline or "").strip()
     if seg or pose:
-        return (seg or "").strip() == PIPELINE_A_SEG and (pose or "").strip() == PIPELINE_A_POSE
+        # pose-Achse case-insensitiv: id 'gdrnpp' und Label 'GDRNPP' sind beide Pipeline A
+        # (sonst faellt seg=yolo-obb&pose=GDRNPP faelschlich durch → InvalidCombo, weil
+        # yolo-obb→gdrnpp NICHT in COMBO_TO_GATEWAY steht — es IST der Live-Monolith).
+        return ((seg or "").strip() == PIPELINE_A_SEG
+                and (pose or "").strip().lower() == PIPELINE_A_POSE)
     return pid in ("", PIPELINE_A_ID)
 
 
 def resolve_combo_id(*, pipeline: str | None = None,
                      seg: str | None = None, pose: str | None = None) -> str:
-    """Loest die Anfrage auf eine Kombi-id auf. Pipeline A → 'gdrnpp'. Die 6 NICHT-A
+    """Loest die Anfrage auf eine Kombi-id auf. Pipeline A → 'gdrnpp'. Die NICHT-A-Kombis
     werden entweder direkt per `pipeline=<combo_id>` ODER per `seg=&pose=` adressiert.
 
-    Wirft InvalidCombo wenn (seg,pose) keine der 7 Whitelist-Kombis ist (→ 400 im
-    kip_server, „niemals 12 Kombis"-Invariante, Mia S-010)."""
+    Quelle der Wahrheit ist `COMBO_TO_GATEWAY` (= alle NICHT-A feasible-Kombis, T-155).
+    Wirft InvalidCombo wenn (seg,pose) keine feasible-Kombi ist (→ 400 im kip_server)."""
     if is_pipeline_a(pipeline=pipeline, seg=seg, pose=pose):
         return PIPELINE_A_ID
 
@@ -97,31 +134,30 @@ def resolve_combo_id(*, pipeline: str | None = None,
     if pid and pid in COMBO_TO_GATEWAY:
         return pid
 
-    # 2-Achsen-Form: (seg, pose) → Kombi-id ueber die Whitelist nachschlagen.
+    # 2-Achsen-Form: (seg, pose) → Kombi-id ueber die feasible-Kombis nachschlagen.
     if seg or pose:
         s, p = (seg or "").strip(), (pose or "").strip()
-        for c in COMBO_WHITELIST:
-            if c["is_pipeline_a"]:
-                continue
-            # Whitelist-pose ist ein Label ("FoundationPose"); Gateway-pose-id steckt
-            # im combo-id-Suffix. Wir matchen tolerant auf beides.
+        for c in _NON_A_COMBOS:
+            # c["seg"] ist die Mesh-/FE-Seg-id (yolo-obb/yolo-seg/sam3); c["pose"] das
+            # FE-Label ("FoundationPose"). Die Gateway-pose-id steckt im combo-id-Suffix.
+            # Wir matchen tolerant auf Label ODER Gateway-id.
             gw = COMBO_TO_GATEWAY[c["id"]]
             if c["seg"] == s and (p == gw["pose_source"] or _pose_label_matches(c, p)):
                 return c["id"]
         raise InvalidCombo(
-            f"Ungueltige Kombi (seg={seg!r}, pose={pose!r}). Erlaubt sind genau die "
-            f"7 Whitelist-Kombis (CONTRACT.md §5)."
+            f"Ungueltige Kombi (seg={seg!r}, pose={pose!r}). Erlaubt sind die feasiblen "
+            f"Kombis (combos.FEASIBLE_COMBOS) bzw. Pipeline A (seg=yolo-obb&pose=gdrnpp)."
         )
 
     raise InvalidCombo(
         f"Unbekannte Pipeline {pipeline!r}. Erlaubt: 'gdrnpp' (Pipeline A) oder eine der "
-        f"6 NICHT-A-Kombi-ids {sorted(COMBO_TO_GATEWAY)}."
+        f"NICHT-A-Kombi-ids {sorted(COMBO_TO_GATEWAY)}."
     )
 
 
 def _pose_label_matches(combo: dict, pose: str) -> bool:
-    """Tolerantes Match der FE-Pose-Achse gegen die Whitelist-Pose. Akzeptiert das
-    Label ('FoundationPose','GigaPose-2D','GigaPose-3D') ODER die Gateway-id."""
+    """Tolerantes Match der FE-Pose-Achse gegen die feasible-Pose. Akzeptiert das Label
+    ('FoundationPose','GigaPose-2D','GigaPose-3D','GDRNPP') ODER die Gateway-id."""
     if not pose:
         return False
     label = combo["pose"].lower().replace(" ", "").replace("-", "")
@@ -136,10 +172,14 @@ def _pose_label_matches(combo: dict, pose: str) -> bool:
 
 
 def combo_to_gateway(combo_id: str) -> dict:
-    """Kombi-id → Gateway-Routing {seg_source, pose_source, needs_depth}.
+    """Kombi-id → Gateway-Routing {seg_source, pose_source, needs_depth, degraded}.
 
-    Wirft InvalidCombo wenn combo_id keine der 6 NICHT-A-Kombis ist (Pipeline A
-    laeuft NICHT ueber das Gateway — das prueft der Aufrufer vorher per is_pipeline_a)."""
+    `degraded=True` nur fuer die 2 GDRNPP-degraded-Kombis (yolo-seg/sam3 → gdrnpp);
+    der Aufrufer (kip_server) MUSS es dann als Form-Feld `degraded=true` ans Gateway
+    durchreichen (T-153-Opt-in: Maske bleibt → gdrnpp-svc AABB-aus-Maske-Fallback).
+
+    Wirft InvalidCombo wenn combo_id keine NICHT-A-Kombi ist (Pipeline A laeuft NICHT
+    ueber das Gateway — das prueft der Aufrufer vorher per is_pipeline_a)."""
     gw = COMBO_TO_GATEWAY.get(combo_id)
     if gw is None:
         raise InvalidCombo(
@@ -319,11 +359,18 @@ def pipelines_status(*, gateway_health: Optional[dict] = None,
 def _gateway_service_up(gateway_health: Optional[dict]) -> dict:
     """Aus der gateway/health-Antwort die per-Service-up-Map ableiten.
 
-    gateway/health (gateway/app.py:292-311) hat die Form
-      {ok, yolo:{ok}, fp:{ok}, gigapose:{...}, sam3:{ok}}.
-    Wir mappen das auf die source-ids, die COMBO_TO_GATEWAY nutzt:
-      seg:  'yolo' (yolo-svc), 'sam3' (sam3-svc)
-      pose: 'foundationpose' (fp-svc), 'gigapose_rgbd'+'gigapose_rgb' (beide gigapose-svc).
+    gateway/health (gateway/app.py:319-340) hat die Form
+      {ok, yolo:{ok}, fp:{ok}, gigapose:{...}, sam3:{ok}, yolo_obb:{ok}, gdrnpp:{ok}}.
+    Wir mappen ALLE Health-Knoten auf die source-ids, die COMBO_TO_GATEWAY +
+    pipelines_status nutzen — alle 4 Seg-Quellen UND alle 4 Pose-Modelle (T-155):
+      seg:  'yolo' (yolo-svc), 'sam3' (sam3-svc), 'yolo-obb' (yolo-obb-svc, OBB-Detektor)
+      pose: 'foundationpose' (fp-svc), 'gigapose_rgbd'+'gigapose_rgb' (beide gigapose-svc),
+            'gdrnpp' (gdrnpp-svc, nativer GDRNPP-Pose-Service fuer die degraded-Kombis).
+
+    Vorher fehlten 'yolo-obb' + 'gdrnpp' → die 3 yolo-obb-Mesh-Kombis fielen faelschlich
+    auf service_down, obwohl yolo-obb-svc im Gateway-/health ok war (Sam T-154-Befund).
+    Der Gateway-Health-Knoten heisst `yolo_obb` (Underscore); unsere source-id ist
+    `yolo-obb` (Bindestrich, == SEG_SOURCES-id / Mesh-Name) — hier explizit gemappt.
     """
     if not gateway_health:
         return {}
@@ -338,12 +385,18 @@ def _gateway_service_up(gateway_health: Optional[dict]) -> dict:
     fp = _ok(gateway_health.get("fp"))
     giga = _ok(gateway_health.get("gigapose"))
     sam3 = _ok(gateway_health.get("sam3"))
+    yolo_obb = _ok(gateway_health.get("yolo_obb"))
+    gdrnpp = _ok(gateway_health.get("gdrnpp"))
     return {
+        # Seg-Quellen (4):
         "yolo": yolo,
         "sam3": sam3,
+        "yolo-obb": yolo_obb,
+        # Pose-Modelle (4):
         "foundationpose": fp,
         "gigapose_rgbd": giga,
         "gigapose_rgb": giga,
+        "gdrnpp": gdrnpp,
     }
 
 

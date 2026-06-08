@@ -230,11 +230,85 @@ def test_predict_invalid_combo_is_400(client, monkeypatch):
     monkeypatch.setattr(K, "_gateway_predict_multipart",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("nie aufrufen")))
     files = {"image": ("rgb.png", _png_bytes(), "image/png")}
-    # yolo-obb nur mit gdrnpp (§4) → yolo-obb + FoundationPose ist ungueltig.
+    # T-155: yolo-obb+FoundationPose ist jetzt VALIDE (feasible). Wirklich ungueltig:
+    # eine unbekannte Seg-Quelle → 400 (niemals 12 Kombis).
     r = client.post("/api/predict", files=files, data={
-        "seg": "yolo-obb", "pose": "FoundationPose",
+        "seg": "bogus-seg", "pose": "FoundationPose",
         "fx": "600", "fy": "600", "cx": "32", "cy": "32"})
     assert r.status_code == 400
+
+
+def test_predict_yolo_obb_mesh_combo_proxies(client, monkeypatch):
+    """T-155: yolo-obb-Mesh-Kombi (yolo-obb → FoundationPose) routet jetzt sauber ueber
+    das Gateway (vorher 400/InvalidCombo). seg_source='yolo' (mask-Pfad, runner-konsistent)."""
+    captured = {}
+
+    def fake_gateway(combo_id, **kw):
+        captured["combo_id"] = combo_id
+        return _gateway_resp()
+
+    monkeypatch.setattr(K, "_gateway_predict_multipart", fake_gateway)
+    monkeypatch.setattr(K, "_real_infer_job",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("kein Live-Pfad")))
+    files = {"image": ("rgb.png", _png_bytes(), "image/png"),
+             "depth": ("depth.png", _png_bytes(mode="L16", val=300), "image/png")}
+    r = client.post("/api/predict", files=files, data={
+        "seg": "yolo-obb", "pose": "FoundationPose",
+        "fx": "600", "fy": "600", "cx": "32", "cy": "32", **_EXTRINSICS})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["pipeline"] == "yolo_obb__foundationpose"
+    assert body["is_pipeline_a"] is False and body["mode"] == "mesh"
+    assert body["seg_source"] == "yolo" and body["pose_source"] == "foundationpose"
+    assert captured["combo_id"] == "yolo_obb__foundationpose"
+
+
+def test_predict_gdrnpp_degraded_combo_forwards_degraded_flag(client, monkeypatch):
+    """T-155: yolo-seg → gdrnpp (degraded) routet ueber das Gateway und reicht
+    degraded='true' in den multipart durch (Maske bleibt → AABB-aus-Maske-Fallback)."""
+    import inspect
+
+    captured = {}
+
+    # Echtes _gateway_predict_multipart laufen lassen, aber httpx.Client wegmocken,
+    # um das tatsaechlich gebaute `data`-dict (inkl. degraded) abzufangen.
+    real_multipart = K._gateway_predict_multipart
+
+    class _FakeResp:
+        status_code = 200
+
+        def json(self):
+            return _gateway_resp()
+
+    class _FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, data=None, files=None):
+            captured["data"] = data
+            return _FakeResp()
+
+    import httpx
+    monkeypatch.setattr(httpx, "Client", _FakeClient)
+    monkeypatch.setattr(K, "_real_infer_job",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("kein Live-Pfad")))
+    assert "httpx" in inspect.getsource(real_multipart)   # sanity: real path uses httpx
+
+    files = {"image": ("rgb.png", _png_bytes(), "image/png")}   # gdrnpp = needs_depth False
+    r = client.post("/api/predict", files=files, data={
+        "pipeline": "yolo_seg__gdrnpp",
+        "fx": "600", "fy": "600", "cx": "32", "cy": "32", **_EXTRINSICS})
+    assert r.status_code == 200, r.text
+    assert r.json()["pipeline"] == "yolo_seg__gdrnpp"
+    assert captured["data"]["degraded"] == "true"
+    assert captured["data"]["seg_source"] == "yolo"        # mask-emitting seg bleibt
+    assert captured["data"]["pose_source"] == "gdrnpp"
 
 
 def test_predict_needs_depth_without_depth_is_400(client, monkeypatch):
