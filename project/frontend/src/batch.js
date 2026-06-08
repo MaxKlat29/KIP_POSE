@@ -32,12 +32,16 @@ const POST_L = { "GDRNPP": "GDRNPP", "FoundationPose": "FoundationPose",
 const fmtPct = (v) => v == null ? "—" : `${Math.round((v > 1 ? v : v * 100))} %`;
 const fmtMs  = (v) => v == null ? "—" : `${Math.round(v)}`;
 const fmtAr  = (m) => m == null ? "—" : m.toFixed(3);
+// T-160: Input-Spalte — schlichter Text "RGB"/"RGBD" aus dem modality-Feld (T-159).
+// Kein Badge, keine Emojis. Fehlt das Feld (alter Job-Endpoint) → em-dash, kein Crash.
+const fmtInput = (c) => c && c.modality ? c.modality : "—";
 const cfgName = (c) => `${SEG_L[c.seg] || c.seg} + ${POST_L[c.pose] || c.pose}`;
 const cfgKey  = (c) => c.config_key || `${c.seg}|${c.pose}`;
 
 // T-158: keine "Verfahren"-Spalte mehr — nur Name, Zahlen.
 const COLS = [
   { key: "config",   label: "Konfiguration", sortable: false, num: false },
+  { key: "input",    label: "Input",         sortable: false, num: false }, // T-160: RGB / RGBD (modality)
   { key: "ar",       label: "AR IC-BIN",     sortable: true,  num: true, sort: (c) => c.ar_mean ?? -1 },
   { key: "runtime",  label: "Laufzeit",      sortable: true,  num: true, sort: (c) => c.pose_ms ?? Infinity, dir0: "asc" },
   { key: "coverage", label: "Abdeckung",     sortable: true,  num: true, sort: (c) => c.coverage ?? -1 },
@@ -158,6 +162,7 @@ export function createBatch({ bar, pollJob, healthRef }) {
       const tr = document.createElement("tr");
       tr.innerHTML =
         `<td data-label="Konfiguration"><span class="kip-eval__cfg">${cfgName(c)}</span></td>` +
+        `<td data-label="Input">${fmtInput(c)}</td>` +
         `<td class="kip-eval__num" data-label="AR IC-BIN">${fmtAr(c.ar_mean)}` +
           (c.ar_std != null ? `<span class="kip-eval__std">±${c.ar_std.toFixed(3)}</span>` : "") + `</td>` +
         `<td class="kip-eval__num" data-label="Laufzeit">${fmtMs(c.seg_ms)} / ${fmtMs(c.pose_ms)} ms</td>` +
@@ -209,6 +214,7 @@ export function createBatch({ bar, pollJob, healthRef }) {
     tr.innerHTML =
       `<td class="kip-live__rankc" data-label="Rang">${rank}</td>` +
       `<td data-label="Konfiguration"><span class="kip-eval__cfg">${cfgName(s)}</span></td>` +
+      `<td data-label="Input">${fmtInput(s)}</td>` +
       `<td class="kip-live__numc" data-label="AR IC-BIN">` +
         `<span class="kip-live__ar">${fmtAr(ar)}</span>` +
         (arStd != null ? `<span class="kip-eval__std">±${arStd.toFixed(3)}</span>` : "") + `</td>` +
@@ -274,6 +280,7 @@ export function createBatch({ bar, pollJob, healthRef }) {
       ar_mean: s.ar ?? s.ar_mean, ar_std: s.ar_std,
       seg_ms: s.seg_ms, pose_ms: s.pose_ms,
       coverage: s.coverage, crash_rate: s.crash_rate,
+      modality: s.modality, // T-160: Input-Spalte beim Live→final-Übergang erhalten
       config_key: s.config_key, run_config_id: s.config_key,
     }));
   }
@@ -431,5 +438,6 @@ export function createBatch({ bar, pollJob, healthRef }) {
     // Für Tests/Smoke: erlaubt das Rendern eines gemockten Job-Stands ohne echten Lauf.
     __renderLive: renderLive,
     __hideLive: hideLive,
+    __setConfigs: setConfigs,   // T-160: finale Tabelle aus gemockten configs (inkl. modality) rendern
   };
 }
