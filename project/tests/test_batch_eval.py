@@ -141,6 +141,22 @@ def test_pivot_flags_present():
     assert by_key["gdrnpp"]["degraded"] is False
 
 
+def test_pipeline_a_routes_through_gateway_native_obb():
+    """T-157: Pipeline A (yolo-obb→gdrnpp) faehrt im EVAL-Pfad ueber das Gateway mit der
+    ECHTEN OBB-Quelle (seg_source='yolo-obb', NICHT dem mask-Pfad 'yolo'), damit gdrnpp-svc
+    `obb` nativ liest (S-004) → echte Pipeline-A-Pose statt leerer Referenzzeile.
+    seg_source='gdrnpp' (Live-Monolith-Signal) ist hier explizit NICHT mehr gesetzt."""
+    a = next(c for c in be.EVAL_CONFIGS if c["is_pipeline_a"])
+    assert a["seg_source"] == "yolo-obb"      # echte orientierte Boxen, nicht "yolo"/"gdrnpp"
+    assert a["pose_source"] == "gdrnpp"
+    # Pipeline A ist KEINE degraded-Kombi (kein AABB-aus-Maske-Fallback).
+    assert a["degraded"] is False
+    # Die degraded gdrnpp-Kombis routen weiterhin ueber den mask-Pfad "yolo"/"sam3".
+    by_key = {be.config_key(c): c for c in be.EVAL_CONFIGS}
+    assert by_key["yolo_seg__gdrnpp"]["seg_source"] == "yolo"
+    assert by_key["sam3__gdrnpp"]["seg_source"] == "sam3"
+
+
 def test_needs_depth_matches_contract():
     # §5: FP + GigaPose-3D brauchen Depth; GigaPose-2D + GDRNPP nicht.
     by_key = {be.config_key(c): c for c in be.EVAL_CONFIGS}
@@ -310,6 +326,90 @@ def test_run_one_success_builds_rows(tmp_path):
     assert res["seg_ms"] == 12.0 and res["pose_ms"] == 340.0
 
 
+# ── 6b) T-157: http_predict-Wiring fuer Pipeline A (echte obb ueber Gateway) ──────
+class _FakeResp:
+    def __init__(self, body):
+        self._body = body
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._body
+
+
+class _FakeHttpxClient:
+    """Faengt die /predict-Form-Daten ab (statt echtem Netz) → wir koennen pruefen,
+    WAS der Runner ans Gateway schickt (seg_source/pose_source/degraded)."""
+
+    captured = None
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def post(self, url, data=None, files=None):
+        _FakeHttpxClient.captured = {"url": url, "data": dict(data or {}),
+                                     "files": list((files or {}).keys())}
+        # Antwort = eine valide Pipeline-A-Pose (2 Anker), wie sie gdrnpp-svc liefern wuerde.
+        return _FakeResp(_gateway_reply(n_anker=2))
+
+
+def _patch_httpx(monkeypatch, client_cls=_FakeHttpxClient):
+    import types
+    fake = types.ModuleType("httpx")
+    fake.Client = client_cls
+    monkeypatch.setitem(sys.modules, "httpx", fake)
+
+
+def test_http_predict_pipeline_a_uses_native_obb_over_gateway(tmp_path, monkeypatch):
+    """T-157 KERN: der Default-http_predict routet Pipeline A ueber das Gateway mit
+    seg_source='yolo-obb' + pose_source='gdrnpp' OHNE degraded → echte obb, gdrnpp-svc
+    nativ. Frueher warf er PipelineANotOnGateway → leere Zeile. Jetzt: echte Antwort."""
+    _FakeHttpxClient.captured = None
+    _patch_httpx(monkeypatch)
+    predict = be.http_predict("http://gateway:8000")
+    cfg = _cfg("gdrnpp")                                  # Pipeline A
+    scene = _scene(tmp_path)
+    out = predict(cfg, scene)                             # wirft NICHT mehr
+    cap = _FakeHttpxClient.captured
+    assert cap is not None and cap["url"].endswith("/predict")
+    assert cap["data"]["seg_source"] == "yolo-obb"       # echte OBB-Quelle
+    assert cap["data"]["pose_source"] == "gdrnpp"
+    assert "degraded" not in cap["data"]                 # KEIN AABB-aus-Maske-Fallback
+    assert len(out["instances"]) == 2                    # echte Pipeline-A-Posen
+
+
+def test_http_predict_degraded_combo_still_sets_degraded(tmp_path, monkeypatch):
+    """Regression: die degraded gdrnpp-Kombis (yolo-seg→gdrnpp) setzen WEITERHIN
+    degraded=true + behalten ihren mask-seg_source (T-153 unveraendert)."""
+    _FakeHttpxClient.captured = None
+    _patch_httpx(monkeypatch)
+    predict = be.http_predict("http://gateway:8000")
+    cfg = _cfg("yolo_seg__gdrnpp")                        # degraded, NICHT Pipeline A
+    predict(cfg, _scene(tmp_path))
+    cap = _FakeHttpxClient.captured
+    assert cap["data"]["seg_source"] == "yolo"           # mask-Pfad bleibt
+    assert cap["data"]["pose_source"] == "gdrnpp"
+    assert cap["data"]["degraded"] == "true"             # T-153-Opt-in bleibt
+
+
+def test_run_one_pipeline_a_over_gateway_builds_rows(tmp_path, monkeypatch):
+    """run_one mit dem echten http_predict → Pipeline A liefert nicht-leere CSV-Zeilen
+    (der ehemals leere AR-Eintrag ist jetzt befuellt)."""
+    _patch_httpx(monkeypatch)
+    predict = be.http_predict("http://gateway:8000")
+    res = be.run_one(_cfg("gdrnpp"), _scene(tmp_path), predict)
+    assert res["ok"] is True
+    assert res["n_instances"] == 2 and len(res["rows"]) == 2
+    assert res["error"] is None
+
+
 # ── 7) ar_from_report ───────────────────────────────────────────────────────────
 def test_ar_from_report():
     report = {"results": {"overall": {"AR": 0.4123},
@@ -393,6 +493,31 @@ def test_run_batch_idempotent_patch(tmp_path):
     assert len(list(out.glob("*/results.json"))) == 1
     second = json.loads((out / "run-x" / "results.json").read_text())
     assert second["n_configs"] == first["n_configs"] == 12
+
+
+def test_run_batch_pipeline_a_scored_over_gateway(tmp_path):
+    """T-157 end-to-end: faehrt ALLE Kombis (inkl. Pipeline A) ueber einen Mock-Gateway
+    → Pipeline A bekommt eine ECHTE, nicht-leere AR-Zeile (ar_mean != None, crash_rate
+    != None) statt der frueheren leeren Referenzzelle. Kein PipelineANotOnGateway mehr."""
+    scenes = [_scene(tmp_path / "scenes", scene_id=i) for i in range(2)]
+    out = tmp_path / "batch_eval"
+
+    # Mock-predict: JEDE Kombi (auch Pipeline A) liefert echte Posen — wie das echte
+    # http_predict, das Pipeline A jetzt uebers Gateway faehrt (seg_source=yolo-obb).
+    def predict(cfg, scene):
+        return _gateway_reply(n_anker=2)
+
+    results = be.run_batch(be.EVAL_CONFIGS, scenes, predict, _mock_eval_fn, out,
+                           run_id="run-a")
+    a = [c for c in results["configs"] if c["is_pipeline_a"]][0]
+    assert a["ar_mean"] is not None                       # GESCORT (war vorher None)
+    assert a["crash_rate"] is not None                    # echter Versuch (n_real > 0)
+    assert a["coverage"] == pytest.approx(1.0)            # 2 Anker pro Szene erkannt
+    assert a["is_pipeline_a"] is True                     # FE-Flag bleibt
+    assert a["run_config_id"] == "gdrnpp"
+    # Pipeline A taucht in den Live-Standings mit einem AR-Rang auf (nicht ar=None-Ende).
+    a_st = [s for s in results["standings"] if s["config_key"] == "gdrnpp"][0]
+    assert a_st["ar"] is not None and a_st["is_pipeline_a"] is True
 
 
 def test_discover_scenes(tmp_path):

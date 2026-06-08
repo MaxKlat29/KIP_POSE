@@ -58,7 +58,12 @@ from compare_pipelines import doc_to_bop_rows  # noqa: E402
 # Seg-/Pose-Modul in combos.SEG_SOURCES/POSE_SOURCES taucht automatisch auf. ─────────
 
 # combos-seg-id (Mesh-/FE-Name) → Gateway-seg_source (INFER_SOURCES-id, app.py).
-# yolo-obb hat kein Gateway-seg (Pipeline-A-Live-Monolith bzw. obb-Maske) → "yolo".
+#   * yolo-seg == "yolo" (mask-emittierender YOLO26m-seg-Service).
+#   * sam3 == "sam3".
+#   * yolo-obb == "yolo-obb": die echte OBB-Quelle. Fuer die 3 yolo-obb-MESH-Kombis
+#     (FP/GigaPose, die die Maske konsumieren) routet der Runner ueber den mask-Pfad
+#     "yolo" (siehe _build_eval_configs); NUR Pipeline A (yolo-obb→gdrnpp) braucht die
+#     echten orientierten Boxen "yolo-obb" → gdrnpp-svc liest `obb` (S-004) nativ.
 _SEG_SOURCE = {"yolo-obb": "yolo", "yolo-seg": "yolo", "sam3": "sam3"}
 # FE-Verfahren-Note (Lena batch.js NOTE_BY-Degrade-Fallback) pro pose_id.
 _NOTE = {"gdrnpp": "Pipeline A", "foundationpose": "RGB-D 6DoF",
@@ -70,9 +75,14 @@ def _build_eval_configs():
     out = []
     for w in FEASIBLE_COMBOS:
         pose_source = "gdrnpp" if w["is_pipeline_a"] else w["pose_id"]
-        # Pipeline A (yolo-obb→gdrnpp) hat KEIN Gateway-/predict → seg_source=gdrnpp
-        # signalisiert den Live-Monolith-Pfad (PipelineANotOnGateway im Runner).
-        seg_source = "gdrnpp" if w["is_pipeline_a"] else _SEG_SOURCE[w["seg_id"]]
+        # T-157: Pipeline A (yolo-obb→gdrnpp) faehrt im EVAL-Pfad jetzt SEHR WOHL uebers
+        # Gateway — mit der echten OBB-Quelle "yolo-obb" (NICHT dem mask-Pfad "yolo"),
+        # damit gdrnpp-svc die orientierten Boxen `obb` nativ liest (S-004) und die
+        # echte Pipeline-A-Pose liefert (= der Genauigkeits-Koenig). So bekommt Pipeline
+        # A eine nicht-leere AR-Zeile in der Vergleichstabelle, statt einer leeren
+        # Referenzzelle. Der LIVE-Pfad (kip_server:8077 pipeline=gdrnpp) bleibt davon
+        # voellig unberuehrt — er nutzt weiterhin den Live-Monolith (e2e_infer).
+        seg_source = "yolo-obb" if w["is_pipeline_a"] else _SEG_SOURCE[w["seg_id"]]
         # Verfahren-Note: "Pipeline A" NUR fuer die echte Kombi 1; die degradierten
         # GDRNPP-Kombis (yolo-seg/sam3 → gdrnpp) sind NICHT Pipeline A.
         note = _NOTE[w["pose_id"]]
@@ -224,25 +234,30 @@ def http_predict(gateway_url: str, iterations: int = 5, top_n=None, timeout: flo
     Spricht das Mesh-Gateway-`/predict` (multipart) — die Quelle der Wahrheit fuer
     seg+pose + die seg_ms/pose_ms-Telemetrie (gateway/app.py timings).
 
-    **Pipeline A** (`is_pipeline_a`, Kombi 1 yolo-obb→gdrnpp) hat KEIN Gateway-/predict
-    (das ist der Live-Monolith); dafuer wirft die predict_fn `PipelineANotOnGateway`
-    → der Runner faellt auf die lokale e2e_infer-Referenz zurueck.
+    **Pipeline A** (`is_pipeline_a`, Kombi 1 yolo-obb→gdrnpp) laeuft im EVAL-Pfad jetzt
+    EBENFALLS ueber das Gateway (T-157): seg_source='yolo-obb' + pose_source='gdrnpp'
+    OHNE `degraded` → das Gateway segmentiert mit yolo-obb-svc (echte orientierte Boxen)
+    und reicht das `obb`-Feld an gdrnpp-svc durch (CONTRACT §4, app.py:566), das es nativ
+    liest (S-004). Ergebnis = die echte Pipeline-A-Pose (Genauigkeits-Koenig) als nicht-
+    leere AR-Zeile in der Tabelle. **Der LIVE-Pfad (kip_server:8077 pipeline=gdrnpp)
+    bleibt der byte-identische Live-Monolith — er beruehrt das Gateway NIE.** Hier geht
+    es ausschliesslich um die Eval-/Vergleichstabelle.
 
     **GDRNPP-degraded** (yolo-seg→gdrnpp, sam3→gdrnpp, pose_source='gdrnpp' aber
-    NICHT is_pipeline_a) laeuft SEHR WOHL ueber das Gateway — mit `degraded=true`
-    (T-153 Gateway-Opt-in), damit der gewaehlte mask-emittierende seg_source erhalten
-    bleibt und gdrnpp-svc die AABB aus der Maske ableitet (dokumentierter Fallback).
-    So bekommen die degraded-Kombis echte AR-Zeilen statt leerer Referenzzellen.
+    NICHT is_pipeline_a) laeuft mit `degraded=true` (T-153 Gateway-Opt-in), damit der
+    gewaehlte mask-emittierende seg_source erhalten bleibt und gdrnpp-svc die AABB aus
+    der Maske ableitet (dokumentierter Fallback). Pipeline A setzt `degraded` NICHT —
+    sie nutzt die echten obb-Boxen, NICHT den AABB-aus-Maske-Fallback. So bekommen sowohl
+    Pipeline A (echte obb) als auch die degraded-Kombis (AABB) echte AR-Zeilen.
 
     Lazy `import httpx` — kein Pin in project/requirements.txt (Box-Stack).
     """
     base = gateway_url.rstrip("/")
 
     def _predict(cfg: dict, scene: dict) -> dict:
-        # NUR die echte Pipeline A (Live-Monolith) geht NICHT uebers Gateway. Die
-        # degraded gdrnpp-Kombis fahren ueber das Gateway mit degraded=true.
-        if cfg.get("is_pipeline_a"):
-            raise PipelineANotOnGateway(cfg)
+        # T-157: Pipeline A geht im Eval JETZT auch uebers Gateway (seg_source=yolo-obb,
+        # pose_source=gdrnpp, degraded=false → echte obb → gdrnpp-svc nativ). Nur die
+        # degraded gdrnpp-Kombis (yolo-seg/sam3 → gdrnpp) setzen degraded=true.
         import httpx
         # Bytes vorab lesen (kleine PNGs) — keine offenen File-Handles ueber den
         # Netz-Call (die leakten, wenn client.post wirft).
@@ -274,10 +289,15 @@ def http_predict(gateway_url: str, iterations: int = 5, top_n=None, timeout: flo
 
 
 class PipelineANotOnGateway(Exception):
-    """Pipeline A (Kombi 1, yolo-obb→gdrnpp) hat kein Gateway-/predict — Live-Monolith.
+    """Eine predict_fn signalisiert: diese Kombi laeuft NICHT uebers Gateway.
 
-    Gilt NUR fuer die echte Referenz (`is_pipeline_a`); die degraded gdrnpp-Kombis
-    (yolo-seg/sam3 → gdrnpp) fahren ueber das Gateway (degraded=true)."""
+    **T-157:** Der Default-`http_predict` wirft das NICHT MEHR — Pipeline A faehrt im
+    Eval jetzt ueber das Gateway (seg_source=yolo-obb→gdrnpp nativ, echte obb). Die
+    Exception bleibt als testbare Naht erhalten: `run_one` faengt sie weiterhin (ok=False,
+    error='pipeline_a_no_gateway', zaehlt NICHT als echter Versuch), damit eine custom
+    predict_fn eine Kombi explizit vom Gateway-Scoring ausnehmen kann (z.B. wenn
+    yolo-obb-svc nicht deployt ist und man Pipeline A bewusst skippen will). Im realen
+    12×N-Lauf wird sie fuer Pipeline A nicht mehr ausgeloest → echte AR-Zeile."""
 
 
 # ── Default eval_fn: subprocess gegen box_src/eval_bop.py --icbin ────────────────
