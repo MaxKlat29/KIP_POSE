@@ -189,7 +189,42 @@ def combo_to_gateway(combo_id: str) -> dict:
     return dict(gw)
 
 
-# ── Gateway-/predict-Antwort → frozen pose_result-Doc ─────────────────────────
+# ── Gateway-/predict-Antwort → Welt-Frame-Eintraege (geteilte Iteration) ──────
+def _gateway_world_entries(gateway_resp: dict, *, R_w2c, t_w2c, table_origin,
+                           with_bbox: bool, start_inst_id: int = 0,
+                           snap: bool = True, warn=None) -> list:
+    """DER eine Iterations-/Mapping-Schritt der Gateway-`instances` → Welt-Frame-Eintraege.
+
+    Geteilt von `gateway_predict_to_pose_result` (Contract-Doc, Eval) UND
+    `gateway_instances_to_viewer_preds` (Viewer-Overlay, Sim/Real) — beide brauchen
+    GENAU diese Schleife (Skip ohne Pose §3, §6-Scope-Filter, tcamobj_to_world_entry),
+    nur die Ziel-Form unterscheidet sich. So gibt es EINE Stelle fuer die Cam→Welt-Naht.
+
+    with_bbox: True → bbox_2d aus mask_b64 ableiten (Contract braucht es); False → [0,0,0,0]
+    (der Viewer nutzt keine 2D-Box auf der Pred). start_inst_id: fortlaufende iids ab hier
+    (der Sim/Viewer haengt Preds hinter die GT-iids)."""
+    from .composed import tcamobj_to_world_entry, _mask_b64_to_bbox
+
+    entries, iid = [], start_inst_id
+    for inst in gateway_resp.get("instances", []):
+        cls, T = inst.get("class"), inst.get("T_cam_obj")
+        if cls is None or T is None:
+            continue                         # Instanz ohne Pose (Gateway-Skip §3) → weg
+        conf = inst.get("conf")
+        mask = inst.get("mask_b64")
+        entry = tcamobj_to_world_entry(      # §1+§6, geteilt mit ComposedPipeline
+            cls=cls, T_cam_obj=T, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=table_origin,
+            instance_id=iid,
+            confidence=(conf if conf is not None else 1.0),
+            bbox_2d=(_mask_b64_to_bbox(mask) if (with_bbox and mask) else [0, 0, 0, 0]),
+            snap=snap, warn=warn,
+        )
+        if entry is not None:                # None = Klasse out-of-scope (§6) → still weg
+            entries.append(entry)
+            iid += 1
+    return entries
+
+
 def gateway_predict_to_pose_result(gateway_resp: dict, *, camera: dict,
                                    table_origin, source_image: str,
                                    warn: Optional[Callable] = None,
@@ -210,7 +245,6 @@ def gateway_predict_to_pose_result(gateway_resp: dict, *, camera: dict,
       snap         : Boden-Snap anwenden (default True; best-effort, fehlt CAD → skip).
     """
     from . import contract
-    from .composed import tcamobj_to_world_entry, _mask_b64_to_bbox
 
     cam = camera or {}
     R_w2c = cam.get("cam_R_w2c")
@@ -221,24 +255,9 @@ def gateway_predict_to_pose_result(gateway_resp: dict, *, camera: dict,
             "(Welt-Extrinsics) — die Pose-Stage liefert nur den Cam-Frame T_cam_obj."
         )
     to = list(table_origin)
-
-    entries = []
-    for inst in gateway_resp.get("instances", []):
-        cls, T = inst.get("class"), inst.get("T_cam_obj")
-        if cls is None or T is None:
-            continue                         # Instanz ohne Pose (Gateway-Skip §3) → weg
-        mask = inst.get("mask_b64")
-        conf = inst.get("conf")
-        entry = tcamobj_to_world_entry(      # §1+§6, geteilt mit ComposedPipeline
-            cls=cls, T_cam_obj=T, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=to,
-            instance_id=int(inst.get("id", len(entries))),
-            confidence=(conf if conf is not None else 1.0),
-            bbox_2d=(_mask_b64_to_bbox(mask) if mask else [0, 0, 0, 0]),
-            snap=snap, warn=warn,
-        )
-        if entry is not None:                # None = Klasse out-of-scope (§6)
-            entries.append(entry)
-
+    entries = _gateway_world_entries(
+        gateway_resp, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=to,
+        with_bbox=True, snap=snap, warn=warn)
     return contract.assemble_doc(source_image, entries, table_origin=to)
 
 
@@ -403,3 +422,88 @@ def _gateway_service_up(gateway_health: Optional[dict]) -> dict:
 def available_combo_ids(pipelines: list) -> list:
     """Aus einer pipelines_status()-Liste die available-Kombi-ids (fuer /api/compare-Gating)."""
     return [p["id"] for p in pipelines if p.get("available")]
+
+
+# ── Result-Metadaten: welche Kombi/welches Modell wurde gefahren (S-014 / T-140) ──
+# Lena (T-164) zeigt im Result an, was wirklich lief. Single-Source = FEASIBLE_COMBOS;
+# funktioniert auch fuer Pipeline A ('gdrnpp', der Live-Monolith) → die Sim/Real/Upload-
+# Pfade haengen used_combo/used_seg/used_pose/modality an JEDES Infer-Result, egal ob
+# Live-Pfad oder Gateway-Proxy.
+_COMBOS_BY_ID = {c["id"]: c for c in FEASIBLE_COMBOS}
+
+
+def _modality(needs_depth: bool) -> str:
+    """Input-Modalitaet (FE-Spalte, T-159): RGBD wenn die Pose Depth braucht, sonst RGB.
+    Identisch zu batch_eval._modality (Single-Source = needs_depth, CONTRACT.md §5)."""
+    return "RGBD" if needs_depth else "RGB"
+
+
+def combo_result_meta(combo_id: str) -> dict:
+    """Die `used_*`-Result-Felder einer gefahrenen Kombi (S-014 / T-140, Lena T-164).
+
+    -> {used_combo, used_seg, used_pose, modality, needs_depth, degraded}.
+      * used_combo : Kombi-id ('gdrnpp' = Pipeline A, sonst die Gateway-Kombi-id).
+      * used_seg   : Seg-Quelle (FE-Name: yolo-obb | yolo-seg | sam3).
+      * used_pose  : Pose-Modell (FE-Label: GDRNPP | FoundationPose | GigaPose-2D/3D).
+      * modality   : "RGB" | "RGBD" (aus needs_depth; FE Input-Spalte, T-159).
+      * needs_depth, degraded : die Routing-Flags (Single-Source FEASIBLE_COMBOS).
+
+    Wirft InvalidCombo wenn combo_id keine feasible-Kombi ist (Pipeline A inklusive)."""
+    c = _COMBOS_BY_ID.get(combo_id)
+    if c is None:
+        raise InvalidCombo(
+            f"Unbekannte Kombi {combo_id!r}. Erlaubt: feasible-Kombi-ids "
+            f"{sorted(_COMBOS_BY_ID)} (inkl. 'gdrnpp' = Pipeline A)."
+        )
+    return {
+        "used_combo": c["id"],
+        "used_seg": c["seg_id"],
+        "used_pose": c["pose"],          # FE-Label (GDRNPP | FoundationPose | GigaPose-…)
+        "modality": _modality(bool(c["needs_depth"])),
+        "needs_depth": bool(c["needs_depth"]),
+        "degraded": bool(c["degraded"]),
+    }
+
+
+# ── Gateway-/predict-Antwort → Viewer-OVERLAY-Pred-Eintraege (color="pred") ──────
+# Der Sim/Real-Web-Viewer nutzt NICHT das frozen Contract-Doc (das ist die Eval-Form),
+# sondern die OVERLAY-Form (kip_server._bop_pose_to_result): {instance_id, part, face,
+# confidence, t_world, R_world, upright, color}. Fuer die NICHT-A-Kombis kommt die Pose
+# vom Gateway (T_cam_obj) statt vom :8078-Worker — wir mappen sie ueber DIESELBE
+# Cam→Welt-Mathematik (composed.tcamobj_to_world_entry) in genau diese Overlay-Form,
+# damit der Viewer Gateway-Pred und Live-Pred byte-gleich rendert (rot). GT (blau) bleibt
+# der Worker-/scene_gt-Pfad — das Gateway liefert NIE GT (image-only, ADR-020).
+def gateway_instances_to_viewer_preds(gateway_resp: dict, *, R_w2c, t_w2c,
+                                      table_origin, start_inst_id: int = 1,
+                                      snap: bool = True, warn=None) -> list:
+    """Gateway-`/predict`-Instanzen (T_cam_obj) → Viewer-Overlay-Pred-Eintraege (rot).
+
+    Jeder Eintrag hat dieselbe Form wie kip_server._bop_pose_to_result(..., color="pred"):
+    {instance_id, part, face:"—", confidence, t_world, R_world, upright, color:"pred"}.
+    Klassen ausserhalb des 2-Klassen-Scope werden still gefiltert (§6, None aus
+    tcamobj_to_world_entry). Reused die ComposedPipeline-Mathematik → keine zweite
+    Mapping-Implementierung, byte-gleich zum Eval-/Composed-Pfad.
+
+    R_w2c/t_w2c: Welt-Extrinsics als 3x3 / 3-Vektor (mm), wie scene_camera.json. Sim/Real
+    liefern die feste Zivid-Kamera (bzw. die Live-Isaac-Kamera des Frames)."""
+    import numpy as np
+
+    # Geteilte Cam→Welt-Iteration (with_bbox=False: der Viewer braucht keine 2D-Box).
+    entries = _gateway_world_entries(
+        gateway_resp, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=table_origin,
+        with_bbox=False, start_inst_id=start_inst_id, snap=snap, warn=warn)
+    preds = []
+    for entry in entries:
+        Rw = np.asarray(entry["R_world"], float).reshape(3, 3)
+        preds.append({
+            "instance_id": int(entry["instance_id"]),
+            "part": entry["part"],
+            "face": "—",
+            "confidence": float(entry["confidence"]),
+            "t_world": [float(x) for x in entry["t_world"]],
+            "R_world": [float(x) for x in Rw.reshape(9)],
+            # upright-Heuristik identisch zu _bop_pose_to_result: Objekt-Y-Achse ~ Welt-Z.
+            "upright": bool(abs(float(Rw[2, 1])) > 0.6),
+            "color": "pred",
+        })
+    return preds
