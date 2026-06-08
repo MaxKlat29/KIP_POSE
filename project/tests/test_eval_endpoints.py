@@ -188,5 +188,97 @@ def test_full_async_run_through_endpoints(client, tmp_path, monkeypatch):
     assert any(x["run_id"] == run_id for x in runs)
 
 
+# ── T-153: /api/eval/job liefert den Live-Scoreboard-Contract ────────────────────
+_STANDINGS_KEYS = {
+    "rank", "config_key", "seg", "pose", "ar", "ar_std", "n_scenes",
+    "seg_ms", "pose_ms", "coverage", "crash_rate", "recommended", "degraded",
+    "degraded_reason", "class_ambiguity", "is_pipeline_a",
+}
+
+
+def test_job_status_live_standings_contract(client, tmp_path, monkeypatch):
+    """GET /api/eval/job/<job> → {status,pct,phase,n_done,n_total,run_id,standings}.
+
+    standings sortiert nach ar DESC, rank gesetzt, ALLE ~12 Configs, exaktes Schema.
+    Live nach jeder Szene aktualisiert (seed-major Round-Robin)."""
+    from tests.test_batch_eval import _scene, _gateway_reply, _mock_eval_fn
+
+    monkeypatch.setattr(K, "_gpu_busy_with_training", lambda: False)
+    scenes = [_scene(tmp_path / "scenes", scene_id=i) for i in range(3)]
+    monkeypatch.setattr(be, "discover_scenes", lambda *a, **k: scenes)
+
+    def _predict_factory(*a, **k):
+        def _p(cfg, scene):
+            # Nur die echte Pipeline A skippt das Gateway; degraded gdrnpp faehrt mit.
+            if cfg.get("is_pipeline_a"):
+                raise be.PipelineANotOnGateway(cfg)
+            return _gateway_reply(n_anker=2)
+        return _p
+
+    monkeypatch.setattr(be, "http_predict", _predict_factory)
+    monkeypatch.setattr(be, "subprocess_eval", lambda *a, **k: _mock_eval_fn)
+
+    job = client.post("/api/eval/run", data={"seeds": 3}).json()["job"]
+
+    # Mind. einen running-Snapshot mit voll besetztem Scoreboard einfangen.
+    saw_running_full = False
+    n_cfg = len(be.EVAL_CONFIGS)
+    deadline = time.time() + 8.0
+    st = {}
+    while time.time() < deadline:
+        st = client.get(f"/api/eval/job/{job}").json()
+        sd = st.get("standings", [])
+        if st.get("status") == "running" and len(sd) == n_cfg:
+            saw_running_full = True
+            # Schema-Pruefung schon waehrend running.
+            for e in sd:
+                assert set(e.keys()) == _STANDINGS_KEYS
+            ranks = [e["rank"] for e in sd]
+            assert ranks == list(range(1, n_cfg + 1))
+        if st.get("status") in ("done", "error"):
+            break
+        time.sleep(0.03)
+
+    assert st.get("status") == "done", st
+    # Contract-Top-Level-Felder.
+    assert {"status", "pct", "phase", "n_done", "n_total", "run_id",
+            "standings"} <= set(st.keys())
+    assert st["pct"] == 100
+    assert st["n_total"] == n_cfg * 3
+    assert st["n_done"] == st["n_total"]
+    assert saw_running_full, "Scoreboard war nie voll besetzt waehrend running"
+
+    final = st["standings"]
+    assert len(final) == n_cfg
+    # ar DESC + rank lueckenlos.
+    ars = [e["ar"] for e in final]
+    non_none = [a for a in ars if a is not None]
+    assert non_none == sorted(non_none, reverse=True)
+    assert [e["rank"] for e in final] == list(range(1, n_cfg + 1))
+    # Exaktes Eintrag-Schema + Source-Id-Felder (seg/pose).
+    for e in final:
+        assert set(e.keys()) == _STANDINGS_KEYS
+        assert e["seg"] in {"yolo-obb", "yolo-seg", "sam3"}
+        assert e["pose"] in {"gdrnpp", "foundationpose", "gigapose_rgbd", "gigapose_rgb"}
+        if e["coverage"] is not None:
+            assert 0.0 <= e["coverage"] <= 1.0
+        if e["crash_rate"] is not None:
+            assert 0.0 <= e["crash_rate"] <= 1.0
+    # Genau eine Pipeline-A-Zeile (ar null, kein Gateway).
+    a = [e for e in final if e["is_pipeline_a"]]
+    assert len(a) == 1 and a[0]["ar"] is None
+    # Die degraded gdrnpp-Kombis SIND gescort (echte AR-Zeilen, nicht leer).
+    degraded = [e for e in final if e["degraded"]]
+    assert len(degraded) == 2 and all(e["ar"] is not None for e in degraded)
+    # finale standings == /api/eval/result-konsistent (run_id abrufbar).
+    res = client.get(f"/api/eval/result/{st['run_id']}").json()
+    assert "standings" in res and len(res["standings"]) == n_cfg
+
+
+def test_job_status_initial_unknown_shape(client):
+    """Unbekannter Job → {error}; ein frisch gesetzter Job hat schon status+standings."""
+    assert client.get("/api/eval/job/nope2").json() == {"error": "unknown job"}
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

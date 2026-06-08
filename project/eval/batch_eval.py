@@ -222,17 +222,26 @@ def http_predict(gateway_url: str, iterations: int = 5, top_n=None, timeout: flo
     """Fabrik fuer eine predict_fn(config, scene) -> {instances, timings}.
 
     Spricht das Mesh-Gateway-`/predict` (multipart) — die Quelle der Wahrheit fuer
-    seg+pose + die seg_ms/pose_ms-Telemetrie (gateway/app.py timings). Pipeline A
-    (gdrnpp) hat KEIN Gateway-/predict (das ist der Live-Monolith); dafuer wirft die
-    predict_fn `PipelineANotOnGateway` → der Runner faellt auf die lokale
-    e2e_infer-Referenz zurueck (apples-to-apples ueber dieselben Szenen).
+    seg+pose + die seg_ms/pose_ms-Telemetrie (gateway/app.py timings).
+
+    **Pipeline A** (`is_pipeline_a`, Kombi 1 yolo-obb→gdrnpp) hat KEIN Gateway-/predict
+    (das ist der Live-Monolith); dafuer wirft die predict_fn `PipelineANotOnGateway`
+    → der Runner faellt auf die lokale e2e_infer-Referenz zurueck.
+
+    **GDRNPP-degraded** (yolo-seg→gdrnpp, sam3→gdrnpp, pose_source='gdrnpp' aber
+    NICHT is_pipeline_a) laeuft SEHR WOHL ueber das Gateway — mit `degraded=true`
+    (T-153 Gateway-Opt-in), damit der gewaehlte mask-emittierende seg_source erhalten
+    bleibt und gdrnpp-svc die AABB aus der Maske ableitet (dokumentierter Fallback).
+    So bekommen die degraded-Kombis echte AR-Zeilen statt leerer Referenzzellen.
 
     Lazy `import httpx` — kein Pin in project/requirements.txt (Box-Stack).
     """
     base = gateway_url.rstrip("/")
 
     def _predict(cfg: dict, scene: dict) -> dict:
-        if cfg.get("pose_source") == "gdrnpp":
+        # NUR die echte Pipeline A (Live-Monolith) geht NICHT uebers Gateway. Die
+        # degraded gdrnpp-Kombis fahren ueber das Gateway mit degraded=true.
+        if cfg.get("is_pipeline_a"):
             raise PipelineANotOnGateway(cfg)
         import httpx
         # Bytes vorab lesen (kleine PNGs) — keine offenen File-Handles ueber den
@@ -246,6 +255,10 @@ def http_predict(gateway_url: str, iterations: int = 5, top_n=None, timeout: flo
             "iterations": iterations,
             "seg_source": cfg["seg_source"], "pose_source": cfg["pose_source"],
         }
+        # degraded gdrnpp-Kombis: opt-in, damit das Gateway den mask-seg_source nicht
+        # auf yolo-obb zurueckzwingt (mask→gdrnpp AABB-Fallback).
+        if cfg["pose_source"] == "gdrnpp" and not cfg.get("is_pipeline_a"):
+            data["degraded"] = "true"
         if top_n is not None:
             data["top_n"] = top_n
         if cfg["seg_source"] == "sam3":
@@ -261,7 +274,10 @@ def http_predict(gateway_url: str, iterations: int = 5, top_n=None, timeout: flo
 
 
 class PipelineANotOnGateway(Exception):
-    """Pipeline A (gdrnpp) hat kein Gateway-/predict — Live-Monolith-Referenz."""
+    """Pipeline A (Kombi 1, yolo-obb→gdrnpp) hat kein Gateway-/predict — Live-Monolith.
+
+    Gilt NUR fuer die echte Referenz (`is_pipeline_a`); die degraded gdrnpp-Kombis
+    (yolo-seg/sam3 → gdrnpp) fahren ueber das Gateway (degraded=true)."""
 
 
 # ── Default eval_fn: subprocess gegen box_src/eval_bop.py --icbin ────────────────
@@ -405,26 +421,151 @@ def aggregate_config(cfg: dict, per_scene: list, ar_mean=None, ar_std=None,
     return row
 
 
-# ── Stage D: der ganze Lauf (7 × N) ──────────────────────────────────────────────
+# ── Stage C2: Live-Akkumulator pro Config (T-153 — inkrementelle Standings) ───────
+class _ConfigAcc:
+    """Laufender Zustand einer Config waehrend des seed-major Round-Robin-Laufs.
+
+    Sammelt pro (config, szene) die BOP-CSV-Zeilen + timings + ok/crash-Flags, haelt
+    eine **running mean** fuer seg_ms/pose_ms (T-153 verlangt keinen Voll-Rescan) und
+    den zuletzt auf der **akkumulierten** CSV neu berechneten AR IC-BIN. Aus diesem
+    Zustand baut `standings_entry` die Live-Scoreboard-Zeile (Contract /api/eval/job).
+    """
+
+    __slots__ = ("cfg", "key", "rows", "n_scenes", "n_real", "n_ok", "n_crash",
+                 "n_with_inst", "_seg_sum", "_seg_cnt", "_pose_sum", "_pose_cnt",
+                 "ar", "per_class")
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.key = config_key(cfg)
+        self.rows: list = []          # akkumulierte BOP-CSV-Zeilen ueber alle Szenen
+        self.n_scenes = 0             # (config, szene)-Versuche, gesamt
+        self.n_real = 0               # echte Versuche (Pipeline-A-ohne-Gateway zaehlt NICHT)
+        self.n_ok = 0
+        self.n_crash = 0
+        self.n_with_inst = 0
+        self._seg_sum = 0.0; self._seg_cnt = 0    # running mean seg_ms (nur oks)
+        self._pose_sum = 0.0; self._pose_cnt = 0  # running mean pose_ms (nur oks)
+        self.ar = None                # zuletzt neu berechneter AR IC-BIN (akkum. CSV)
+        self.per_class = None
+
+    def add_scene(self, res: dict) -> None:
+        """Eine (config, szene): run_one-Output in die Akkumulatoren falten."""
+        self.n_scenes += 1
+        if res.get("error") == "pipeline_a_no_gateway":
+            return                                # kein echter Versuch (apples-to-apples)
+        self.n_real += 1
+        if res["ok"]:
+            self.n_ok += 1
+            if res["n_instances"] > 0:
+                self.n_with_inst += 1
+            if res.get("seg_ms") is not None:
+                self._seg_sum += float(res["seg_ms"]); self._seg_cnt += 1
+            if res.get("pose_ms") is not None:
+                self._pose_sum += float(res["pose_ms"]); self._pose_cnt += 1
+            self.rows.extend(res["rows"])
+        else:
+            self.n_crash += 1
+
+    @property
+    def seg_ms(self):
+        return round(self._seg_sum / self._seg_cnt, 4) if self._seg_cnt else None
+
+    @property
+    def pose_ms(self):
+        return round(self._pose_sum / self._pose_cnt, 4) if self._pose_cnt else None
+
+    @property
+    def coverage(self):
+        return round(self.n_with_inst / self.n_real, 4) if self.n_real else None
+
+    @property
+    def crash_rate(self):
+        return round(self.n_crash / self.n_real, 4) if self.n_real else None
+
+    def standings_entry(self) -> dict:
+        """Eine Scoreboard-Zeile (OHNE rank — den setzt `build_standings` global).
+
+        Contract-Felder (T-153, /api/eval/job.standings[]): config_key, seg, pose,
+        ar, ar_std, n_scenes, seg_ms, pose_ms, coverage, crash_rate, recommended,
+        degraded, degraded_reason, class_ambiguity, is_pipeline_a.
+
+        `seg`/`pose` sind die kompakten Source-Ids des Contracts (seg = combo-seg-id
+        'yolo-seg', pose = Gateway-`pose_source` 'foundationpose') — NICHT die FE-
+        Display-Labels (cfg['pose'] = 'FoundationPose'). seg_ms/pose_ms gerundet auf
+        ganze ms (FE-Tabelle). ar_std = 0.0 wenn gescort (IC-BIN ist ein Set-Score,
+        kein Per-Szene-Mittel), sonst null."""
+        cfg = self.cfg
+        ar = self.ar
+        return {
+            "config_key": self.key,
+            "seg": cfg["seg"], "pose": cfg["pose_source"],
+            "ar": ar,
+            "ar_std": 0.0 if ar is not None else None,
+            "n_scenes": self.n_ok,            # gescorte Szenen (= was in der CSV steht)
+            "seg_ms": _round_ms(self.seg_ms), "pose_ms": _round_ms(self.pose_ms),
+            "coverage": self.coverage, "crash_rate": self.crash_rate,
+            "recommended": bool(cfg.get("recommended")),
+            "degraded": bool(cfg.get("degraded")),
+            "degraded_reason": cfg.get("degraded_reason"),
+            "class_ambiguity": bool(cfg.get("class_ambiguity")),
+            "is_pipeline_a": bool(cfg.get("is_pipeline_a")),
+        }
+
+
+def _round_ms(v):
+    return None if v is None else int(round(v))
+
+
+def build_standings(accs) -> list:
+    """Sortierte + geranke Live-Standings aus den Config-Akkumulatoren (T-153).
+
+    Vertrag (/api/eval/job.standings[]): sortiert nach `ar` DESC, `rank` ab 1 gesetzt,
+    **alle** Configs vertreten — auch noch-nicht-gestartete (n_scenes=0 → ar=null,
+    rank ans Ende). Configs ohne AR sortieren stabil ans Ende (nach config_key, damit
+    die Reihenfolge deterministisch ist und das FE nicht flackert)."""
+    entries = [a.standings_entry() for a in accs]
+    # ar=None nach hinten; innerhalb gleicher ar-Gruppe stabil nach config_key.
+    entries.sort(key=lambda e: (e["ar"] is None, -(e["ar"] or 0.0), e["config_key"]))
+    for rank, e in enumerate(entries, 1):
+        e["rank"] = rank
+    return entries
+
+
+# ── Stage D: der ganze Lauf (12 × N, seed-major Round-Robin) ─────────────────────
 def run_batch(configs, scenes, predict_fn, eval_fn, out_dir,
-              run_id=None, progress=None, warn=None) -> dict:
-    """Faehrt alle Configs × alle Szenen, scored, aggregiert, persistiert.
+              run_id=None, progress=None, warn=None, standings_cb=None) -> dict:
+    """Faehrt alle Configs × alle Szenen **seed-major** (Round-Robin), scored
+    inkrementell, streamt Live-Standings, aggregiert, persistiert.
+
+    **T-153 Reihenfolge-Pivot:** statt Config-fuer-Config (erst alle N Szenen von
+    Kombi 1, dann Kombi 2 ...) laeuft fuer **jeden Seed 1..N: ALLE Configs**. Damit
+    hat nach Seed 1 jede Kombi schon 1 Szene → das Scoreboard ist von Anfang an voll
+    besetzt und verfeinert sich, statt erst am Ende zu erscheinen.
+
+    **Inkrementelle AR:** nach jeder (config, szene) wird die Zeile an die config-CSV
+    angehaengt und der AR IC-BIN dieser Config auf der **akkumulierten** CSV neu
+    berechnet (eval_bop --icbin ist schnell). Danach `standings_cb(standings)` mit der
+    aktuellen, nach ar sortierten + geranken Tabelle aller Configs.
 
     Args:
-      configs   : Liste von Config-dicts (Default EVAL_CONFIGS = die 7).
-      scenes    : Liste von Szenen-dicts {scene_id, im_id, rgb, depth?, camera, K, dir}.
-      predict_fn: (cfg, scene) -> {instances, timings}  (Mock-Naht).
-      eval_fn   : (csv_path, scene_dir, out_dir) -> report_json  (Mock-Naht).
-      out_dir   : project/temp/batch_eval — der Run landet unter <out_dir>/<run_id>/.
-      run_id    : default = "run-<utc-stamp>". Idempotent: gleiche id patcht.
-      progress  : optional callback(pct:int, phase:str) fuer die Job-Bar.
-      warn      : optional log-callback.
+      configs     : Liste von Config-dicts (Default EVAL_CONFIGS = die 12 feasiblen).
+      scenes      : Liste von Szenen-dicts {scene_id, im_id, rgb, depth?, camera, K, dir}.
+      predict_fn  : (cfg, scene) -> {instances, timings}  (Mock-Naht).
+      eval_fn     : (csv_path, scene_dir, out_dir) -> report_json  (Mock-Naht).
+      out_dir     : project/temp/batch_eval — der Run landet unter <out_dir>/<run_id>/.
+      run_id      : default = "run-<utc-stamp>". Idempotent: gleiche id patcht.
+      progress    : optional callback(pct:int, phase:str) fuer die Job-Bar.
+      warn        : optional log-callback.
+      standings_cb: optional callback(standings:list, n_done:int, n_total:int) —
+                    nach jeder gescorten (config, szene) mit den Live-Standings.
 
-    Liefert das results-dict (= /api/eval/result-Body, {run_id,date,configs,...})
+    Liefert das results-dict (= /api/eval/result-Body, {run_id,date,configs,standings})
     und schreibt <out_dir>/<run_id>/results.json + EVAL.md.
     """
     warn = warn or (lambda *a, **k: None)
     progress = progress or (lambda *a, **k: None)
+    standings_cb = standings_cb or (lambda *a, **k: None)
     run_id = run_id or ("run-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()))
     run_dir = pathlib.Path(out_dir) / run_id
     csv_dir = run_dir / "csv"
@@ -433,43 +574,49 @@ def run_batch(configs, scenes, predict_fn, eval_fn, out_dir,
         d.mkdir(parents=True, exist_ok=True)
 
     t0 = time.time()
-    config_rows = []
-    n_total = max(1, len(configs))
+    accs = [_ConfigAcc(cfg) for cfg in configs]
+    n_total = max(1, len(configs) * len(scenes))
+    n_done = 0
 
-    for ci, cfg in enumerate(configs):
-        key = config_key(cfg)
-        progress(int(5 + 90 * ci / n_total), f"Config {cfg['n']}/{len(configs)}: {key}")
-        per_scene = []
-        all_rows = []
-        for scene in scenes:
+    # Seed-major Round-Robin: aeussere Schleife = Szene/Seed, innere = alle Configs.
+    for si, scene in enumerate(scenes):
+        for acc in accs:
+            cfg = acc.cfg
             res = run_one(cfg, scene, predict_fn, warn=warn)
-            per_scene.append(res)
-            all_rows.extend(res["rows"])
+            acc.add_scene(res)
+            n_done += 1
 
-        # AR IC-BIN: EIN eval_bop-Lauf ueber die ueber alle Seeds gepoolte CSV
-        # (multi-instance IC-BIN-Matching braucht das ganze Dataset-Set). ar_std
-        # ueber die Seeds ist hier 0/None — IC-BIN ist ein Set-Score, kein
-        # Per-Szene-Mittel; wir reporten den Set-AR als ar_mean.
-        ar_mean, ar_std, per_class = None, None, None
-        csv_path = csv_dir / f"{key}.csv"
-        _write_bop_csv(csv_path, all_rows)
-        scored_any = any(s["ok"] for s in per_scene
-                         if s.get("error") != "pipeline_a_no_gateway")
-        if scored_any and all_rows:
-            try:
-                report = eval_fn(str(csv_path),
-                                 str(scenes[0].get("dir", "")), str(eval_dir / key))
-                ar_mean, per_class = ar_from_report(report)
-            except Exception as e:  # noqa: BLE001 — Eval-Fehler = AR unbekannt, kein Abbruch
-                warn(f"[batch_eval] eval_bop fuer {key} fehlgeschlagen: {e}")
+            # Inkrementelle AR IC-BIN: config-CSV (akkumuliert ueber die bisherigen
+            # Seeds) neu schreiben + eval_bop auf dem akkumulierten Set neu rechnen.
+            csv_path = csv_dir / f"{acc.key}.csv"
+            _write_bop_csv(csv_path, acc.rows)
+            if acc.n_ok and acc.rows:
+                try:
+                    report = eval_fn(str(csv_path), str(scene.get("dir", "")),
+                                     str(eval_dir / acc.key))
+                    acc.ar, acc.per_class = ar_from_report(report)
+                except Exception as e:  # noqa: BLE001 — Eval-Fehler = AR unbekannt, kein Abbruch
+                    warn(f"[batch_eval] eval_bop fuer {acc.key} fehlgeschlagen: {e}")
 
-        row = aggregate_config(cfg, per_scene, ar_mean=ar_mean, ar_std=ar_std,
-                               per_class=per_class)
+            pct = int(5 + 90 * n_done / n_total)
+            progress(pct, f"Seed {si + 1}/{len(scenes)} · {acc.key} "
+                          f"(AR={acc.ar if acc.ar is not None else '—'})")
+            standings_cb(build_standings(accs), n_done, n_total)
+
+    # ── Final-Aggregation: results.configs bleibt kompatibel zu /api/eval/result ──
+    # (aggregate_config-Form), results.standings = finale Live-Tabelle.
+    config_rows = []
+    for acc in accs:
+        per_scene = _acc_to_per_scene(acc)
+        row = aggregate_config(acc.cfg, per_scene, ar_mean=acc.ar,
+                               ar_std=(0.0 if acc.ar is not None else None),
+                               per_class=acc.per_class)
         config_rows.append(row)
-        warn(f"[batch_eval] {key}: AR={ar_mean} cov={row['coverage']} "
+        warn(f"[batch_eval] {acc.key}: AR={acc.ar} cov={row['coverage']} "
              f"crash={row['crash_rate']} seg_ms={row['seg_ms']} pose_ms={row['pose_ms']}")
 
     duration_s = round(time.time() - t0, 1)
+    standings = build_standings(accs)
     results = {
         "run_id": run_id,
         "date": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -477,10 +624,37 @@ def run_batch(configs, scenes, predict_fn, eval_fn, out_dir,
         "n_configs": len(config_rows),
         "n_scenes": len(scenes),
         "configs": config_rows,
+        "standings": standings,
     }
     _persist(run_dir, results)
     progress(100, "Lauf fertig")
+    standings_cb(standings, n_total, n_total)
     return results
+
+
+def _acc_to_per_scene(acc: "_ConfigAcc") -> list:
+    """Rekonstruiert eine per_scene-Liste fuer `aggregate_config` aus den Acc-Zaehlern.
+
+    `aggregate_config` braucht nur die ok/error/n_instances/seg_ms/pose_ms-Felder zum
+    Zaehlen — nicht die echten Per-Szene-Werte (AR kommt separat aus dem Set-Score).
+    Wir geben deshalb synthetische Eintraege mit den korrekten Aggregat-Zaehlern: die
+    oks tragen die running-mean seg_ms/pose_ms (gleiches Aggregat-Ergebnis), die
+    Pipeline-A-ohne-Gateway-Versuche bleiben als solche markiert."""
+    out = []
+    seg = acc.seg_ms; pose = acc.pose_ms
+    for _ in range(acc.n_with_inst):
+        out.append({"ok": True, "seg_ms": seg, "pose_ms": pose,
+                    "n_instances": 1, "error": None, "rows": []})
+    for _ in range(acc.n_ok - acc.n_with_inst):
+        out.append({"ok": True, "seg_ms": seg, "pose_ms": pose,
+                    "n_instances": 0, "error": None, "rows": []})
+    for _ in range(acc.n_crash):
+        out.append({"ok": False, "seg_ms": None, "pose_ms": None,
+                    "n_instances": 0, "error": "crash", "rows": []})
+    for _ in range(acc.n_scenes - acc.n_real):
+        out.append({"ok": False, "seg_ms": None, "pose_ms": None,
+                    "n_instances": 0, "error": "pipeline_a_no_gateway", "rows": []})
+    return out
 
 
 def _write_bop_csv(path: pathlib.Path, rows: list) -> None:
