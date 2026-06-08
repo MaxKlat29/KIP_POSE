@@ -250,6 +250,67 @@ def test_write_bop_csv_roundtrips(tmp_path):
     assert len(lines) == 1 + 2                          # header + 2 rows
 
 
+# ── 4b) T-163: Eval-Pfad snappt NICHT — sonst killt der Z-Snap AR_MSSD ───────────
+def _back_to_cam_t(doc, camera):
+    """Recover cam-frame translation (mm) of the first result via world_to_bop_cam."""
+    r = doc["results"][0]
+    R_w2c = np.array(camera["cam_R_w2c"]).reshape(3, 3)
+    t_w2c = np.array(camera["cam_t_w2c"])
+    table_origin = doc["meta"]["table_origin"]
+    _R, t_m2c = world_to_bop_cam(r["R_world"], r["t_world"], R_w2c, t_w2c, table_origin)
+    return np.asarray(t_m2c, float)
+
+
+def test_eval_path_does_not_snap_preserves_3d_z(monkeypatch):
+    """REGRESSION T-163: der Eval-Pfad darf KEINEN Boden-Snap anwenden.
+
+    Bug: `instances_to_doc` snappte über `planar_z_snap(table_z=0.0)` jede Pose so,
+    dass der tiefste Mesh-Punkt auf Welt-z=0 ruht. Im pose_isaac-Eval ruhen die GT-
+    Teile aber NICHT auf z=0 → der Snap hob jede Pose um ~75–79 mm an. 2D reprojiziert
+    weiter (MSPD ok), aber der 3D-Punktabstand (MSSD) sprengt die Schwelle → AR_MSSD=0.
+
+    Dieser Test injiziert synthetische Mesh-Verts, deren tiefster Punkt 60 mm UNTER
+    dem Body-Origin liegt → ein scharfer, deterministischer Snap-Hebel. Bewiesen:
+      * snap=False (Fix): die zurückgerechnete Cam-Z == Eingabe-Z (exakt, kein Drift).
+      * snap=True  (Bug): die Cam-Z weicht um die volle Snap-Distanz ab (hier ~60 mm).
+    Gegen den ALTEN Code (immer-snap) fällt der snap=False-Assert (Cam-Z driftet) → rot.
+    """
+    # Synthetische Body-Verts (Meter): Würfelchen, tiefster Punkt 0.06 m unter Origin.
+    verts = np.array([[0.01, 0.01, -0.06], [-0.01, -0.01, -0.06],
+                      [0.01, -0.01, 0.02], [-0.01, 0.01, 0.02]], float)
+    monkeypatch.setattr(be, "_mesh_verts_for", lambda oid, warn=None: verts)
+    # Falls der geteilte Gateway-Proxy/Composed-Pfad genutzt wird, dort dieselbe
+    # CAD-Quelle patchen (er lädt Verts über pipelines.composed._mesh_verts_for).
+    try:
+        from pipelines import composed as _composed
+        monkeypatch.setattr(_composed, "_mesh_verts_for",
+                            lambda oid, warn=None: verts, raising=False)
+    except Exception:  # noqa: BLE001
+        pass
+
+    camera = _scene_camera()
+    tz_m = 0.60
+    inst = {"id": 0, "class": "anker_kurz", "conf": 1.0,
+            "T_cam_obj": _T_cam_obj(0.10, -0.05, tz_m), "bbox_2d": [0, 0, 1, 1]}
+
+    # Fix: Default snap=False → 3D-Cam-Translation bleibt EXAKT erhalten.
+    doc_fix = be.instances_to_doc([inst], camera, "s.png")
+    t_fix = _back_to_cam_t(doc_fix, camera)
+    assert np.allclose(t_fix, [100.0, -50.0, 600.0], atol=1e-2), (
+        f"Eval-Pfad (snap=False) verfaelschte die Cam-Translation: {t_fix} "
+        "— der Boden-Snap darf im Eval NICHT greifen (T-163).")
+
+    # Bug-Regime: snap=True → die Cam-Z driftet messbar (Snap-Hebel ~60 mm).
+    doc_snap = be.instances_to_doc([inst], camera, "s.png", snap=True)
+    t_snap = _back_to_cam_t(doc_snap, camera)
+    dz = abs(float(t_snap[2]) - 600.0)
+    assert dz > 30.0, (
+        f"snap=True haette die Z um ~Snap-Distanz verschieben muessen (got dz={dz:.1f}mm). "
+        "Wenn das fehlschlaegt, feuert der Snap-Hebel nicht — der Test prueft nichts.")
+    # Und: der Fix-Pfad weicht echt vom Bug-Pfad ab (kein No-Op-Theater).
+    assert abs(float(t_fix[2]) - float(t_snap[2])) > 30.0
+
+
 # ── 5) aggregate_config: coverage/crash 0..1, Pipeline-A-no-gateway-Sonderfall ──
 def test_aggregate_config_coverage_crash_and_timings():
     cfg = _cfg("yolo_seg__foundationpose")
