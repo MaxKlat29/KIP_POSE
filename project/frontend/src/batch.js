@@ -32,6 +32,50 @@ const POST_L = { "GDRNPP": "GDRNPP", "FoundationPose": "FoundationPose",
 const fmtPct = (v) => v == null ? "—" : `${Math.round((v > 1 ? v : v * 100))} %`;
 const fmtMs  = (v) => v == null ? "—" : `${Math.round(v)}`;
 const fmtAr  = (m) => m == null ? "—" : m.toFixed(3);
+
+// T-169 (Max): das Run-Dropdown zeigt rohe run_ids (run-20260608T113628Z,
+// cli-T152-20260608T084127Z) — unlesbar. Wir ziehen den ISO-Basic-Timestamp aus
+// der id (bzw. dem date-Feld) und formatieren ihn als "2026-06-08 11:36".
+// BEWUSST UTC (getUTC*): run-ids tragen den UTC-Zeitstempel (…Z) und benennen die
+// Run-Ordner — das Label spiegelt damit exakt die id-Ziffern (113628Z → 11:36),
+// statt sie um die lokale TZ zu verschieben (verwirrend beim Ordner-Abgleich).
+// Fallback: rohe id wenn nichts parsebar.
+const pad2 = (n) => String(n).padStart(2, "0");
+
+// Findet "YYYYMMDDThhmmss(Z)" irgendwo in der id → ms-Epoch (UTC), sonst null.
+// Robust gegen Präfixe/Suffixe (run-…, cli-T152-…). Sekunden/Z optional.
+function tsFromRunId(id) {
+  if (typeof id !== "string") return null;
+  const m = id.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const ms = Date.UTC(+y, +mo - 1, +d, +h, +mi, +(s || 0));
+  return Number.isNaN(ms) ? null : ms;
+}
+
+// Sortier-/Vergleichswert eines Runs: bevorzugt date-Feld, sonst Timestamp aus der
+// id. Unparsebare Runs sinken nach unten (-Infinity).
+function runTs(run) {
+  if (!run) return -Infinity;
+  if (run.date != null) {
+    const t = Date.parse(run.date);
+    if (!Number.isNaN(t)) return t;
+  }
+  const t = tsFromRunId(run.run_id);
+  return t == null ? -Infinity : t;
+}
+
+// Lesbares Dropdown-Label "2026-06-08 11:36" (lokale Zeit). Fallback: rohe run_id.
+function runLabel(run) {
+  const id = run && run.run_id;
+  let ms = null;
+  if (run && run.date != null) { const t = Date.parse(run.date); if (!Number.isNaN(t)) ms = t; }
+  if (ms == null) ms = tsFromRunId(id);
+  if (ms == null) return id != null ? String(id) : "—";
+  const dt = new Date(ms);
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())} `
+       + `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
+}
 // T-160: Input-Spalte — schlichter Text "RGB"/"RGBD" aus dem modality-Feld (T-159).
 // Kein Badge, keine Emojis. Fehlt das Feld (alter Job-Endpoint) → em-dash, kein Crash.
 const fmtInput = (c) => c && c.modality ? c.modality : "—";
@@ -310,29 +354,39 @@ export function createBatch({ bar, pollJob, healthRef }) {
     }
   }
 
+  // Befüllt das Run-Dropdown aus einer Run-Liste: neueste zuerst (T-169), Optionen
+  // mit lesbarem Datum-Zeit-Label statt roher run_id. Gibt den ausgewählten (neuesten)
+  // Run zurück oder null bei leerer Liste. Mutiert das modulweite `runs`.
+  function populateRuns(list) {
+    // T-169: stabil neueste-zuerst sortieren (date-Feld bevorzugt, sonst id-Timestamp).
+    runs = [...(list || [])].sort((a, b) => runTs(b) - runTs(a));
+    els.runSel.innerHTML = "";
+    if (!runs.length) {
+      const o = document.createElement("option"); o.textContent = "— kein Lauf —"; o.disabled = true;
+      els.runSel.appendChild(o); els.runSel.disabled = true;
+      els.runMeta.textContent = "";
+      setEmpty("Noch kein Lauf — starte einen, um Configs zu vergleichen.");
+      return null;
+    }
+    els.runSel.disabled = false;
+    for (const run of runs) {
+      const o = document.createElement("option");
+      o.value = run.run_id;
+      o.textContent = runLabel(run);   // T-169: "2026-06-08 11:36" statt roher id
+      els.runSel.appendChild(o);
+    }
+    els.runSel.value = runs[0].run_id;            // neuester default
+    return runs[0];
+  }
+
   async function loadRuns() {
     try {
       const r = await fetch(`${API}/eval/runs`, { cache: "no-store" });
       if (!r.ok) throw new Error(String(r.status));
       const data = await r.json();
-      runs = data.runs || data || [];
-      els.runSel.innerHTML = "";
-      if (!runs.length) {
-        const o = document.createElement("option"); o.textContent = "— kein Lauf —"; o.disabled = true;
-        els.runSel.appendChild(o); els.runSel.disabled = true;
-        els.runMeta.textContent = "";
-        setEmpty("Noch kein Lauf — starte einen, um Configs zu vergleichen.");
-        return;
-      }
-      els.runSel.disabled = false;
-      for (const run of runs) {
-        const o = document.createElement("option");
-        o.value = run.run_id;
-        o.textContent = run.run_id;
-        els.runSel.appendChild(o);
-      }
-      els.runSel.value = runs[0].run_id;            // neuester default
-      await loadResult(runs[0]);
+      const newest = populateRuns(data.runs || data || []);
+      if (!newest) return;
+      await loadResult(newest);
     } catch {
       // Endpoint noch nicht da (S-012) → sauberer Empty-State, kein Crash.
       els.runSel.innerHTML = "";
@@ -439,5 +493,9 @@ export function createBatch({ bar, pollJob, healthRef }) {
     __renderLive: renderLive,
     __hideLive: hideLive,
     __setConfigs: setConfigs,   // T-160: finale Tabelle aus gemockten configs (inkl. modality) rendern
+    __populateRuns: populateRuns, // T-169: Run-Dropdown aus gemockten runs befüllen (sort + Label)
   };
 }
+
+// T-169: pure Helfer exportiert für Unit-Smoke (run-id → lesbares Label, Sortierung).
+export { runLabel, runTs, tsFromRunId };
