@@ -49,6 +49,49 @@ if str(_PROJECT) not in sys.path:
 CLASS_TO_OBJ_ID = {"anker_kurz": 1, "anker_lang": 2}
 
 
+def tcamobj_to_world_entry(*, cls: str, T_cam_obj, R_w2c, t_w2c, table_origin,
+                           confidence: float, bbox_2d, instance_id: int,
+                           snap: bool = True, warn=None) -> "dict | None":
+    """DER eine T_cam_obj → Welt-Frame-Mapping-Schritt (S-003 §1+§6). Genutzt von der
+    ComposedPipeline UND vom kip_server-Gateway-Proxy (gateway_proxy.py, S-013), damit
+    beide Pfade byte-gleiche pose_result-Eintraege liefern (Eval-Konsistenz).
+
+    Erledigt: §6-Klassen-Mapping (lowercase → obj_id → CamelCase-Part), §1-Einheit
+    (T ist Meter → mm fuer bop_pose_to_world), Boden-Snap (best-effort), Symmetrie-
+    Kanonisierung (gegen Yaw-Flackern). Gibt einen assemble_doc-Eintrag zurueck, oder
+    None wenn die Klasse nicht im 2-Klassen-Scope ist (§6, still gefiltert)."""
+    import numpy as np
+    from bop_adapter import (
+        bop_pose_to_world, planar_z_snap, canonicalize_rotation, part_for_obj_id,
+    )
+    if cls not in CLASS_TO_OBJ_ID:
+        return None
+    obj_id = CLASS_TO_OBJ_ID[cls]
+    part = part_for_obj_id(obj_id)                      # §6: obj_id → CamelCase-Part
+
+    T = np.asarray(T_cam_obj, float).reshape(4, 4)
+    R_m2c = T[:3, :3]
+    t_m2c_mm = T[:3, 3] * 1000.0                        # §1: Meter → mm
+
+    R_world, t_world = bop_pose_to_world(R_m2c, t_m2c_mm, R_w2c, t_w2c, table_origin)
+
+    if snap:
+        verts = _mesh_verts_for(obj_id, warn or (lambda *a, **k: None))
+        if verts is not None:
+            t_world, _dz = planar_z_snap(R_world, t_world, verts, table_z=0.0)
+
+    R_world = canonicalize_rotation(R_world, part)      # §6: Yaw-Flackern vermeiden
+
+    return {
+        "instance_id": int(instance_id),
+        "part": part,
+        "R_world": [float(x) for x in np.asarray(R_world, float).reshape(9)],
+        "t_world": [float(x) for x in np.asarray(t_world, float).reshape(3)],
+        "confidence": float(confidence),
+        "bbox_2d": list(bbox_2d),
+    }
+
+
 def _mask_b64_to_bbox(mask_b64: str) -> "list[int]":
     """Voll-Bild-Maske (base64-PNG 0/255) → achsenparallele bbox [x0,y0,x1,y1].
 
@@ -140,11 +183,6 @@ class ComposedPipeline(PipelineAdapter):
         camera: {cam_K[9], cam_R_w2c[9], cam_t_w2c[3] mm} (ein BOP scene_camera-Eintrag).
         table_origin: [x,y,z] Welt-Nullpunkt (Meter). Faellt auf den Kombi-Default zurueck.
         """
-        import numpy as np
-        from bop_adapter import (
-            bop_pose_to_world, planar_z_snap, canonicalize_rotation, part_for_obj_id,
-        )
-
         cam = camera or {}
         K = cam.get("cam_K")
         R_w2c = cam.get("cam_R_w2c")
@@ -186,39 +224,15 @@ class ComposedPipeline(PipelineAdapter):
                 # Pose ohne zugehoerige Detection (id-Drift) — defensiv ueberspringen.
                 self._warn(f"[composed] Pose id={p.id} ohne Seg-Detection — uebersprungen")
                 continue
-
-            obj_id = CLASS_TO_OBJ_ID[d.cls]
-            # §6-FALLE: NIE direkt mit der lowercase-Klasse in PART_SYMMETRY. IMMER
-            # ueber obj_id den CamelCase-Registry-Part holen.
-            part = part_for_obj_id(obj_id)              # "anker_kurz" → "Anker_Kurz"
-
-            # T_cam_obj (OpenCV-cam, Meter, mesh→cam) zerlegen.
-            T = np.asarray(p.T_cam_obj, float).reshape(4, 4)
-            R_m2c = T[:3, :3]
-            t_m2c_mm = T[:3, 3] * 1000.0                # §1: T ist in METER → mm fuer bop_pose_to_world
-
-            # §1: T_cam_obj → Welt-Frame (world = R @ body; t Meter rel. Tisch).
-            R_world, t_world = bop_pose_to_world(R_m2c, t_m2c_mm, R_w2c, t_w2c, to)
-
-            # Boden-Snap (best-effort): ersetzt die schwache Z-Schaetzung durch den
-            # Planar-Prior. Fehlt das CAD-Mesh lokal → None → kein Snap (lauffaehig).
-            verts = _mesh_verts_for(obj_id, self._warn)
-            if verts is not None:
-                t_world, _dz = planar_z_snap(R_world, t_world, verts, table_z=0.0)
-
-            # §6: Kanonisierung NACH dem Welt-Mapping — sonst flackern continuous-
-            # symmetrische Anker (continuous-Y) im Yaw. Greift via obj_id→Part→
-            # PART_SYMMETRY (CamelCase!). Bei nicht-symmetrischen Teilen No-Op.
-            R_world = canonicalize_rotation(R_world, part)
-
-            entries.append({
-                "instance_id": int(p.id),
-                "part": part,
-                "R_world": [float(x) for x in np.asarray(R_world, float).reshape(9)],
-                "t_world": [float(x) for x in np.asarray(t_world, float).reshape(3)],
-                "confidence": float(p.score if p.score is not None else d.conf),
-                "bbox_2d": _mask_b64_to_bbox(d.mask_b64),
-            })
+            # DER eine Mapping-Schritt (§1+§6) — geteilt mit dem kip_server-Gateway-Proxy.
+            entry = tcamobj_to_world_entry(
+                cls=d.cls, T_cam_obj=p.T_cam_obj, R_w2c=R_w2c, t_w2c=t_w2c,
+                table_origin=to, instance_id=p.id,
+                confidence=(p.score if p.score is not None else d.conf),
+                bbox_2d=_mask_b64_to_bbox(d.mask_b64), snap=True, warn=self._warn,
+            )
+            if entry is not None:                       # None = Klasse out-of-scope (§6)
+                entries.append(entry)
 
         # assemble_doc leitet face/upright analytisch ab + validiert gegen das frozen
         # Schema (additionalProperties:false). Liefert ein byte-kompatibles pose_result.
