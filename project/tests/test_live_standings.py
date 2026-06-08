@@ -40,7 +40,7 @@ from tests.test_batch_eval import _scene, _gateway_reply, _mock_eval_fn  # noqa:
 
 # ── Contract: das exakte standings[]-Schema (T-153) ─────────────────────────────
 _STANDINGS_KEYS = {
-    "rank", "config_key", "seg", "pose", "ar", "ar_std", "n_scenes",
+    "rank", "config_key", "seg", "pose", "modality", "ar", "ar_std", "n_scenes",
     "seg_ms", "pose_ms", "coverage", "crash_rate", "recommended", "degraded",
     "degraded_reason", "class_ambiguity", "is_pipeline_a",
 }
@@ -189,6 +189,60 @@ def test_standings_entry_pipeline_a_and_degraded_flags():
     # sam3-Kombi: class_ambiguity.
     s = be._ConfigAcc(by_key["sam3__foundationpose"])
     assert s.standings_entry()["class_ambiguity"] is True
+
+
+def test_modality_rgb_vs_rgbd_per_combo():
+    """T-159: jede Kombi traegt modality = 'RGB'|'RGBD', abgeleitet aus needs_depth.
+    Depth-Posen (FoundationPose, GigaPose-3D) = RGBD; GDRNPP + GigaPose-2D = RGB.
+    Geprueft in BEIDEN Vertraegen — Live-Standings (/api/eval/job) UND der finalen
+    Config-Zeile (/api/eval/result, aggregate_config)."""
+    by_key = {be.config_key(c): c for c in be.EVAL_CONFIGS}
+
+    def _entry_mod(key):
+        return be._ConfigAcc(by_key[key]).standings_entry()["modality"]
+
+    def _config_mod(key):
+        return be.aggregate_config(by_key[key], per_scene=[])["modality"]
+
+    # RGBD: alle Kombis mit Depth-Pose (foundationpose, gigapose_rgbd).
+    rgbd_keys = [k for k, c in by_key.items() if c["needs_depth"]]
+    # RGB: alle ohne Depth (gdrnpp inkl. Pipeline A, gigapose_rgb).
+    rgb_keys = [k for k, c in by_key.items() if not c["needs_depth"]]
+    assert rgbd_keys and rgb_keys                       # beide Klassen vertreten
+
+    for k in rgbd_keys:
+        assert _entry_mod(k) == "RGBD", k
+        assert _config_mod(k) == "RGBD", k
+        assert ("foundationpose" in k) or ("gigapose_rgbd" in k), k
+    for k in rgb_keys:
+        assert _entry_mod(k) == "RGB", k
+        assert _config_mod(k) == "RGB", k
+        assert ("gdrnpp" in k) or ("gigapose_rgb" in k), k
+
+    # Konkrete Anker (T-159 AK): FoundationPose/GigaPose-3D=RGBD, GDRNPP/GigaPose-2D=RGB.
+    assert _entry_mod("yolo_seg__foundationpose") == "RGBD"
+    assert _entry_mod("yolo_seg__gigapose_rgbd") == "RGBD"
+    assert _entry_mod("gdrnpp") == "RGB"                # Pipeline A
+    assert _entry_mod("yolo_seg__gigapose_rgb") == "RGB"
+
+
+def test_eval_md_has_input_column():
+    """T-159: render_markdown traegt die Input-Spalte (RGB/RGBD) — Header + Werte."""
+    results = {
+        "run_id": "md-mod", "date": "2026-06-08T00:00:00Z", "duration_s": 1.0,
+        "n_configs": 2, "n_scenes": 1,
+        "configs": [
+            {"seg": "yolo-seg", "pose": "GDRNPP", "modality": "RGB",
+             "ar_mean": 0.1, "ar_std": 0.0, "seg_ms": 40, "pose_ms": 100,
+             "coverage": 1.0, "crash_rate": 0.0, "note": "x", "is_pipeline_a": False},
+            {"seg": "yolo-seg", "pose": "FoundationPose", "modality": "RGBD",
+             "ar_mean": 0.2, "ar_std": 0.0, "seg_ms": 40, "pose_ms": 300,
+             "coverage": 1.0, "crash_rate": 0.0, "note": "y", "is_pipeline_a": False},
+        ],
+    }
+    md = be.render_markdown(results)
+    assert "| Input |" in md
+    assert "| RGB |" in md and "| RGBD |" in md
 
 
 # ── 4) Inkrementelle AR-Recompute auf akkumulierter CSV ─────────────────────────

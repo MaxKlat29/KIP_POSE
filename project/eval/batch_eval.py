@@ -454,9 +454,9 @@ def aggregate_config(cfg: dict, per_scene: list, ar_mean=None, ar_std=None,
     Dataset) — daher ar_mean/ar_std hier reingereicht (nicht aus per_scene).
 
     Liefert exakt Lenas batch.js-Felder:
-      {seg,pose, ar_mean,ar_std, seg_ms,pose_ms, coverage,crash_rate,
+      {seg,pose, modality, ar_mean,ar_std, seg_ms,pose_ms, coverage,crash_rate,
        note, is_pipeline_a, run_config_id, per_class?}
-    coverage/crash_rate ∈ 0..1.
+    coverage/crash_rate ∈ 0..1. modality (T-159) = "RGB"|"RGBD" (FE Input-Spalte).
     """
     n = len(per_scene)
     # "echte" Versuche (Pipeline-A-ohne-Gateway zaehlt NICHT als Versuch — apples).
@@ -475,6 +475,7 @@ def aggregate_config(cfg: dict, per_scene: list, ar_mean=None, ar_std=None,
 
     row = {
         "seg": cfg["seg"], "pose": cfg["pose"],
+        "modality": _modality(cfg),       # T-159: RGB | RGBD (FE Input-Spalte)
         "ar_mean": ar_mean, "ar_std": ar_std,
         "seg_ms": seg_mean, "pose_ms": pose_mean,
         "coverage": coverage, "crash_rate": crash_rate,
@@ -560,8 +561,10 @@ class _ConfigAcc:
         """Eine Scoreboard-Zeile (OHNE rank — den setzt `build_standings` global).
 
         Contract-Felder (T-153, /api/eval/job.standings[]): config_key, seg, pose,
-        ar, ar_std, n_scenes, seg_ms, pose_ms, coverage, crash_rate, recommended,
-        degraded, degraded_reason, class_ambiguity, is_pipeline_a.
+        modality, ar, ar_std, n_scenes, seg_ms, pose_ms, coverage, crash_rate,
+        recommended, degraded, degraded_reason, class_ambiguity, is_pipeline_a.
+
+        `modality` (T-159) = "RGB" | "RGBD" (FE Input-Spalte, aus needs_depth).
 
         `seg`/`pose` sind die kompakten Source-Ids des Contracts (seg = combo-seg-id
         'yolo-seg', pose = Gateway-`pose_source` 'foundationpose') — NICHT die FE-
@@ -573,6 +576,7 @@ class _ConfigAcc:
         return {
             "config_key": self.key,
             "seg": cfg["seg"], "pose": cfg["pose_source"],
+            "modality": _modality(cfg),       # T-159: RGB | RGBD (FE Input-Spalte)
             "ar": ar,
             "ar_std": 0.0 if ar is not None else None,
             "n_scenes": self.n_ok,            # gescorte Szenen (= was in der CSV steht)
@@ -588,6 +592,15 @@ class _ConfigAcc:
 
 def _round_ms(v):
     return None if v is None else int(round(v))
+
+
+def _modality(cfg: dict) -> str:
+    """Input-Modalitaet einer Kombi (T-159, FE Input-Spalte): "RGBD" wenn die Pose
+    Depth braucht (FoundationPose + GigaPose-3D), sonst "RGB" (GDRNPP + GigaPose-2D).
+
+    Abgeleitet aus `needs_depth` (combos.FEASIBLE_COMBOS, CONTRACT.md §5) — die Seg-
+    Stufe ist immer RGB, die Pose-Stufe entscheidet. Single-Source, kein Netz."""
+    return "RGBD" if cfg.get("needs_depth") else "RGB"
 
 
 def build_standings(accs) -> list:
@@ -755,9 +768,9 @@ def render_markdown(results: dict) -> str:
         f"- Datum: {results['date']}",
         f"- Configs: {results['n_configs']} feasible ({n_rec} recommended) "
         f"· Szenen/Seeds: {results['n_scenes']} · Dauer: {results['duration_s']} s", "",
-        "| # | Seg | Pose | AR IC-BIN | ±std | seg ms | pose ms | Coverage | Crash "
-        "| Verfahren | Flags |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "| # | Seg | Pose | Input | AR IC-BIN | ±std | seg ms | pose ms | Coverage "
+        "| Crash | Verfahren | Flags |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
 
     def _f(v, nd=3):
@@ -779,7 +792,8 @@ def render_markdown(results: dict) -> str:
         if c.get("class_ambiguity"):
             flags.append("klassen-ambig")
         lines.append(
-            f"| {i}{ref} | {c['seg']} | {c['pose']} | {_f(c['ar_mean'])} "
+            f"| {i}{ref} | {c['seg']} | {c['pose']} | {c.get('modality') or '—'} "
+            f"| {_f(c['ar_mean'])} "
             f"| {_f(c['ar_std'])} | {_ms(c['seg_ms'])} | {_ms(c['pose_ms'])} "
             f"| {_pct(c['coverage'])} | {_pct(c['crash_rate'])} | {c.get('note') or '—'} "
             f"| {', '.join(flags) or '—'} |"

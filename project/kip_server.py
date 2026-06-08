@@ -1706,8 +1706,9 @@ def eval_runs():
 def eval_result(run_id: str):
     """Die 7-Config-Vergleichstabelle eines Laufs.
 
-    -> {"run_id",...,"configs":[{seg,pose,ar_mean,ar_std,seg_ms,pose_ms,coverage,
-       crash_rate,note,is_pipeline_a,run_config_id,per_class?}]}. coverage/crash 0..1."""
+    -> {"run_id",...,"configs":[{seg,pose,modality,ar_mean,ar_std,seg_ms,pose_ms,
+       coverage,crash_rate,note,is_pipeline_a,run_config_id,per_class?}]}. modality
+       (T-159) = "RGB"|"RGBD" (FE Input-Spalte). coverage/crash 0..1."""
     import re as _re
     # M2 (SECURITY_GATE, Bruno T-145): validate run_id BEFORE load_run. The id is a
     # generated run-folder name (run_<ts>); restrict to a safe charset so a crafted
@@ -1796,9 +1797,10 @@ def eval_job_status(job: str):
     """Job-Fortschritt + Live-Standings (T-153 Scoreboard-Contract).
 
     -> {"status":"running|done|error","pct":0-100,"phase":"...","n_done":int,
-        "n_total":int,"run_id":"...","standings":[{rank,config_key,seg,pose,ar,ar_std,
-        n_scenes,seg_ms,pose_ms,coverage,crash_rate,recommended,degraded,
+        "n_total":int,"run_id":"...","standings":[{rank,config_key,seg,pose,modality,
+        ar,ar_std,n_scenes,seg_ms,pose_ms,coverage,crash_rate,recommended,degraded,
         degraded_reason,class_ambiguity,is_pipeline_a}]}
+        modality (T-159) = "RGB"|"RGBD" (FE Input-Spalte, aus needs_depth).
 
     standings ist nach ar DESC sortiert (rank ab 1), enthaelt ALLE ~12 Configs — auch
     noch-nicht-gestartete (ar=null, rank am Ende) — und wird nach jeder gescorten
