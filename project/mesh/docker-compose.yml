@@ -29,6 +29,9 @@
 #   GIGAPOSE_DIR        GigaPose checkout (code, pretrained/, datasets/, templates)
 #   YOLO_WEIGHTS_PT     YOLO26n-seg checkpoint (.pt); a copy is bundled at
 #                       ./assets/weights/best.pt
+#   YOLO_OBB_WEIGHTS_PT YOLOv8-OBB detector checkpoint (.pt) for yolo-obb-svc;
+#                       default ./assets/weights/detector.pt (e.g. the box copy
+#                       /mnt/data/kip_pose/data/detector_armvis/detector.pt)
 #   HF_CACHE_DIR        HuggingFace cache holding the gated facebook/sam3
 #                       snapshot (for sam3-svc; offline at runtime)
 #
