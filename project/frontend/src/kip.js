@@ -7,6 +7,7 @@ import { createViewer } from "./scene.js";
 import { createOriginMarker } from "./origin.js";
 import {
   evaluate as evalGating, availMapFromResponse, DEFAULT as PIPE_DEFAULT, findCombo,
+  inferredWithText,
 } from "./pipeline.js";
 import { createBatch } from "./batch.js";
 
@@ -96,6 +97,35 @@ function syncRealRunBtn() {
 
 function currentCombo() { return findCombo(pipeSel.seg, pipeSel.pose); }
 function currentPipeline() { return currentCombo()?.id || "gdrnpp"; }
+
+// Query-String für den Infer-Call (T-164): die gewählte Kombi REDUNDANT als
+// `pipeline=<combo_id>` UND `seg=&pose=<roh-id>` mitschicken. Das Backend (T-140)
+// resolved beides (is_pipeline_a / resolve_combo_id). Doppelt = robust gg. Backend-
+// Resolution-Varianten; die Felder driften nicht (Quelle = WHITELIST-Eintrag).
+function currentPipelineQuery() {
+  const c = currentCombo();
+  const params = new URLSearchParams({ pipeline: c?.id || "gdrnpp" });
+  if (c?.seg_id)  params.set("seg", c.seg_id);
+  if (c?.pose_id) params.set("pose", c.pose_id);
+  return params.toString();
+}
+
+// "Inferiert mit"-Zeile (T-164): zeigt welches Modell die Schätzung erzeugt hat.
+// Quelle = result.meta (used_seg/used_pose/modality bzw. used_combo, T-140) mit
+// Fallback auf die zum Zeitpunkt des Klicks gewählte Kombi. `chosen` wird beim
+// Absenden festgehalten, falls der User die Dropdowns während des Laufs ändert.
+function setInferredWith(prefix, meta, chosen) {
+  const row = document.getElementById(`${prefix}-inferred`);
+  const val = document.getElementById(`${prefix}-inferred-val`);
+  if (!row || !val) return;
+  const text = inferredWithText(meta, chosen);
+  if (text) { val.textContent = text; row.hidden = false; }
+  else { row.hidden = true; val.textContent = ""; }
+}
+function hideInferredWith(prefix) {
+  const row = document.getElementById(`${prefix}-inferred`);
+  if (row) row.hidden = true;
+}
 
 // Befüllt ein Select aus den Gating-Options (T-158: marken-frei). Logisch unmögliche
 // Kombis kommen gar nicht erst in `opts` (pipeline.js blendet sie aus). Nicht-saubere
@@ -240,6 +270,7 @@ function showScreen(which) {
   scrBatch.hidden = which !== "batch";
   legend.hidden  = which !== "sim";     // blau/rot-Legende nur im Sim-Screen
   const pip = document.getElementById("pip");
+  hideInferredWith("sim"); hideInferredWith("real");   // stale "Inferiert mit" beim Tab-Wechsel weg
   if (which === "real") {
     viewer.setParts([]);                // Real ohne Foto: nur Zelle, keine Geister
     if (!chosenFile) pip.hidden = true;
@@ -381,14 +412,21 @@ runBtn.addEventListener("click", async () => {
   runBtn.disabled = true;
   const _origLabel = runBtn.textContent; runBtn.textContent = "Inferiert …";
   realStat.className = "kip-status"; realStat.textContent = "";
+  hideInferredWith("real");                       // alte Anzeige weg bis das neue Result da ist
   realBar.set(5, "Upload empfangen");
   setPip(URL.createObjectURL(chosenFile), "");
+  // Gewählte Kombi beim Absenden festhalten (Fallback fürs "Inferiert mit").
+  const chosen = { ...pipeSel };
+  const chosenCombo = currentCombo();
   try {
     const fd = new FormData();
     fd.append("image", chosenFile);
     fd.append("tta", document.getElementById("real-tta").checked);
     fd.append("refine_rc", document.getElementById("real-rc").checked);
+    // Kombi REDUNDANT mitschicken (T-164): pipeline=<combo_id> UND seg=&pose=<roh-id>.
     fd.append("pipeline", currentPipeline());     // Default gdrnpp = unveränderter Pfad
+    if (chosenCombo?.seg_id)  fd.append("seg", chosenCombo.seg_id);
+    if (chosenCombo?.pose_id) fd.append("pose", chosenCombo.pose_id);
     if (depthFile) fd.append("depth", depthFile); // RGB-D-Kombis (needs_depth) im Upload
     const r = await fetch(`${API}/real/infer_async`, { method: "POST", body: fd });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
@@ -397,6 +435,7 @@ runBtn.addEventListener("click", async () => {
     const doc = await (await fetch(`${API}/${final.result_url}`)).json();
     await renderSim(doc);
     setPip(`api/real/rgb/${job}`, `api/${final.boxes_url}`);
+    setInferredWith("real", doc.meta, chosen);    // welches Modell die Schätzung machte
     realBar.done("Fertig 100 %");
     realStat.className = "kip-status kip-status--ok";
     const counts = final.counts || {};
@@ -450,9 +489,13 @@ async function inferLiveSim() {
   simInferBtn.disabled = true;
   const origLabel = simInferBtn.textContent; simInferBtn.textContent = "Isaac rendert …";
   simStat.className = "kip-status"; simStat.textContent = "";
+  hideInferredWith("sim");                    // alte Anzeige weg bis das neue Result da ist
   simBar.set(5, "Isaac Sim startet");
+  // Gewählte Kombi JETZT festhalten — als Fallback fürs "Inferiert mit", falls der
+  // User die Dropdowns während des ~60-80s-Laufs noch ändert.
+  const chosen = { ...pipeSel };
   try {
-    const r = await fetch(`${API}/sim/generate_async?pipeline=${encodeURIComponent(currentPipeline())}`);
+    const r = await fetch(`${API}/sim/generate_async?${currentPipelineQuery()}`);
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     const { job } = await r.json();
     // Live-Pipeline dauert ~60-80s, daher laengeres Polling-Intervall.
@@ -460,6 +503,7 @@ async function inferLiveSim() {
     const m = await (await fetch(`${API}/${final.result_url}`)).json();
     await renderSim(m);
     setPip(`./api/sim/live_rgb/${job}`, `./api/sim/live_boxes/${job}`);
+    setInferredWith("sim", m.meta, chosen);   // welches Modell die Schätzung machte
     simBar.done("Live generiert");
     // Szenen-Info: Seed + Teile-pro-Typ (sauber, statt dem grünen Monospace-Block).
     const sceneGt = (m.results || []).filter((r) => r.color === "gt");
@@ -486,4 +530,11 @@ async function inferLiveSim() {
 simInferBtn.addEventListener("click", inferLiveSim);
 
 showScreen("real");
+
+// QS/Smoke-Hooks (T-164): erlauben das "Inferiert mit" + den Pipeline-Query ohne
+// echten ~60-80s-Infer-Lauf zu prüfen (Pattern wie __KIP_BATCH__/__KIP_VIEWER__).
+window.__KIP_INFER__ = {
+  setInferredWith, hideInferredWith, currentPipelineQuery,
+  pipeSel: () => ({ ...pipeSel }),
+};
 window.__KIP_READY__ = true;
