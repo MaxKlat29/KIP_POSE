@@ -289,18 +289,24 @@ def metrics():
 
 @app.get("/api/pipelines")
 def pipelines():
-    """Die 7-Kombi-Whitelist fuer das FE (2 Dropdowns + Gating, Mia S-010).
+    """Die volle Feasibility-Matrix (~12 Kombis) fuer das FE-Gating (2 Dropdowns,
+    T-147-RELAX). Bis T-138-PIVOT waren es nur die kuratierten 7 — jetzt liefert der
+    Endpoint ALLE feasiblen Kombis (combos.FEASIBLE_COMBOS), die 7 als `recommended`.
 
-    Pro Kombi (Quelle = combos.COMBO_WHITELIST + gateway/health, S-013):
+    Pro Kombi (Quelle = combos.FEASIBLE_COMBOS + gateway/health, S-013/T-147):
       id, name, description, seg, pose, needs_depth, is_pipeline_a,
-      available (bool), unavailable_reason (enum service_down|training|null).
+      available (bool), unavailable_reason (enum service_down|training|null),
+      recommended (bool), degraded (bool), degraded_reason (str|null),
+      class_ambiguity (bool).
 
     `unavailable_reason` ist Mias Pflicht-Feld (S-010 §12): das FE muss „Dienst nicht
-    aktiv" von „Modell trainiert noch" unterscheiden, sonst kann es Available-disabled
-    nicht von Gating-disabled trennen.
+    aktiv" von „Modell trainiert noch" unterscheiden. Die T-147-Flags markieren die
+    kuratierten 7 (recommended-Highlight) gegen die 5 zusaetzlichen (degraded/ambig-
+    Hinweis), ohne sie wegzublenden.
 
     Kombi 1 (gdrnpp/yolo-obb = Pipeline A) haengt NICHT am Mesh — sie ist available,
-    solange der :8078-Live-Worker lebt. Die 6 NICHT-A-Kombis pollen gateway/health.
+    solange der :8078-Live-Worker lebt. Die Mesh-Kombis pollen gateway/health; die
+    GDRNPP-degraded-Kombis (yolo-seg/sam3 → GDRNPP) brauchen Seg-Service + Live-Worker.
 
     Back-compat: alte Felder (`seam`, je Pipeline `id/name/description/available`)
     bleiben erhalten; FE-Code, der nur die alten Felder liest, funktioniert weiter."""
@@ -311,7 +317,9 @@ def pipelines():
                                "description": "Referenz/Baseline", "seg": "yolo-obb",
                                "pose": "GDRNPP", "needs_depth": False,
                                "is_pipeline_a": True, "available": True,
-                               "unavailable_reason": None}]}
+                               "unavailable_reason": None, "recommended": True,
+                               "degraded": False, "degraded_reason": None,
+                               "class_ambiguity": False}]}
     plist = _gwp.pipelines_status(
         gateway_health=_gateway_health(),
         live_pipeline_a_available=_live_pipeline_a_available(),

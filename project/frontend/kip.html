@@ -121,7 +121,7 @@
       <section id="screen-batch" class="kip-screen kip-screen--wide" hidden>
         <div class="kip-card kip-card--wide">
           <h2 class="kip-card__h">Pipeline-Vergleich</h2>
-          <p class="kip-card__sub" id="batch-scope">7 Konfigurationen × 20 Szenen · nur Anker_Kurz / Anker_Lang</p>
+          <p class="kip-card__sub" id="batch-scope">12 Konfigurationen × 20 Szenen · nur Anker_Kurz / Anker_Lang</p>
           <div class="kip-row kip-row--batch">
             <label class="kip-pipe__field kip-pipe__field--run">
               <span class="kip-pipe__sub">Lauf</span>
@@ -133,6 +133,30 @@
           <div id="eval-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
           <p id="eval-run-hint" class="kip-hint" hidden>Vollständiger Lauf dauert je nach Auslastung 20–60 min.</p>
           <p id="eval-status" class="kip-status" aria-live="polite"></p>
+
+          <!-- Live-Scoreboard (T-147): während ein Lauf aktiv ist, baut sich das Ranking
+               szene-für-szene auf — die Tabelle re-sortiert live nach AR. Bei status:done
+               nahtloser Übergang in die finale sortierbare Tabelle unten. -->
+          <section id="eval-live" class="kip-live" hidden aria-live="polite">
+            <div class="kip-live__head">
+              <span class="kip-live__title">Live-Ranking</span>
+              <span id="eval-live-prog" class="kip-live__prog" aria-live="polite"></span>
+            </div>
+            <div class="kip-live__wrap">
+              <table class="kip-live__tbl" id="eval-live-tbl">
+                <caption class="sr-only">Live-Pipeline-Ranking nach AR IC-BIN, während der Eval-Lauf läuft</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" class="kip-live__rankh">Rang</th>
+                    <th scope="col">Konfiguration</th>
+                    <th scope="col" class="kip-live__numh">AR IC-BIN</th>
+                    <th scope="col" class="kip-live__numh">Szenen</th>
+                  </tr>
+                </thead>
+                <tbody id="eval-live-tbody"></tbody>
+              </table>
+            </div>
+          </section>
 
           <!-- Mobile-Sortierung (nur <760px sichtbar) -->
           <label class="kip-pipe__field kip-eval-sortm" id="eval-sort-mobile-wrap">

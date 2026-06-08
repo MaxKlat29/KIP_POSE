@@ -99,14 +99,23 @@ function currentCombo() { return findCombo(pipeSel.seg, pipeSel.pose); }
 function currentPipeline() { return currentCombo()?.id || "gdrnpp"; }
 
 // Befüllt ein Select aus den Gating-Options (disabled-mit-Grund im Option-Text + title).
+// T-147: wählbare NICHT-recommended Kombis tragen einen degraded/ambig-Hinweis (o.note)
+// im Option-Text — wählbar bleiben, aber sichtbar markiert (kein Wegblenden).
 function fillSelect(sel, opts, value, labels) {
   sel.innerHTML = "";
   for (const o of opts) {
     const opt = document.createElement("option");
     opt.value = o.value;
     opt.disabled = o.disabled;
-    opt.textContent = o.disabled ? `${o.label} — ${o.reason}` : o.label;
-    if (o.disabled && o.reason) opt.title = o.reason;
+    if (o.disabled) {
+      opt.textContent = `${o.label} — ${o.reason}`;
+      if (o.reason) opt.title = o.reason;
+    } else if (o.note) {
+      opt.textContent = `${o.label} (${o.note})`;
+      opt.title = o.note;
+    } else {
+      opt.textContent = o.label;
+    }
     if (o.value === value) opt.selected = true;
     sel.appendChild(opt);
   }
