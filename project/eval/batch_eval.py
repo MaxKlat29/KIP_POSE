@@ -291,11 +291,23 @@ def subprocess_eval(dataset_dir: str, split: str = "val",
 
     Ruft `eval_bop.py --icbin` (offizielles BOP19/IC-BIN-Localisation-Protokoll,
     sym-aware, multi-instance) gegen das GT-Dataset. NUR auf der GPU-Box (eval_bop +
-    bop-venv + bop_toolkit_lib). `scene_dir` ist hier ungenutzt — eval_bop matched
-    ueber das ganze Dataset (--dataset-dir/--split); wir reichen es fuer eine
-    moegliche Per-Szene-Variante durch.
+    bop-venv + bop_toolkit_lib).
+
+    **Denominator-Scoping (T-152, ehrliche AR):** IC-BIN ist ein RECALL-Protokoll —
+    der Nenner ist die Summe der `inst_count` ueber die im targets-File gelisteten
+    (scene,im)-Paare. Der Batch-Lauf praediziert NUR die discover_scenes-Teilmenge
+    (im=0 pro Szene, ~10 Bilder), nicht den ganzen Split (1000 Bilder). Ohne Scoping
+    rechnet eval_bop den Recall gegen ALLE 1000 Bilder → AR ~0 (strukturell, nicht
+    Modell-Versagen). Wir bauen darum pro Lauf ein **scoped targets-File** aus genau
+    den (scene_id, im_id)-Paaren der CSV (= die praedizierten Bilder), gefiltert aus
+    dem vollen Dataset-targets-File, und reichen es via `--targets`. eval_bop wertet
+    dann GENAU diese Bilder als Nenner (official-BOP-Semantik: das targets-File IST
+    die Eval-Bild-Liste). Faellt das volle targets-File, faellt es auf den ungescopten
+    Default zurueck (eval_bop loest ihn selbst auf).
     """
     import subprocess
+
+    full_targets = _full_targets_path(dataset_dir, split)
 
     def _eval(csv_path: str, scene_dir: str, out_dir: str) -> dict:
         out = pathlib.Path(out_dir)
@@ -304,12 +316,53 @@ def subprocess_eval(dataset_dir: str, split: str = "val",
                "--dataset-dir", str(dataset_dir), "--split", split,
                "--icbin", "--preds", str(csv_path),
                "--n-points", str(n_points), "--out", str(out)]
+        scoped = _scoped_targets_for_csv(csv_path, full_targets, out)
+        if scoped is not None:
+            cmd += ["--targets", str(scoped)]
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError(f"eval_bop --icbin FAIL: {r.stderr[-400:]}")
         return json.load(open(out / "report.json"))
 
     return _eval
+
+
+def _full_targets_path(dataset_dir: str, split: str):
+    """Default BOP targets-File <dataset>/test_targets_<dataset>_<split>.json o. None."""
+    ds = pathlib.Path(dataset_dir)
+    cand = ds / f"test_targets_{ds.name}_{split}.json"
+    return cand if cand.is_file() else None
+
+
+def _scoped_targets_for_csv(csv_path, full_targets, out_dir):
+    """Scoped targets-File: die targets-Zeilen der (scene_id,im_id)-Paare der CSV.
+
+    Liefert den Pfad zum geschriebenen scoped-File, oder None wenn kein volles
+    targets-File da ist (→ ungescopt, eval_bop nutzt seinen Default). Robust gegen
+    eine leere/header-only CSV (Pipeline-A-Referenz) — dann gibt es keine Paare und
+    wir scopen nicht (der Aufrufer ruft eval_bop ohnehin nur bei n_ok>0)."""
+    import csv as _csv
+    if not full_targets:
+        return None
+    pairs = set()
+    try:
+        with open(csv_path, newline="") as f:
+            for row in _csv.DictReader(f):
+                try:
+                    pairs.add((int(row["scene_id"]), int(row["im_id"])))
+                except (KeyError, ValueError, TypeError):
+                    continue
+    except FileNotFoundError:
+        return None
+    if not pairs:
+        return None
+    rows = json.loads(pathlib.Path(full_targets).read_text())
+    scoped = [t for t in rows if (int(t["scene_id"]), int(t["im_id"])) in pairs]
+    if not scoped:
+        return None
+    sp = pathlib.Path(out_dir) / "targets_scoped.json"
+    sp.write_text(json.dumps(scoped))
+    return sp
 
 
 def ar_from_report(report: dict) -> "tuple[float | None, dict]":
