@@ -501,6 +501,7 @@ async def predict(
     pose_source: str = Form("foundationpose"),
     gt_masks: str | None = Form(None),
     seg_prompts: str | None = Form(None),
+    degraded: bool = Form(False),
 ):
     pose = POSE_SOURCES.get(pose_source)
     if pose is None:
@@ -510,7 +511,15 @@ async def predict(
     # emits, so it is hard-coupled to that seg source. If the caller picked gdrnpp
     # but a different seg_source (or none), force it to yolo-obb — this is the server
     # side of the 7-combo whitelist (yolo-obb → gdrnpp is the only valid gdrnpp combo).
-    if pose_source == "gdrnpp" and seg_source != GDRNPP_COUPLED_SEG:
+    #
+    # degraded=true (T-153) is the explicit opt-in for the eval's GDRNPP-degraded
+    # combos (yolo-seg→gdrnpp, sam3→gdrnpp): keep the chosen mask-emitting seg_source
+    # and let gdrnpp-svc derive an AABB from the mask (its documented fallback). This
+    # is OFF by default — the live FE path never sets it, so Pipeline A behaviour and
+    # the whitelist are unchanged. It only exists so the batch-eval can FILL the
+    # degraded AR rows instead of leaving them as empty reference cells (CONTRACT §4
+    # notes the degraded AABB-from-mask path is measured, not forbidden).
+    if pose_source == "gdrnpp" and seg_source != GDRNPP_COUPLED_SEG and not degraded:
         seg_source = GDRNPP_COUPLED_SEG
     # And the inverse guard: yolo-obb's oriented boxes are only meaningful for gdrnpp;
     # any mask-consuming pose source would ignore the obb. Reject the off-whitelist mix

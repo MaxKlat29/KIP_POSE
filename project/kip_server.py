@@ -1715,37 +1715,55 @@ def eval_result(run_id: str):
 
 
 def _eval_run_job(job: str, seeds: int, iterations: int, top_n):
-    """Hintergrund-Thread: faehrt run_batch seriell + meldet pct/phase in _JOBS.
+    """Hintergrund-Thread: faehrt run_batch seed-major + streamt Live-Standings in _JOBS.
+
+    T-153: der Runner laeuft seed-major (Round-Robin) und ruft nach jeder gescorten
+    (config, szene) `standings_cb` → wir spiegeln die nach ar sortierten + geranken
+    Standings (alle Configs) live in den Job-State. Das FE pollt /api/eval/job/<id>
+    und rendert ein live aktualisierendes Scoreboard, statt erst am Ende eine Tabelle.
 
     Respektiert den Training-Guard: laeuft ein GDRNPP-Training, koennen die schweren
     Pose-Services 503 liefern — die werden pro (config,szene) als Crash gezaehlt
     (Crash-Rate-Achse), kein Job-Abbruch. all-resident sonst (S006-VRAM)."""
     from eval import batch_eval as _be
     try:
-        _job_set(job, phase="Szenen suchen", pct=3)
+        _job_set(job, phase="Szenen suchen", pct=3, status="running")
         # discover_scenes toleriert ein fehlendes VAL_ROOT (gibt [] zurueck) — kein
         # extra exists()-Gate (das wuerde Test-Mocks von discover_scenes aushebeln).
         scenes = _be.discover_scenes(str(VAL_ROOT), seeds=seeds)
         if not scenes:
             _job_set(job, phase=f"Keine SDG-Seed-Szenen mit GT unter {VAL_ROOT}",
-                     pct=-1, error="no_scenes")
+                     pct=-1, status="error", error="no_scenes")
             return
+        n_total = len(_be.EVAL_CONFIGS) * len(scenes)
+        # Initiale Standings (alle Configs, ar=null, rank am Ende) — das Scoreboard ist
+        # von Anfang an voll besetzt, noch bevor die erste Szene gescort ist.
+        init_accs = [_be._ConfigAcc(c) for c in _be.EVAL_CONFIGS]
+        _job_set(job, status="running",
+                 standings=_be.build_standings(init_accs),
+                 n_done=0, n_total=n_total)
+
         predict_fn = _be.http_predict(MESH_GATEWAY_URL, iterations=iterations, top_n=top_n)
         eval_fn = _be.subprocess_eval(EVAL_DATASET_DIR, split=EVAL_SPLIT)
 
         def _prog(pct, phase):
             _job_set(job, phase=phase, pct=int(pct))
 
+        def _standings(standings, n_done, n_total_):
+            _job_set(job, standings=standings, n_done=n_done, n_total=n_total_)
+
         results = _be.run_batch(
             _be.EVAL_CONFIGS, scenes, predict_fn, eval_fn, EVAL_OUT,
-            progress=_prog, warn=lambda m: None)
-        _job_set(job, phase="Fertig", pct=100,
+            progress=_prog, standings_cb=_standings, warn=lambda m: None)
+        _job_set(job, phase="Fertig", pct=100, status="done",
                  result_url=f"eval/result/{results['run_id']}",
                  run_id=results["run_id"], n_configs=results["n_configs"],
-                 n_scenes=results["n_scenes"])
+                 n_scenes=results["n_scenes"],
+                 standings=results["standings"],
+                 n_done=n_total, n_total=n_total)
     except Exception as e:  # noqa: BLE001
         import traceback; traceback.print_exc()
-        _job_set(job, phase=f"Fehler: {e}", pct=-1, error=str(e))
+        _job_set(job, phase=f"Fehler: {e}", pct=-1, status="error", error=str(e))
 
 
 @app.post("/api/eval/run")
@@ -1760,7 +1778,7 @@ def eval_run(seeds: int = Form(20), iterations: int = Form(5),
         raise HTTPException(
             503, "GPU trainiert gerade — Batch-Eval spaeter (override force=true).")
     job = uuid.uuid4().hex[:8]
-    _job_set(job, phase="Lauf startet", pct=2)
+    _job_set(job, phase="Lauf startet", pct=2, status="running")
     threading.Thread(target=_eval_run_job, args=(job, seeds, iterations, top_n),
                      daemon=True).start()
     return {"job": job}
@@ -1768,9 +1786,32 @@ def eval_run(seeds: int = Form(20), iterations: int = Form(5),
 
 @app.get("/api/eval/job/{job}")
 def eval_job_status(job: str):
-    """Job-Fortschritt (gleiches {pct,phase,...}-Schema wie /api/sim/job)."""
+    """Job-Fortschritt + Live-Standings (T-153 Scoreboard-Contract).
+
+    -> {"status":"running|done|error","pct":0-100,"phase":"...","n_done":int,
+        "n_total":int,"run_id":"...","standings":[{rank,config_key,seg,pose,ar,ar_std,
+        n_scenes,seg_ms,pose_ms,coverage,crash_rate,recommended,degraded,
+        degraded_reason,class_ambiguity,is_pipeline_a}]}
+
+    standings ist nach ar DESC sortiert (rank ab 1), enthaelt ALLE ~12 Configs — auch
+    noch-nicht-gestartete (ar=null, rank am Ende) — und wird nach jeder gescorten
+    Szene aktualisiert. Behaelt zusaetzlich pct/phase (sim-job-Schema, FE-Progressbar).
+    Solange noch keine Szene durch ist, ist standings die Initial-Tabelle (alle ar=null);
+    fehlt sie noch ganz (Thread noch im Setup), liefern wir [] statt key-error."""
     st = _job_get(job)
-    return st or {"error": "unknown job"}
+    if not st:
+        return {"error": "unknown job"}
+    # status aus pct ableiten falls der Thread es (noch) nicht gesetzt hat:
+    # pct=100 → done, pct=-1 → error, sonst running.
+    status = st.get("status")
+    if status is None:
+        pct = st.get("pct", 0)
+        status = "done" if pct == 100 else ("error" if pct == -1 else "running")
+    st["status"] = status
+    st.setdefault("standings", [])
+    st.setdefault("n_total", 0)
+    st.setdefault("n_done", 0)
+    return st
 
 
 # ── Frontend entry: "/" -> kip.html (2-Screen-Shell). Der alte Single-Viewer
