@@ -128,12 +128,24 @@ def config_key(cfg: dict) -> str:
 
 # ── Stage A: Gateway-/predict instances → pose_result-Welt-Doc ───────────────────
 def instances_to_doc(instances: list, camera: dict, source_image: str,
-                     table_origin=TABLE_ORIGIN_M, warn=None) -> dict:
+                     table_origin=TABLE_ORIGIN_M, warn=None, snap: bool = False) -> dict:
     """Gateway-`/predict`-instances [{class,T_cam_obj}] → pose_result-Welt-Doc.
 
     T_cam_obj→Welt + §6-Klassenmapping, OHNE die Seg/Pose-Stages erneut zu fahren
     (die Posen kommen schon vom Gateway). Nur Klassen mit obj_id-Mapping (2-Klassen-
     Scope §6); unbekannte still gefiltert.
+
+    **Boden-Snap (T-163): im EVAL-/Vergleichspfad AUS (snap=False default).**
+    `planar_z_snap` ist ein LIVE-VIEWER-Cosmetic (Teile auf die gerenderte Tischebene
+    ziehen) und hardcodet `table_z=0.0`. Im pose_isaac-Eval ruhen die GT-Teile aber bei
+    Welt-z ≈ -0.075 m (= -table_origin.z), NICHT 0 — der Snap hob darum JEDE Pose um
+    +75–79 mm an. Effekt: das 2D reprojiziert noch (MSPD ok), aber der 3D-Punktabstand
+    sprengt jede MSSD-Schwelle → **AR_MSSD = 0** über alle Kombis (gemessen: snap=True
+    AR_MSSD 0.000 vs snap=False 0.796, median MSSD 78 mm → 5 mm, 10 Szenen). Die
+    etablierte 0.87-Baseline (T-109, preds_best.csv) wurde auf RAW GDRNPP-Posen OHNE
+    Snap gemessen — der Eval muss apples-to-apples ungesnappt scoren. Der Live-Viewer
+    (kip_server, mit korrekt berechnetem table_z + Guard) und das Gateway-`/predict`
+    bleiben unberührt. snap=True bleibt für Aufrufer wählbar.
 
     **Single-Source-Delegation:** Existiert S-013's `gateway_proxy.
     gateway_predict_to_pose_result` (= dieselbe §1/§6-Mathematik via
@@ -154,19 +166,21 @@ def instances_to_doc(instances: list, camera: dict, source_image: str,
     if gateway_predict_to_pose_result is not None:
         return gateway_predict_to_pose_result(
             {"instances": instances}, camera=camera,
-            table_origin=list(table_origin), source_image=source_image, warn=warn)
+            table_origin=list(table_origin), source_image=source_image,
+            warn=warn, snap=snap)
     return _instances_to_doc_local(instances, camera, source_image,
-                                   table_origin=table_origin, warn=warn)
+                                   table_origin=table_origin, warn=warn, snap=snap)
 
 
 def _instances_to_doc_local(instances: list, camera: dict, source_image: str,
-                            table_origin=TABLE_ORIGIN_M, warn=None) -> dict:
+                            table_origin=TABLE_ORIGIN_M, warn=None, snap: bool = False) -> dict:
     """Self-contained T_cam_obj→Welt-Mapping (Fallback, byte-gleich zu S-013/composed).
 
     Spiegelt `composed.ComposedPipeline.infer`: §1 (T in Meter → mm,
-    `bop_pose_to_world`), Boden-Snap (best-effort), §6 (obj_id→CamelCase-Part →
-    `canonicalize_rotation` ueber PART_SYMMETRY). Round-trip gegen `world_to_bop_cam`
-    getestet (test_batch_eval.test_coordframe_roundtrip_translation_preserved)."""
+    `bop_pose_to_world`), Boden-Snap (T-163: im Eval AUS, snap=False default — siehe
+    `instances_to_doc`), §6 (obj_id→CamelCase-Part → `canonicalize_rotation` ueber
+    PART_SYMMETRY). Round-trip gegen `world_to_bop_cam` getestet
+    (test_batch_eval.test_coordframe_roundtrip_translation_preserved)."""
     import numpy as np
     from pipelines import contract
     from bop_adapter import (
@@ -200,10 +214,13 @@ def _instances_to_doc_local(instances: list, camera: dict, source_image: str,
 
         R_world, t_world = bop_pose_to_world(R_m2c, t_m2c_mm, R_w2c, t_w2c, to)
 
-        # Boden-Snap (best-effort, fehlt das CAD lokal → kein Snap).
-        verts = _mesh_verts_for(obj_id, warn)
-        if verts is not None:
-            t_world, _dz = planar_z_snap(R_world, t_world, verts, table_z=0.0)
+        # Boden-Snap (T-163: im Eval AUS, snap default False — der Snap mit
+        # hardcodetem table_z=0.0 hebt jede Pose +75–79 mm an und killt AR_MSSD;
+        # best-effort, fehlt das CAD lokal → ohnehin kein Snap).
+        if snap:
+            verts = _mesh_verts_for(obj_id, warn)
+            if verts is not None:
+                t_world, _dz = planar_z_snap(R_world, t_world, verts, table_z=0.0)
         R_world = canonicalize_rotation(R_world, part)  # §6: continuous-sym Anker
 
         bbox = inst.get("bbox_2d")
