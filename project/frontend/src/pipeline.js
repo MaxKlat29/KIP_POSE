@@ -100,6 +100,78 @@ const comboOf = (seg, pose) => WHITELIST.find((c) => c.seg === seg && c.pose ===
 export const isValid = (seg, pose) => !!comboOf(seg, pose);
 export const findCombo = comboOf;
 
+// ── "Inferiert mit"-Anzeige (T-164) ───────────────────────────────────────────
+// Lookups von den ROHEN Backend-Source-IDs (wie sie im Infer-Result-meta stehen:
+// used_seg="yolo-seg", used_pose="foundationpose"/"gigapose_rgbd", …) auf die
+// sauberen Display-Labels. Abgeleitet aus SEG_SOURCES/POSE_SOURCES (keine Drift).
+const SEG_ID_LABELS  = Object.fromEntries(SEG_SOURCES.map((s) => [s.id, s.label]));
+const POSE_ID_LABELS = Object.fromEntries(POSE_SOURCES.map((p) => [p.id, p.label]));
+// combo_id → {seg-id, pose-id} (used_combo-Fallback, falls used_seg/used_pose fehlen).
+const COMBO_BY_ID = Object.fromEntries(WHITELIST.map((c) => [c.id, c]));
+
+const cap = (s) => (typeof s === "string" && s ? s[0].toUpperCase() + s.slice(1) : s);
+const segLabel  = (id) => SEG_ID_LABELS[id]  || SEG_LABELS[id]  || (id != null ? cap(id) : null);
+const poseLabel = (id) => POSE_ID_LABELS[id] || POST_LABELS[id] || (id != null ? cap(id) : null);
+
+/**
+ * Liefert die Display-Trias { seg, pose, modality } für die "Inferiert mit"-Zeile.
+ * QUELLE-PRIORITÄT (defensiv — Backend-Wahrheit schlägt FE-Auswahl):
+ *   1. result.meta.used_seg / used_pose  (rohe Source-IDs, T-140)
+ *   2. result.meta.used_combo            (combo_id → seg/pose-IDs auflösen)
+ *   3. fallback: die gewählte Kombi `chosen` ({seg, pose} aus den Dropdowns)
+ * modality:  meta.modality ("RGB"|"RGBD") bevorzugt; sonst aus needs_depth der
+ *            gewählten Kombi abgeleitet (RGBD wenn Tiefe nötig). null wenn unbekannt.
+ * @param {object|null} meta   result.meta vom Infer-Endpoint (kann undefined sein)
+ * @param {object|null} chosen die im UI gewählte Kombi {seg(display), pose(display)}
+ * @returns {{seg:string|null, pose:string|null, modality:string|null}|null}
+ */
+export function comboDisplay(meta, chosen) {
+  meta = meta || {};
+  let segId = meta.used_seg || null;
+  let poseId = meta.used_pose || null;
+
+  // used_combo → seg/pose-IDs auflösen, wenn die Einzelfelder fehlen.
+  if ((!segId || !poseId) && meta.used_combo) {
+    const c = COMBO_BY_ID[meta.used_combo];
+    if (c) { segId = segId || c.seg_id; poseId = poseId || c.pose_id; }
+  }
+
+  // Display-Labels aus den Backend-IDs; sonst Fallback auf die gewählte Kombi.
+  const chosenCombo = chosen ? comboOf(chosen.seg, chosen.pose) : null;
+  let seg  = segLabel(segId);
+  let pose = poseLabel(poseId);
+  if (!seg)  seg  = chosen ? (SEG_LABELS[chosen.seg] || chosen.seg) : null;
+  if (!pose) pose = chosen ? (POST_LABELS[chosen.pose] || chosen.pose) : null;
+
+  // Modality: explizit vom Backend bevorzugt. Sonst aus needs_depth ableiten —
+  // und zwar der TATSÄCHLICH verwendeten Kombi (aus used_seg/used_pose/used_combo)
+  // falls bekannt, sonst der gewählten. Die Backend-Wahrheit schlägt die UI-Auswahl,
+  // damit eine fehlende `modality` nicht aus einer abweichenden Auswahl falsch wird.
+  let modality = meta.modality || null;
+  if (!modality) {
+    const usedCombo = (segId && poseId)
+      ? WHITELIST.find((c) => c.seg_id === segId && c.pose_id === poseId)
+      : null;
+    const src = usedCombo || chosenCombo;
+    if (src) modality = src.needs_depth ? "RGBD" : "RGB";
+  }
+
+  if (!seg && !pose) return null;
+  return { seg, pose, modality };
+}
+
+/**
+ * Formatiert die Trias zu einer Zeile: "YOLO-Seg + FoundationPose (RGBD)".
+ * modality in Klammern nur wenn bekannt. Gibt null zurück wenn nichts da.
+ */
+export function inferredWithText(meta, chosen) {
+  const d = comboDisplay(meta, chosen);
+  if (!d) return null;
+  const combo = [d.seg, d.pose].filter(Boolean).join(" + ");
+  if (!combo) return null;
+  return d.modality ? `${combo} (${d.modality})` : combo;
+}
+
 /**
  * Wertet das gesamte Gating aus.
  * @param {object} args
