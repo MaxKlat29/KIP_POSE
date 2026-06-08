@@ -1,26 +1,91 @@
-// pipeline.js — S-010: 2 gekoppelte Dropdowns (Seg → Post) + 7-Kombi-Gating.
+// pipeline.js — S-010 + T-147-RELAX: 2 gekoppelte Dropdowns (Seg → Post) + Gating
+// auf die VOLLE Feasibility-Matrix (12 Kombis, nicht mehr nur die kuratierten 7).
 //
-// REGEL-QUELLE: project/pipelines/combos.py (COMBO_WHITELIST). Das FE erfindet KEINE
-// Gating-Regeln — es spiegelt die 7 validen Kombis. Idealerweise käme die Seg/Post-
-// Achse aus /api/pipelines; der Endpoint liefert aktuell aber nur {id,name,available}
-// (kein seg/pose/needs_depth) — daher hier der dokumentierte Degrade (Mia §12 / §3.5):
-// die Kombi-Matrix ist FE-seitig gespiegelt, `available`/`unavailable_reason` werden
-// zur Laufzeit aus /api/pipelines per `id` darübergelegt. Sobald S-013 die Felder ans
-// all_pipelines() hängt, kann WHITELIST aus der Response gebaut werden (TODO unten).
+// REGEL-QUELLE: project/pipelines/combos.py (FEASIBLE_COMBOS = SEG_SOURCES × POSE_SOURCES,
+// gefiltert durch das feasibility-Predicate). Das FE erfindet KEINE Gating-Regeln — es
+// spiegelt die Matrix. Die GDRNPP↔yolo-obb-Kopplung wird NICHT mehr hart hardcoded:
+// GDRNPP koppelt jetzt mit ALLEN 3 Seg-Quellen (mit yolo-obb nativ, mit yolo-seg/sam3
+// `degraded` = AABB-aus-Maske). Die kuratierten 7 (`recommended`) sind Default/Highlight,
+// die 5 zusaetzlichen sind waehlbar mit degraded/class-ambiguity-Hinweis (kein Wegblenden).
 //
-// Es sind GENAU 7 valide Kombis (nicht 12). Ungültige Felder bleiben sichtbar +
-// disabled-mit-Grund (kein Wegblenden). Auto-Spring statt Sackgasse. Keine Emojis.
+// Idealerweise kaeme die Matrix aus /api/pipelines (T-147: liefert jetzt alle 12 inkl.
+// recommended/degraded/class_ambiguity-Flags). Bis das FE komplett darauf umgestellt ist,
+// spiegeln wir die Feasibility-Konstruktion hier (dieselbe Logik wie combos.feasibility);
+// `available`/`unavailable_reason` + die Flags werden zur Laufzeit aus /api/pipelines per
+// `id` darübergelegt (graceful: fehlende Felder = stiller Degrade). Keine Emojis.
 
-// ── Die 7-Kombi-Whitelist (Spiegel von combos.COMBO_WHITELIST; id = pose_source-id) ──
-export const WHITELIST = [
-  { n: 1, seg: "yolo-obb", pose: "GDRNPP",         id: "gdrnpp",                  needs_depth: false, is_pipeline_a: true,  note: "Pipeline A — Hauptlinie" },
-  { n: 2, seg: "yolo-seg", pose: "FoundationPose", id: "yolo_seg__foundationpose", needs_depth: true,  is_pipeline_a: false, note: "RGB-D · 6-DoF" },
-  { n: 3, seg: "sam3",     pose: "FoundationPose", id: "sam3__foundationpose",    needs_depth: true,  is_pipeline_a: false, note: "RGB-D · 6-DoF" },
-  { n: 4, seg: "yolo-seg", pose: "GigaPose-3D",    id: "yolo_seg__gigapose_rgbd", needs_depth: true,  is_pipeline_a: false, note: "coarse+GenFlow+Kabsch" },
-  { n: 5, seg: "yolo-seg", pose: "GigaPose-2D",    id: "yolo_seg__gigapose_rgb",  needs_depth: false, is_pipeline_a: false, note: "coarse+GenFlow" },
-  { n: 6, seg: "sam3",     pose: "GigaPose-3D",    id: "sam3__gigapose_rgbd",     needs_depth: true,  is_pipeline_a: false, note: "coarse+GenFlow+Kabsch" },
-  { n: 7, seg: "sam3",     pose: "GigaPose-2D",    id: "sam3__gigapose_rgb",      needs_depth: false, is_pipeline_a: false, note: "coarse+GenFlow" },
+// ── Seg-Source-Registry (Spiegel von combos.SEG_SOURCES) ──────────────────────
+// gives_obb: yolo-obb liefert eine OBB; yolo-seg/sam3 liefern Masken.
+// class_ambiguity: sam3 trennt kurz/lang nicht zuverlässig (S006-Befund).
+const SEG_SOURCES = [
+  { id: "yolo-obb", label: "YOLO-OBB", gives_obb: true,  class_ambiguity: false },
+  { id: "yolo-seg", label: "YOLO-Seg", gives_obb: false, class_ambiguity: false },
+  { id: "sam3",     label: "SAM 3",    gives_obb: false, class_ambiguity: true  },
 ];
+
+// ── Pose-Source-Registry (Spiegel von combos.POSE_SOURCES) ────────────────────
+// wants_obb: gdrnpp ist nativ OBB-gekoppelt (§4) — mit nicht-OBB-Seg = degraded.
+const POSE_SOURCES = [
+  { id: "gdrnpp",        label: "GDRNPP",        pose: "GDRNPP",        needs_depth: false, pipeline: null,   wants_obb: true  },
+  { id: "foundationpose",label: "FoundationPose",pose: "FoundationPose",needs_depth: true,  pipeline: null,   wants_obb: false },
+  { id: "gigapose_rgbd", label: "GigaPose 3D",   pose: "GigaPose-3D",   needs_depth: true,  pipeline: "rgbd", wants_obb: false },
+  { id: "gigapose_rgb",  label: "GigaPose 2D",   pose: "GigaPose-2D",   needs_depth: false, pipeline: "rgb",  wants_obb: false },
+];
+
+// Die kuratierten 7 (recommended-Highlight). Quelle: combos.COMBO_WHITELIST-ids.
+const RECOMMENDED_IDS = new Set([
+  "gdrnpp", "yolo_seg__foundationpose", "sam3__foundationpose",
+  "yolo_seg__gigapose_rgbd", "yolo_seg__gigapose_rgb",
+  "sam3__gigapose_rgbd", "sam3__gigapose_rgb",
+]);
+
+// Verfahren-Notiz pro Pose (Kontextzeile). degraded/ambig kommen als eigener Hinweis.
+const POSE_NOTE = {
+  "gdrnpp": "GDRNPP", "foundationpose": "6-DoF", "gigapose_rgbd": "coarse+GenFlow+Kabsch",
+  "gigapose_rgb": "coarse+GenFlow",
+};
+
+// Kanonische combo-id (== combos._combo_id): Pipeline A = "gdrnpp"; sonst seg__pose.
+function comboId(segId, poseId) {
+  if (segId === "yolo-obb" && poseId === "gdrnpp") return "gdrnpp";
+  return `${segId.replace(/-/g, "_")}__${poseId}`;
+}
+
+// Feasibility-Predicate (Spiegel von combos.feasibility). Aktuell schließt KEINE Kombi
+// hart aus (3×4 = 12); Flags markieren die degradierten/ambigen.
+function feasibility(seg, pose) {
+  const flags = { degraded: false, degraded_reason: null, class_ambiguity: !!seg.class_ambiguity };
+  if (pose.wants_obb && !seg.gives_obb) {
+    flags.degraded = true;
+    flags.degraded_reason = "aabb_from_mask"; // gdrnpp-svc AABB-aus-Maske-Fallback
+  }
+  return flags;
+}
+
+// ── Die volle Feasibility-Matrix (12 Kombis) ──────────────────────────────────
+// Super-Menge der kuratierten 7. Jeder Eintrag trägt note + die T-147-Flags.
+export const WHITELIST = (() => {
+  const out = [];
+  let n = 0;
+  for (const seg of SEG_SOURCES) {
+    for (const pose of POSE_SOURCES) {
+      const flags = feasibility(seg, pose);
+      n += 1;
+      const id = comboId(seg.id, pose.id);
+      out.push({
+        n, id, seg: seg.id, pose: pose.pose,
+        seg_id: seg.id, pose_id: pose.id,
+        needs_depth: pose.needs_depth, pipeline: pose.pipeline,
+        is_pipeline_a: id === "gdrnpp",
+        recommended: RECOMMENDED_IDS.has(id),
+        degraded: flags.degraded, degraded_reason: flags.degraded_reason,
+        class_ambiguity: flags.class_ambiguity,
+        note: POSE_NOTE[pose.id] || pose.pose,
+      });
+    }
+  }
+  return out;
+})();
 
 // Stabile Achsen-Reihenfolge (Datenfluss: Bild → Maske → Pose).
 export const SEG_ORDER  = ["yolo-obb", "yolo-seg", "sam3"];
@@ -38,10 +103,26 @@ const comboOf = (seg, pose) => WHITELIST.find((c) => c.seg === seg && c.pose ===
 export const isValid = (seg, pose) => !!comboOf(seg, pose);
 export const findCombo = comboOf;
 
+// Hinweis-Text für eine NICHT-recommended (degraded/ambig) aber wählbare Kombi.
+// Kurzer Sub-Hinweis, der die Achse markiert ohne sie zu blockieren (Max: waehlbar
+// mit Hinweis). Keine Emojis.
+export function comboHint(combo) {
+  if (!combo) return "";
+  const bits = [];
+  if (combo.degraded && combo.degraded_reason === "aabb_from_mask") {
+    bits.push("degradiert · AABB aus Maske statt OBB");
+  } else if (combo.degraded) {
+    bits.push("degradiert");
+  }
+  if (combo.class_ambiguity) bits.push("Klassen-Ambiguität (kurz/lang)");
+  return bits.join(" · ");
+}
+
 // Grund-Texte: Gating (logisch unmöglich, ändert sich nie) vs Available (Zustand).
+// T-147: die einzige logisch-unmögliche Achse ist „Pose braucht eine Service-Quelle,
+// die das Mesh nicht liefert" — das deckt jetzt `available` ab, nicht das Gating.
+// Reines Gating bleibt nur als Fallback (sollte mit 12-Matrix nie greifen).
 function gatingReason(seg, pose) {
-  if (pose === "GDRNPP" && seg !== "yolo-obb") return "nur mit YOLO-OBB";
-  if (seg === "yolo-obb" && pose !== "GDRNPP") return "braucht Maske (nicht YOLO-OBB)";
   return "nicht kombinierbar";
 }
 
@@ -61,12 +142,12 @@ function availReason(meta) {
  *   sel: {seg, pose} — aktuelle Auswahl
  *   axis: "seg" | "post" | null — welche Achse zuletzt geändert wurde (für Spring-Richtung)
  *   mode: "real" | "sim" | "live" | "batch"
- *   availById: Map id->{available, unavailable_reason} aus /api/pipelines (kann leer sein)
+ *   availById: Map id->{available, unavailable_reason, recommended, degraded, ...} aus /api/pipelines
  *   depthPresent: bool — ob im Upload-Tab ein Tiefenbild liegt
  * @returns {object}
  *   seg: [{value,label,disabled,reason}], post: [...], selected:{seg,pose},
  *   combo: WHITELIST-Eintrag, sprang: bool, springText: string|null,
- *   needsDepth: bool, anyAvailable: bool, ctx: string
+ *   needsDepth: bool, anyAvailable: bool, ctx: string, hint: string
  */
 export function evaluate({ sel, axis = null, mode = "real", availById = new Map(), depthPresent = false }) {
   const availOf = (combo) => {
@@ -113,7 +194,9 @@ export function evaluate({ sel, axis = null, mode = "real", availById = new Map(
         const ns = firstValidSegFor(pose);
         if (ns) { seg = ns; sprang = true; }
         else {
-          const any = WHITELIST.find((c) => !state(c.seg, c.pose).disabled);
+          // Bevorzuge eine recommended-Kombi als Fallback-Ziel (sonst irgendeine).
+          const any = WHITELIST.find((c) => c.recommended && !state(c.seg, c.pose).disabled)
+                   || WHITELIST.find((c) => !state(c.seg, c.pose).disabled);
           if (any) { seg = any.seg; pose = any.pose; sprang = true; }
         }
       }
@@ -128,10 +211,9 @@ export function evaluate({ sel, axis = null, mode = "real", availById = new Map(
   }
 
   // ── Options-Listen für beide Selects aufbauen ──
+  // Markiert disabled-mit-Grund (Available/Depth) UND, für gültige NICHT-recommended
+  // Kombis, einen degraded/ambig-Hinweis (wählbar bleiben, Max-Regel).
   const segOpts = SEG_ORDER.map((s) => {
-    // Eine Seg-Quelle ist wählbar, wenn sie mit IRGENDEINER Post-Option eine gültige
-    // (nicht-disabled) Kombi bildet. Der Grund kommt vom besten Konflikt mit der
-    // aktuell gewählten Post.
     const stWithCurrent = state(s, pose);
     const anyValid = POST_ORDER.some((p) => !state(s, p).disabled);
     const disabled = !anyValid || stWithCurrent.disabled;
@@ -141,7 +223,9 @@ export function evaluate({ sel, axis = null, mode = "real", availById = new Map(
   });
   const postOpts = POST_ORDER.map((p) => {
     const st = state(seg, p);
-    return { value: p, label: POST_LABELS[p], disabled: st.disabled, reason: st.reason };
+    const combo = comboOf(seg, p);
+    const note = (!st.disabled && combo && !combo.recommended) ? comboHint(combo) : "";
+    return { value: p, label: POST_LABELS[p], disabled: st.disabled, reason: st.reason, note };
   });
 
   const combo = comboOf(seg, pose);
@@ -158,22 +242,39 @@ export function evaluate({ sel, axis = null, mode = "real", availById = new Map(
     } else {
       parts.push("RGB");
     }
-    parts.push(combo.note);
+    parts.push(combo.is_pipeline_a ? "Pipeline A — Hauptlinie" : combo.note);
+    if (!combo.recommended) {
+      const hint = comboHint(combo);
+      if (hint) parts.push(hint);
+    }
     ctx = parts.join(" · ");
   }
+
+  // Eigener Hinweis-String (für die kip.js-Kontextzeile / einen separaten Hinweis-Slot).
+  const hint = (combo && !combo.recommended) ? comboHint(combo) : "";
 
   return {
     seg: segOpts, post: postOpts, selected: { seg, pose }, combo,
     sprang, springText, needsDepth: !!(combo && combo.needs_depth),
-    anyAvailable, ctx,
+    anyAvailable, ctx, hint,
+    recommended: !!(combo && combo.recommended),
   };
 }
 
 // Baut die id->meta-Map aus der /api/pipelines-Response (defensiv).
+// Reicht die T-147-Flags mit durch (recommended/degraded/degraded_reason/class_ambiguity),
+// damit das FE die Server-Wahrheit über die statische Matrix-Spiegelung legen kann.
 export function availMapFromResponse(data) {
   const m = new Map();
   for (const p of (data && data.pipelines) || []) {
-    m.set(p.id, { available: p.available !== false, unavailable_reason: p.unavailable_reason });
+    m.set(p.id, {
+      available: p.available !== false,
+      unavailable_reason: p.unavailable_reason,
+      recommended: p.recommended,
+      degraded: p.degraded,
+      degraded_reason: p.degraded_reason,
+      class_ambiguity: p.class_ambiguity,
+    });
   }
   return m;
 }

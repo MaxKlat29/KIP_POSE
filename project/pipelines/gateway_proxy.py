@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from .combos import COMBO_WHITELIST
+from .combos import COMBO_WHITELIST, FEASIBLE_COMBOS
 
 # ── unavailable_reason-Enum (Mia S-010 §12) ───────────────────────────────────
 # Das FE muss „Dienst gerade nicht aktiv" von „Modell trainiert noch" unterscheiden
@@ -225,48 +225,77 @@ def unavailable_reason(available: bool, *, service_up: bool,
 def pipelines_status(*, gateway_health: Optional[dict] = None,
                      live_pipeline_a_available: bool = True,
                      training_segs: Optional[set] = None) -> list:
-    """Baut die 7-Kombi-Liste fuer `/api/pipelines` (Mia S-010 §12 Pflicht-Felder).
+    """Baut die volle Feasibility-Matrix (~12 Kombis) fuer `/api/pipelines`.
 
-    Pro Kombi:
+    T-147-RELAX (Max 2026-06-07): das FE-Gating soll ALLE feasible Kombis erlauben,
+    nicht nur die kuratierten 7. Quelle der Wahrheit ist jetzt `combos.FEASIBLE_COMBOS`
+    (registry × feasibility-Kreuzprodukt). Die kuratierten 7 (`COMBO_WHITELIST`)
+    bleiben das `recommended`-Highlight-Subset. Die GDRNPP↔yolo-obb-Kopplung wird NICHT
+    mehr hart hardcoded — sie faellt aus der Matrix (GDRNPP koppelt jetzt mit allen 3
+    Seg; mit yolo-seg/sam3 = `degraded`, AABB-aus-Maske).
+
+    Pro Kombi (Mia S-010 §12 + T-147-Flags):
       id, name, description, seg, pose, needs_depth, is_pipeline_a,
-      available (bool), unavailable_reason (service_down|training|None).
+      available (bool), unavailable_reason (service_down|training|None),
+      recommended (bool), degraded (bool), degraded_reason (str|None),
+      class_ambiguity (bool).
+
+    Back-compat: die 7 recommended-Kombis tragen exakt dieselben Felder/ids wie zuvor;
+    FE-Code, der nur die alten Felder liest, funktioniert weiter. Die 5 zusaetzlichen
+    Kombis sind durch `recommended=False` + Flags markiert.
 
     Args:
       gateway_health : die `gateway/health`-Antwort {ok, yolo, fp, gigapose, sam3}
                        (gateway/app.py:292-311). None → Gateway nicht erreichbar →
-                       alle 6 NICHT-A-Kombis service_down. Pipeline A bleibt davon
-                       UNBERUEHRT (haengt nicht am Mesh).
-      live_pipeline_a_available : ob der :8077/:8078-Live-Pfad lebt (Kombi 1). Mia
-                       §6: solange der Live-Pfad lebt, ist Kombi 1 IMMER available
-                       (es gibt praktisch immer >=1 Kombi).
-      training_segs  : Set der Seg-Quellen, deren Modell gerade trainiert (S-008
-                       yolo-seg medium-Langlaeufer). Diese Kombis → unavailable_reason
-                       'training' statt 'service_down'.
+                       alle Mesh-Kombis service_down. Pipeline A bleibt UNBERUEHRT.
+      live_pipeline_a_available : ob der :8077/:8078-Live-Pfad lebt. Mia §6: solange
+                       er lebt, ist Pipeline A (und der GDRNPP-Pose-Pfad) available.
+      training_segs  : Set der Seg-Quellen, deren Modell gerade trainiert (S-008).
+                       Diese Kombis → unavailable_reason 'training' statt 'service_down'.
     """
     training_segs = training_segs or set()
     svc_up = _gateway_service_up(gateway_health)
 
     out = []
-    for c in COMBO_WHITELIST:
+    for c in FEASIBLE_COMBOS:
+        seg_id, pose_id = c["seg_id"], c["pose_id"]
+        training = seg_id in training_segs
+
         if c["is_pipeline_a"]:
+            # Kombi 1 (yolo-obb → GDRNPP) = Live-Monolith, haengt NICHT am Mesh.
             avail = bool(live_pipeline_a_available)
             reason = unavailable_reason(avail, service_up=avail, training=False)
             name = "GDRNPP (yolo-obb, Pipeline A)"
-            desc = "Live-Hauptlinie (Genauigkeits-King). yolo-obb → GDRNPP, byte-identisch."
-        else:
-            gw = COMBO_TO_GATEWAY[c["id"]]
-            seg_up = svc_up.get(gw["seg_source"], False)
-            pose_up = svc_up.get(gw["pose_source"], False)
-            training = c["seg"] in training_segs
-            # available nur wenn BEIDE Stages up sind (Seg-Service + Pose-Service).
-            # Bei Training ist die Kombi nicht available, aber der Grund ist 'training'.
+        elif pose_id == "gdrnpp":
+            # GDRNPP-degraded (yolo-seg/sam3 → GDRNPP, AABB-aus-Maske). Der GDRNPP-Pose-
+            # Pfad haengt am Live-Worker (wie Pipeline A); zusaetzlich braucht es den
+            # Seg-Service (yolo/sam3) up — die Maske kommt aus dem Mesh.
+            seg_up = svc_up.get(_SEG_COMBO_TO_GATEWAY.get(seg_id, seg_id), False)
+            pose_up = bool(live_pipeline_a_available)
             avail = bool(seg_up and pose_up and not training)
             reason = unavailable_reason(avail, service_up=(seg_up and pose_up),
                                         training=training)
             name = f"{c['seg']} → {c['pose']}"
-            desc = (f"Kombi {c['n']}: {c['seg']} → {c['pose']} "
-                    f"(needs_depth={c['needs_depth']}"
-                    + (f", pipeline={c['pipeline']}" if c.get('pipeline') else "") + ")")
+        else:
+            # Reine Mesh-Kombi (FP/GigaPose). Routing kommt aus COMBO_TO_GATEWAY (sofern
+            # registriert); fehlt es (sollte nicht), faellt sie defensiv auf service_down.
+            gw = COMBO_TO_GATEWAY.get(c["id"])
+            if gw is not None:
+                seg_up = svc_up.get(gw["seg_source"], False)
+                pose_up = svc_up.get(gw["pose_source"], False)
+            else:
+                seg_up = svc_up.get(_SEG_COMBO_TO_GATEWAY.get(seg_id, seg_id), False)
+                pose_up = svc_up.get(pose_id, False)
+            avail = bool(seg_up and pose_up and not training)
+            reason = unavailable_reason(avail, service_up=(seg_up and pose_up),
+                                        training=training)
+            name = f"{c['seg']} → {c['pose']}"
+
+        desc = (f"Kombi {c['n']}: {c['seg']} → {c['pose']} "
+                f"(needs_depth={c['needs_depth']}"
+                + (f", pipeline={c['pipeline']}" if c.get('pipeline') else "")
+                + (", degraded=AABB-aus-Maske" if c["degraded"] else "")
+                + (", class-ambig" if c["class_ambiguity"] else "") + ")")
 
         out.append({
             "id": c["id"],
@@ -278,6 +307,11 @@ def pipelines_status(*, gateway_health: Optional[dict] = None,
             "is_pipeline_a": bool(c["is_pipeline_a"]),
             "available": avail,
             "unavailable_reason": reason,
+            # T-147-Flags (FE-Gating-Relax): recommended-7 vs degraded/ambig-5.
+            "recommended": bool(c["recommended"]),
+            "degraded": bool(c["degraded"]),
+            "degraded_reason": c["degraded_reason"],
+            "class_ambiguity": bool(c["class_ambiguity"]),
         })
     return out
 

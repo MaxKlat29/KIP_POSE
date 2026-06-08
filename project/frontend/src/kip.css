@@ -251,11 +251,75 @@
   .kip-pipe__arrow { display: none; }
 }
 
-/* ── Reduced-Motion: Phasen-Puls statt Animation (A11y, S-010/S-011 AK) ── */
+/* ── Flag-Badges (T-147): recommended / degraded / class-ambig als Text-Pills ── */
+.kip-flag {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; vertical-align: middle;
+  white-space: nowrap;
+}
+.kip-flag--rec { color: rgb(140, 230, 170); background: rgba(52,211,153,0.16); border: 1px solid rgba(52,211,153,0.34); }
+.kip-flag--deg { color: #f5cf8a; background: rgba(245,185,66,0.14); border: 1px solid rgba(245,185,66,0.34); }
+.kip-flag--amb { color: #c9b6e8; background: rgba(168,130,230,0.14); border: 1px solid rgba(168,130,230,0.34); }
+
+/* ── Live-Scoreboard (T-147): re-sortierende Tabelle während eines Eval-Laufs ── */
+.kip-live { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+.kip-live__head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px;
+}
+.kip-live__title { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0.02em; }
+.kip-live__prog { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+.kip-live__wrap { overflow-x: auto; }
+.kip-live__tbl {
+  width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.kip-live__tbl th, .kip-live__tbl td {
+  padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.kip-live__tbl thead th {
+  color: var(--text-dim); font-weight: 600; font-size: 10.5px; letter-spacing: 0.02em; white-space: nowrap;
+}
+.kip-live__numh, .kip-live__rankh { text-align: right; }
+.kip-live__rankh { text-align: center; }
+.kip-live__numc { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.kip-live__rankc { text-align: center; width: 44px; }
+/* Zeilen wandern beim Re-Sortieren (FLIP via JS-transform). Wichtig: will-change für GPU. */
+.kip-live__row { will-change: transform; }
+.kip-live__rank {
+  display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; color: var(--text-dim); background: rgba(255,255,255,0.06);
+}
+.kip-live__rank--best {
+  color: rgb(140, 230, 170); background: rgba(52,211,153,0.2); border: 1px solid rgba(52,211,153,0.4);
+}
+.kip-live__row--best td { background: rgba(52,211,153,0.06); }
+.kip-live__row--best td:nth-child(2) { border-left: 3px solid var(--origin); }
+.kip-live__ar { color: var(--text); font-weight: 600; }
+.kip-live__row--best .kip-live__ar { color: rgb(140, 230, 170); }
+.kip-live__scenes { color: var(--text-dim); font-size: 11px; }
+/* Mini-Fortschrittsbalken pro Zeile (n_scenes/20). */
+.kip-live__minibar {
+  display: inline-block; vertical-align: middle; width: 46px; height: 4px; margin-left: 6px;
+  border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden;
+}
+.kip-live__minibar > span {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(52,211,153,0.6), rgba(52,211,153,0.9));
+  transition: width 0.3s ease;
+}
+.kip-live__row--ref .kip-live__rank { color: var(--text-dim); }
+
+@media (max-width: 760px) {
+  .kip-live__minibar { display: none; }
+}
+
+/* ── Reduced-Motion: Phasen-Puls statt Animation (A11y, S-010/S-011/T-147 AK) ── */
 @media (prefers-reduced-motion: reduce) {
   .kip-bar__fill--pulse {
     animation: none; left: 0; width: 100%;
     background: linear-gradient(90deg, rgba(52,211,153,0.30), rgba(52,211,153,0.45));
   }
   .kip-sel, .kip-tab, .kip-btn, .kip-drop { transition: none; }
+  /* Live-Scoreboard re-sortiert ohne Bewegung (FLIP-Transform wird in JS unterdrückt;
+     hier zusätzlich die mini-bar-Transition + etwaige Rest-Transitions hart aus). */
+  .kip-live__row, .kip-live__minibar > span { transition: none !important; }
 }
