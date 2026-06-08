@@ -150,6 +150,26 @@ def test_needs_depth_matches_contract():
     assert by_key["gdrnpp"]["needs_depth"] is False
 
 
+def test_runner_gateway_routing_consistent():
+    """T-155 Konsistenz Runner ↔ Gateway: der Batch-Eval-Runner (EVAL_CONFIGS, via
+    http_predict) und der direkte /api/predict-Proxy (gateway_proxy.COMBO_TO_GATEWAY)
+    MUESSEN jede NICHT-A-Kombi auf dasselbe (seg_source, pose_source, degraded) routen.
+    Sonst gibt derselbe Eval andere Zahlen als die manuelle Inferenz desselben Modells."""
+    from pipelines.gateway_proxy import COMBO_TO_GATEWAY
+    by_key = {be.config_key(c): c for c in be.EVAL_CONFIGS}
+    # Beide Pfade decken dieselben NICHT-A feasible-Kombis ab.
+    non_a_runner = {k for k, c in by_key.items() if not c["is_pipeline_a"]}
+    assert non_a_runner == set(COMBO_TO_GATEWAY), "Runner ↔ Gateway: gleiche NICHT-A-Kombis"
+    for cid, gw in COMBO_TO_GATEWAY.items():
+        cfg = by_key[cid]
+        assert cfg["seg_source"] == gw["seg_source"], f"{cid}: seg_source-Drift"
+        assert cfg["pose_source"] == gw["pose_source"], f"{cid}: pose_source-Drift"
+        # Der Runner setzt degraded=true im http_predict fuer pose_source==gdrnpp&!is_a;
+        # das deckt sich 1:1 mit dem COMBO_TO_GATEWAY-degraded-Flag.
+        runner_degraded = (cfg["pose_source"] == "gdrnpp" and not cfg["is_pipeline_a"])
+        assert runner_degraded == gw["degraded"], f"{cid}: degraded-Drift"
+
+
 # ── 2) instances_to_doc: §6-Klassenmapping + 2-Klassen-Scope ────────────────────
 def test_instances_to_doc_class_mapping_and_scope():
     reply = _gateway_reply(n_anker=2, with_foreign=True)

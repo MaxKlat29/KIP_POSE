@@ -143,7 +143,7 @@ def _resolve_pipeline(pipeline: str) -> str:
 
 # ── Gateway-Proxy-Seam (S-013, additiv; bricht den Boot NIE) ──────────────────
 # kip_server:8077 bleibt der LIVE-Pipeline-A-Pfad (pipeline=gdrnpp byte-identisch).
-# Fuer die 6 NICHT-A-Kombis proxyt /api/predict zum Mesh-Gateway (gateway:8000),
+# Fuer ALLE NICHT-A feasible-Kombis (T-155: 11) proxyt /api/predict zum Gateway (gateway:8000),
 # damit das FE EINE Origin behaelt (Caddy /KIP, kein zweiter Tunnel). Die testbare
 # Mapping-/Gating-Logik liegt fastapi-/httpx-frei in pipelines.gateway_proxy.
 GATEWAY_URL = os.environ.get("KIP_GATEWAY_URL", "http://gateway:8000").rstrip("/")
@@ -163,7 +163,7 @@ except Exception:  # noqa: BLE001 — Proxy-Seam ist optional, darf den Server n
 
 def _gateway_health() -> Optional[dict]:
     """Pollt gateway/health (aggregiert yolo/fp/gigapose/sam3). None wenn das Gateway
-    nicht erreichbar ist (dann sind alle 6 NICHT-A-Kombis service_down; Pipeline A
+    nicht erreichbar ist (dann sind alle NICHT-A-Kombis service_down; Pipeline A
     bleibt unberuehrt). httpx ist nur in der Box-venv — fehlt es, None (kein Crash)."""
     try:
         import httpx
@@ -195,7 +195,7 @@ def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
                                cx: float, cy: float, iterations: int,
                                top_n: Optional[int], want_pointcloud: bool,
                                seg_prompts: Optional[str]) -> dict:
-    """Proxyt EINE der 6 NICHT-A-Kombis als multipart an gateway/predict und gibt die
+    """Proxyt EINE der NICHT-A feasible-Kombis als multipart an gateway/predict und gibt die
     rohe Gateway-Antwort (instances[].T_cam_obj + timings) zurueck. httpx nur Box-venv."""
     import httpx
     gw = _gwp.combo_to_gateway(combo_id)              # 4xx-Quelle: InvalidCombo → 400 oben
@@ -209,6 +209,11 @@ def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
         "seg_source": gw["seg_source"],
         "pose_source": gw["pose_source"],
     }
+    # GDRNPP-degraded-Kombis (yolo-seg/sam3 → gdrnpp): das Gateway braucht degraded=true,
+    # sonst forced es seg→yolo-obb und die Maske geht verloren (T-153-Opt-in, default-off;
+    # identisch zu batch_eval.http_predict). Nur diese 2 Kombis tragen das Flag.
+    if gw.get("degraded"):
+        data["degraded"] = "true"
     if top_n is not None:
         data["top_n"] = str(top_n)
     if seg_prompts:
@@ -374,7 +379,9 @@ async def predict(
         delegiert byte-identisch an den bestehenden `_real_infer_job`-Thread (die
         feste Zivid-Kamera + warmer :8078-GDRNPP-Worker, exakt wie heute). Antwort
         `{job}` — das FE pollt `/api/real/job/<id>` wie gewohnt.
-      * Eine der 6 NICHT-A-Kombis (per `pipeline=<combo_id>` ODER `seg=&pose=`)
+      * Eine der NICHT-A feasible-Kombis (per `pipeline=<combo_id>` ODER `seg=&pose=`;
+        T-155: alle 11 NICHT-A = 12 FEASIBLE_COMBOS minus Pipeline A, inkl. der 3
+        yolo-obb-Mesh + 2 gdrnpp-degraded Kombis)
         → Proxy an `gateway:8000/predict` (httpx), Antwort (instances[].T_cam_obj)
         → ueber dieselbe composed.py-Mapping-Mathematik → pose_result-Doc. EINE
         Origin (Caddy /KIP), kein zweiter Tunnel.
@@ -395,7 +402,7 @@ async def predict(
         return {"job": job, "pipeline": "gdrnpp", "mode": "live", "is_pipeline_a": True,
                 "poll_url": f"api/real/job/{job}"}
 
-    # ── 6 NICHT-A-Kombis → Gateway-Proxy ──
+    # ── NICHT-A feasible-Kombis → Gateway-Proxy (T-155: alle 11) ──
     try:
         combo_id = _gwp.resolve_combo_id(pipeline=pipeline, seg=seg, pose=pose)
     except _gwp.InvalidCombo as e:
