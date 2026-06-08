@@ -862,12 +862,19 @@ def load_run(out_dir, run_id) -> "dict | None":
 
 
 # ── Szenen-Discovery (vorgerenderte SDG-Seeds mit GT) ────────────────────────────
-def discover_scenes(scenes_dir, seeds=None, split_layout=True) -> list:
+def discover_scenes(scenes_dir, seeds=None, split_layout=True, frames=None) -> list:
     """Findet vorgerenderte SDG-Seed-Szenen MIT GT unter `scenes_dir`.
 
     Erwartet BOP-Layout: <scenes_dir>/<scene_id>/ mit rgb/<im>.png, depth/<im>.png,
-    scene_gt.json, scene_camera.json. Eine Szene pro scene_id (im=0). `seeds` cappt
-    auf die ersten N. Liefert {scene_id, im_id, rgb, depth, camera, K, dir}.
+    scene_gt.json, scene_camera.json. `seeds` cappt auf die ersten N SZENEN. Liefert
+    {scene_id, im_id, rgb, depth, camera, K, dir}.
+
+    `frames` (T-170, D-5 PIVOT): wenn None (Default) → EIN Eintrag pro Szene (im_ids[0]),
+    byte-identisch zum Vor-T-170-Verhalten. Wenn eine Liste von im_ids (z.B.
+    [0,10,20,..,90]) → PRO Szene ein Eintrag JE angefragtem im_id, der im scene_camera
+    existiert (deterministisches Sub-Sampling fuer robustere AR ueber ~100 statt 10 Frames).
+    Die eval-Naht (subprocess_eval) scoped das targets-File ohnehin per (scene_id,im_id),
+    also wird jeder Frame korrekt gegen sein scene_gt[im_id] gewertet.
 
     camera = {cam_K[9], cam_R_w2c[9], cam_t_w2c[3] mm} aus scene_camera.json[im].
     Fehlt cam_R_w2c/cam_t_w2c im scene_camera (BOP speichert Extrinsics oft separat),
@@ -879,31 +886,36 @@ def discover_scenes(scenes_dir, seeds=None, split_layout=True) -> list:
         return out
     scene_dirs = sorted([d for d in root.iterdir() if d.is_dir()
                          and (d / "scene_camera.json").is_file()])
+    if seeds is not None:
+        scene_dirs = scene_dirs[:seeds]
     for sd in scene_dirs:
         cam_all = json.loads((sd / "scene_camera.json").read_text())
-        im_ids = sorted(int(k) for k in cam_all.keys())
-        if not im_ids:
+        im_ids_all = sorted(int(k) for k in cam_all.keys())
+        if not im_ids_all:
             continue
-        im_id = im_ids[0]
-        cam = cam_all[str(im_id)]
-        K9 = cam.get("cam_K")
-        rgb = sd / "rgb" / f"{im_id:06d}.png"
-        depth = sd / "depth" / f"{im_id:06d}.png"
-        camera = {"cam_K": K9,
-                  "cam_R_w2c": cam.get("cam_R_w2c"),
-                  "cam_t_w2c": cam.get("cam_t_w2c")}
-        K = (_K_dict(K9) if K9 else None)
-        out.append({
-            "scene_id": int(sd.name), "im_id": im_id,
-            "rgb": str(rgb), "depth": str(depth) if depth.exists() else None,
-            # BOP depth PNGs encode metres = png*depth_scale/1000 (Isaac/SDG writes
-            # 0.1). Carry it so the gateway+refiner decode the right scale (T-156);
-            # default 1.0 (mm) when scene_camera omits it.
-            "depth_scale": float(cam.get("depth_scale", 1.0)),
-            "camera": camera, "K": K, "dir": str(sd),
-        })
-    if seeds is not None:
-        out = out[:seeds]
+        if frames is None:
+            sel_ims = [im_ids_all[0]]                 # Default: 1 Frame/Szene (byte-identisch)
+        else:
+            avail = set(im_ids_all)
+            sel_ims = [im for im in frames if im in avail]  # nur existierende, in Wunsch-Reihenfolge
+        for im_id in sel_ims:
+            cam = cam_all[str(im_id)]
+            K9 = cam.get("cam_K")
+            rgb = sd / "rgb" / f"{im_id:06d}.png"
+            depth = sd / "depth" / f"{im_id:06d}.png"
+            camera = {"cam_K": K9,
+                      "cam_R_w2c": cam.get("cam_R_w2c"),
+                      "cam_t_w2c": cam.get("cam_t_w2c")}
+            K = (_K_dict(K9) if K9 else None)
+            out.append({
+                "scene_id": int(sd.name), "im_id": im_id,
+                "rgb": str(rgb), "depth": str(depth) if depth.exists() else None,
+                # BOP depth PNGs encode metres = png*depth_scale/1000 (Isaac/SDG writes
+                # 0.1). Carry it so the gateway+refiner decode the right scale (T-156);
+                # default 1.0 (mm) when scene_camera omits it.
+                "depth_scale": float(cam.get("depth_scale", 1.0)),
+                "camera": camera, "K": K, "dir": str(sd),
+            })
     return out
 
 
