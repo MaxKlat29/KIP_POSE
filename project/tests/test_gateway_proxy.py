@@ -186,7 +186,7 @@ def test_mapping_requires_extrinsics():
 # ── 5) pipelines_status + unavailable_reason (Mia S-010 §12) ──────────────────
 def test_pipelines_status_has_all_mia_fields():
     ps = g.pipelines_status(gateway_health=None, live_pipeline_a_available=True)
-    assert len(ps) == 7
+    assert len(ps) == 12  # T-147: Gating-Relax 7→12 (volle FEASIBLE_COMBOS-Matrix)
     for p in ps:
         for f in ("id", "name", "seg", "pose", "needs_depth", "is_pipeline_a",
                   "available", "unavailable_reason"):
