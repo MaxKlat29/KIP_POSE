@@ -111,3 +111,6 @@ pretrained/
 **/huggingface/token
 hf_token*
 .hf_token
+
+# S-012 local test venv (not committed)
+.venv-s012/
