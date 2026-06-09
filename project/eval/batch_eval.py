@@ -408,21 +408,67 @@ def _scoped_targets_for_csv(csv_path, full_targets, out_dir):
     return sp
 
 
-def ar_from_report(report: dict) -> "tuple[float | None, dict]":
-    """AR IC-BIN (overall) + per-Klasse aus einem eval_bop-report.json.
+def active_class_parts() -> list:
+    """Die D1-aktiven Klassen-Parts (= die Hauptmetrik-Klassen), generisch.
+
+    Single-Source: die Parts der `CLASS_TO_OBJ_ID`-Werte (= der aktive 2-Klassen-
+    Scope D1: Anker_Kurz, Anker_Lang). **Nicht hartcodiert 2** — kommt spaeter eine
+    dritte trainierte Klasse in CLASS_TO_OBJ_ID dazu (z.B. Zahnrad → obj_id 6), mittelt
+    die Hauptmetrik automatisch ueber 3. Die 4 untrainierten BOP-Klassen
+    (Buerstenhalter/Getriebe/Ringmagnet/Zahnrad) stehen NICHT in CLASS_TO_OBJ_ID und
+    bleiben damit aus der primaeren AR raus (sie haben AR=0 und wuerden die Zahl 3x
+    verwaessern — T-171)."""
+    from bop_adapter import part_for_obj_id
+    return [part_for_obj_id(oid) for oid in CLASS_TO_OBJ_ID.values()]
+
+
+def _mean_active(per_class: dict) -> "float | None":
+    """Mittel der AR ueber die D1-aktiven Klassen-Parts (= die primaere/Haupt-AR).
+
+    Mittelt GENAU ueber `active_class_parts()` — case-insensitiv gematcht gegen die
+    `per_class`-Keys (eval_bop schreibt CamelCase 'Anker_Kurz', aeltere Reports/
+    Fixtures evtl. lowercase). Eine aktive Klasse, die im Report fehlt, zaehlt als 0.0
+    (kein Recall = 0, nicht weglassen — sonst wuerde sam3 mit nur Anker_Kurz faelschlich
+    hoch erscheinen statt (0.8187+0.0)/2). None wenn per_class leer ist oder keine
+    aktive Klasse aufgeloest werden kann (kein stiller 0-Wert)."""
+    if not per_class:
+        return None
+    lut = {str(k).lower(): v for k, v in per_class.items()}
+    vals = [float(lut.get(p.lower(), 0.0)) for p in active_class_parts()]
+    if not vals:
+        return None
+    return round(statistics.fmean(vals), 4)
+
+
+def ar_from_report(report: dict) -> "tuple[float | None, dict, float | None]":
+    """Primaere AR IC-BIN (D1-aktive Klassen) + per-Klasse + 6-obj-AR aus report.json.
 
     report.json (eval_bop --icbin): {"results":{"per_object":{obj_id:{AR,name,...}},
-    "overall":{"AR":...}}}. Liefert (overall_AR, {part: AR}); per_class fuer die
-    optionale FE-`per_class`-Spalte. None wenn AR fehlt (kein stiller 0-Wert)."""
+    "overall":{"AR":...}}}.
+
+    **T-171 — primaere AR = Mittel der aktiven D1-Klassen, NICHT der 6-obj-overall.AR:**
+    eval_bop mittelt `overall.AR` ueber ALLE Objekte im targets-File — inkl. der 4
+    untrainierten Klassen (Buerstenhalter/Getriebe/Ringmagnet/Zahnrad, AR=0). Das zog
+    die angezeigte AR ~3x runter (gdrnpp 0.295 statt 0.886). Die Hauptmetrik ist jetzt
+    `_mean_active(per_class)` = Mittel ueber die `CLASS_TO_OBJ_ID`-aktiven Klassen (= der
+    2-Klassen-Scope D1, generisch). Die alte 6-obj-Zahl bleibt als `ar_6obj` erhalten.
+
+    Liefert (primary_ar, {part: AR}, ar_6obj):
+      * primary_ar = Mittel der aktiven D1-Klassen (die Haupt-AR; None wenn kein
+        per_class oder keine aktive Klasse aufloesbar).
+      * per_class  = {part: AR} ALLER Objekte im Report (FE-Spalte + Transparenz).
+      * ar_6obj    = overall.AR (eval_bop ueber alle Objekte; None wenn nicht gescort)."""
     res = (report or {}).get("results", report or {})
     overall = res.get("overall", {})
-    ar = overall.get("AR")
+    ar6_raw = overall.get("AR")
+    ar_6obj = float(ar6_raw) if isinstance(ar6_raw, (int, float)) else None
     per_class = {}
     for oid, po in res.get("per_object", {}).items():
         name = po.get("name") or str(oid)
         if po.get("AR") is not None:
             per_class[name] = round(float(po["AR"]), 4)
-    return (float(ar) if isinstance(ar, (int, float)) else None), per_class
+    primary_ar = _mean_active(per_class)
+    return primary_ar, per_class, ar_6obj
 
 
 # ── Stage B: ein (config, szene) — predict → doc → CSV → eval ────────────────────
@@ -469,15 +515,19 @@ def _stats(xs):
 
 
 def aggregate_config(cfg: dict, per_scene: list, ar_mean=None, ar_std=None,
-                     per_class=None) -> dict:
+                     per_class=None, ar_6obj=None) -> dict:
     """Aggregiert die N Seed-Ergebnisse einer Config zur FE-Config-Zeile.
 
     per_scene: Liste von run_one-Outputs (ein Eintrag pro Seed). AR kommt aus EINEM
     eval_bop-Lauf ueber die gepoolte CSV (multi-instance IC-BIN braucht das ganze
     Dataset) — daher ar_mean/ar_std hier reingereicht (nicht aus per_scene).
 
+    **T-171:** `ar_mean` ist die **primaere** AR = Mittel der D1-aktiven Klassen
+    (anker_kurz/lang), NICHT der eval_bop-6-obj-overall. `ar_6obj` traegt die alte
+    6-Objekt-Zahl als sekundaeres Feld weiter (Transparenz). `per_class` zeigt alle 6.
+
     Liefert exakt Lenas batch.js-Felder:
-      {seg,pose, modality, ar_mean,ar_std, seg_ms,pose_ms, coverage,crash_rate,
+      {seg,pose, modality, ar_mean,ar_std, ar_6obj, seg_ms,pose_ms, coverage,crash_rate,
        note, is_pipeline_a, run_config_id, per_class?}
     coverage/crash_rate ∈ 0..1. modality (T-159) = "RGB"|"RGBD" (FE Input-Spalte).
     """
@@ -499,7 +549,8 @@ def aggregate_config(cfg: dict, per_scene: list, ar_mean=None, ar_std=None,
     row = {
         "seg": cfg["seg"], "pose": cfg["pose"],
         "modality": _modality(cfg),       # T-159: RGB | RGBD (FE Input-Spalte)
-        "ar_mean": ar_mean, "ar_std": ar_std,
+        "ar_mean": ar_mean, "ar_std": ar_std,   # T-171: ar_mean = D1-aktive Klassen
+        "ar_6obj": ar_6obj,               # T-171: sekundaer = eval_bop 6-obj-overall
         "seg_ms": seg_mean, "pose_ms": pose_mean,
         "coverage": coverage, "crash_rate": crash_rate,
         "note": cfg.get("note"),
@@ -530,7 +581,7 @@ class _ConfigAcc:
 
     __slots__ = ("cfg", "key", "rows", "n_scenes", "n_real", "n_ok", "n_crash",
                  "n_with_inst", "_seg_sum", "_seg_cnt", "_pose_sum", "_pose_cnt",
-                 "ar", "per_class")
+                 "ar", "per_class", "ar_6obj")
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -543,8 +594,9 @@ class _ConfigAcc:
         self.n_with_inst = 0
         self._seg_sum = 0.0; self._seg_cnt = 0    # running mean seg_ms (nur oks)
         self._pose_sum = 0.0; self._pose_cnt = 0  # running mean pose_ms (nur oks)
-        self.ar = None                # zuletzt neu berechneter AR IC-BIN (akkum. CSV)
+        self.ar = None                # primaere AR IC-BIN (D1-aktive Klassen, T-171)
         self.per_class = None
+        self.ar_6obj = None           # sekundaer: eval_bop overall.AR ueber alle 6 Objekte
 
     def add_scene(self, res: dict) -> None:
         """Eine (config, szene): run_one-Output in die Akkumulatoren falten."""
@@ -587,6 +639,10 @@ class _ConfigAcc:
         modality, ar, ar_std, n_scenes, seg_ms, pose_ms, coverage, crash_rate,
         recommended, degraded, degraded_reason, class_ambiguity, is_pipeline_a.
 
+        `ar` (T-171) = die **primaere** AR = Mittel ueber die D1-aktiven Klassen (NICHT
+        die 6-obj-overall.AR — die zog die Zahl ~3x runter). `ar_6obj` traegt die alte
+        6-Objekt-Zahl als sekundaeres Feld weiter (Transparenz, nicht primaer).
+
         `modality` (T-159) = "RGB" | "RGBD" (FE Input-Spalte, aus needs_depth).
 
         `seg`/`pose` sind die kompakten Source-Ids des Contracts (seg = combo-seg-id
@@ -600,7 +656,8 @@ class _ConfigAcc:
             "config_key": self.key,
             "seg": cfg["seg"], "pose": cfg["pose_source"],
             "modality": _modality(cfg),       # T-159: RGB | RGBD (FE Input-Spalte)
-            "ar": ar,
+            "ar": ar,                         # T-171: primaer = D1-aktive Klassen
+            "ar_6obj": self.ar_6obj,          # T-171: sekundaer = eval_bop 6-obj-overall
             "ar_std": 0.0 if ar is not None else None,
             "n_scenes": self.n_ok,            # gescorte Szenen (= was in der CSV steht)
             "seg_ms": _round_ms(self.seg_ms), "pose_ms": _round_ms(self.pose_ms),
@@ -703,7 +760,7 @@ def run_batch(configs, scenes, predict_fn, eval_fn, out_dir,
                 try:
                     report = eval_fn(str(csv_path), str(scene.get("dir", "")),
                                      str(eval_dir / acc.key))
-                    acc.ar, acc.per_class = ar_from_report(report)
+                    acc.ar, acc.per_class, acc.ar_6obj = ar_from_report(report)
                 except Exception as e:  # noqa: BLE001 — Eval-Fehler = AR unbekannt, kein Abbruch
                     warn(f"[batch_eval] eval_bop fuer {acc.key} fehlgeschlagen: {e}")
 
@@ -719,9 +776,9 @@ def run_batch(configs, scenes, predict_fn, eval_fn, out_dir,
         per_scene = _acc_to_per_scene(acc)
         row = aggregate_config(acc.cfg, per_scene, ar_mean=acc.ar,
                                ar_std=(0.0 if acc.ar is not None else None),
-                               per_class=acc.per_class)
+                               per_class=acc.per_class, ar_6obj=acc.ar_6obj)
         config_rows.append(row)
-        warn(f"[batch_eval] {acc.key}: AR={acc.ar} cov={row['coverage']} "
+        warn(f"[batch_eval] {acc.key}: AR={acc.ar} (6obj={acc.ar_6obj}) cov={row['coverage']} "
              f"crash={row['crash_rate']} seg_ms={row['seg_ms']} pose_ms={row['pose_ms']}")
 
     duration_s = round(time.time() - t0, 1)
@@ -784,16 +841,25 @@ def _persist(run_dir: pathlib.Path, results: dict) -> None:
 
 def render_markdown(results: dict) -> str:
     """EVAL.md — eine Zeile pro feasibler Config. Pipeline A = Referenz, kuratierte
-    7 = RECOMMENDED (★), degraded (gdrnpp AABB-aus-Maske) + class-ambig (sam3) markiert."""
+    7 = RECOMMENDED (★), degraded (gdrnpp AABB-aus-Maske) + class-ambig (sam3) markiert.
+
+    **T-171:** Die Haupt-Spalte `AR IC-BIN` ist die **2-Klassen-AR** (D1-aktive Klassen,
+    Mittel anker_kurz/lang = `ar_mean`). Die alte 6-Objekt-Zahl steht zur Transparenz in
+    der Neben-Spalte `AR 6-obj` (`ar_6obj`) — sie war primaer und zog die Zahl ~3x runter
+    (gdrnpp 0.295), weil 4 untrainierte BOP-Klassen (AR=0) mitgemittelt wurden."""
+    active = ", ".join(active_class_parts())
     n_rec = sum(1 for c in results["configs"] if c.get("recommended"))
     lines = [
         f"# Batch-Eval {results['run_id']}", "",
         f"- Datum: {results['date']}",
         f"- Configs: {results['n_configs']} feasible ({n_rec} recommended) "
-        f"· Szenen/Seeds: {results['n_scenes']} · Dauer: {results['duration_s']} s", "",
-        "| # | Seg | Pose | Input | AR IC-BIN | ±std | seg ms | pose ms | Coverage "
-        "| Crash | Verfahren | Flags |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        f"· Szenen/Seeds: {results['n_scenes']} · Dauer: {results['duration_s']} s",
+        f"- Haupt-AR = Mittel ueber die {len(active_class_parts())} aktiven D1-Klassen "
+        f"({active}); `AR 6-obj` = eval_bop ueber alle 6 BOP-Objekte (4 untrainiert, "
+        "nur Transparenz).", "",
+        "| # | Seg | Pose | Input | AR IC-BIN | ±std | AR 6-obj | seg ms | pose ms "
+        "| Coverage | Crash | Verfahren | Flags |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
 
     def _f(v, nd=3):
@@ -817,14 +883,17 @@ def render_markdown(results: dict) -> str:
         lines.append(
             f"| {i}{ref} | {c['seg']} | {c['pose']} | {c.get('modality') or '—'} "
             f"| {_f(c['ar_mean'])} "
-            f"| {_f(c['ar_std'])} | {_ms(c['seg_ms'])} | {_ms(c['pose_ms'])} "
+            f"| {_f(c['ar_std'])} | {_f(c.get('ar_6obj'))} "
+            f"| {_ms(c['seg_ms'])} | {_ms(c['pose_ms'])} "
             f"| {_pct(c['coverage'])} | {_pct(c['crash_rate'])} | {c.get('note') or '—'} "
             f"| {', '.join(flags) or '—'} |"
         )
     lines += ["", "_AR IC-BIN: offizielles BOP19/IC-BIN-Localisation-Protokoll "
-              "(sym-aware, 2 Anker-Klassen D1). Coverage/Crash ∈ 0..1. ★empf. = "
-              "kuratierte Recommended-7; degr. = GDRNPP AABB-aus-Maske; klassen-ambig "
-              "= sam3 trennt kurz/lang schwach (S006)._", ""]
+              "(sym-aware). **Haupt-AR = Mittel ueber die aktiven D1-Klassen** "
+              f"({', '.join(active_class_parts())}); `AR 6-obj` = eval_bop ueber alle 6 "
+              "BOP-Objekte (4 untrainiert → AR 0, nur Transparenz, T-171). "
+              "Coverage/Crash ∈ 0..1. ★empf. = kuratierte Recommended-7; degr. = GDRNPP "
+              "AABB-aus-Maske; klassen-ambig = sam3 trennt kurz/lang schwach (S006)._", ""]
     return "\n".join(lines)
 
 

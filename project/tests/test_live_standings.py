@@ -40,9 +40,9 @@ from tests.test_batch_eval import _scene, _gateway_reply, _mock_eval_fn  # noqa:
 
 # ── Contract: das exakte standings[]-Schema (T-153) ─────────────────────────────
 _STANDINGS_KEYS = {
-    "rank", "config_key", "seg", "pose", "modality", "ar", "ar_std", "n_scenes",
-    "seg_ms", "pose_ms", "coverage", "crash_rate", "recommended", "degraded",
-    "degraded_reason", "class_ambiguity", "is_pipeline_a",
+    "rank", "config_key", "seg", "pose", "modality", "ar", "ar_6obj", "ar_std",
+    "n_scenes", "seg_ms", "pose_ms", "coverage", "crash_rate", "recommended",
+    "degraded", "degraded_reason", "class_ambiguity", "is_pipeline_a",
 }
 
 
