@@ -472,19 +472,80 @@ def test_run_one_pipeline_a_over_gateway_builds_rows(tmp_path, monkeypatch):
     assert res["error"] is None
 
 
-# ── 7) ar_from_report ───────────────────────────────────────────────────────────
-def test_ar_from_report():
+# ── 7) ar_from_report — T-171: primaere AR = D1-aktive Klassen, NICHT 6-obj-overall ──
+def test_ar_from_report_primary_is_active_class_mean_not_overall():
+    """Die primaere AR ist das Mittel der D1-aktiven Klassen (anker_kurz/lang) — NICHT
+    der eval_bop-overall.AR. overall.AR (6-obj, hier 0.4123 inkl. 4 untrainierter 0er)
+    wandert nach `ar_6obj`. Das ist der T-171-Kern: 0.886 statt 0.295."""
+    report = {"results": {
+        "overall": {"AR": 0.4123},                       # 6-obj-Mittel (verwaessert)
+        "per_object": {"1": {"name": "Anker_Kurz", "AR": 0.8796},
+                       "2": {"name": "Anker_Lang", "AR": 0.8926},
+                       "3": {"name": "Buerstenhalter_2polig", "AR": 0.0},
+                       "4": {"name": "Getriebegehaeuse_typ4", "AR": 0.0},
+                       "5": {"name": "Ringmagnet", "AR": 0.0},
+                       "6": {"name": "Zahnrad", "AR": 0.0}}}}
+    ar, per_class, ar_6obj = be.ar_from_report(report)
+    # Primaer = Mittel NUR der 2 aktiven Klassen (nicht alle 6).
+    assert ar == pytest.approx((0.8796 + 0.8926) / 2, abs=1e-4)   # 0.8861
+    # Sekundaer = die alte 6-obj-overall-Zahl, erhalten.
+    assert ar_6obj == pytest.approx(0.4123)
+    # per_class fuehrt weiterhin ALLE 6 Klassen (FE-Spalte + Transparenz).
+    assert per_class["Anker_Kurz"] == 0.8796 and per_class["Zahnrad"] == 0.0
+    assert len(per_class) == 6
+
+
+def test_ar_from_report_case_insensitive_active_match():
+    """Aktive-Klassen-Match ist case-insensitiv (eval_bop CamelCase, Fixtures lowercase)."""
     report = {"results": {"overall": {"AR": 0.4123},
                           "per_object": {"1": {"name": "anker_kurz", "AR": 0.51},
                                          "2": {"name": "anker_lang", "AR": 0.31}}}}
-    ar, per_class = be.ar_from_report(report)
-    assert ar == pytest.approx(0.4123)
+    ar, per_class, ar_6obj = be.ar_from_report(report)
+    assert ar == pytest.approx((0.51 + 0.31) / 2)        # 0.41 (2 aktive Klassen)
+    assert ar_6obj == pytest.approx(0.4123)
     assert per_class == {"anker_kurz": 0.51, "anker_lang": 0.31}
 
 
+def test_ar_from_report_missing_active_class_counts_as_zero():
+    """Eine aktive D1-Klasse, die im Report fehlt/0 ist (z.B. sam3 findet Anker_Lang
+    nie), zaehlt als 0.0 in der Haupt-AR — sonst wuerde sam3 mit nur Anker_Kurz
+    faelschlich hoch erscheinen. (0.8187 + 0.0) / 2 = 0.40935."""
+    report = {"results": {"overall": {"AR": 0.1365},
+                          "per_object": {"1": {"name": "Anker_Kurz", "AR": 0.8187},
+                                         "2": {"name": "Anker_Lang", "AR": 0.0},
+                                         "5": {"name": "Ringmagnet", "AR": 0.0}}}}
+    ar, _per_class, _ar6 = be.ar_from_report(report)
+    assert ar == pytest.approx((0.8187 + 0.0) / 2, abs=1e-4)
+
+
+def test_ar_from_report_active_parts_generic_from_class_map():
+    """Die aktiven Klassen kommen GENERISCH aus CLASS_TO_OBJ_ID (nicht hartcodiert 2).
+    Kommt eine 3. trainierte Klasse dazu, mittelt die Haupt-AR ueber 3."""
+    assert be.active_class_parts() == ["Anker_Kurz", "Anker_Lang"]
+    # Simuliere einen 3-Klassen-Scope → Mittel ueber 3.
+    import bop_adapter
+    saved = dict(be.CLASS_TO_OBJ_ID)
+    be.CLASS_TO_OBJ_ID["zahnrad"] = 6
+    try:
+        assert be.active_class_parts() == ["Anker_Kurz", "Anker_Lang", "Zahnrad"]
+        report = {"results": {"overall": {"AR": 0.5},
+                              "per_object": {"1": {"name": "Anker_Kurz", "AR": 0.9},
+                                             "2": {"name": "Anker_Lang", "AR": 0.6},
+                                             "6": {"name": "Zahnrad", "AR": 0.3}}}}
+        ar, _pc, _a6 = be.ar_from_report(report)
+        assert ar == pytest.approx((0.9 + 0.6 + 0.3) / 3)
+    finally:
+        be.CLASS_TO_OBJ_ID.clear()
+        be.CLASS_TO_OBJ_ID.update(saved)
+        assert bop_adapter is not None     # touch import (linter)
+
+
 def test_ar_from_report_missing_ar_is_none():
+    # Kein per_object → keine aktive Klasse aufloesbar → primaer None (kein stiller 0).
     assert be.ar_from_report({"results": {"overall": {}}})[0] is None
     assert be.ar_from_report({})[0] is None
+    # ar_6obj bleibt None wenn overall.AR fehlt.
+    assert be.ar_from_report({"results": {"overall": {}}})[2] is None
 
 
 # ── 8) run_batch end-to-end gegen Mocks → results.json + EVAL.md + idempotent ───
