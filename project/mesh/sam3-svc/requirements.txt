@@ -1,0 +1,15 @@
+# SAM3 (Sam3Model/Sam3Processor) landed in transformers v5. 5.10.2 verified to
+# import + run against the foundationpose:ampere torch (2.11.0+cu128) on the box.
+# torch/torchvision are NOT listed: they come from the base image's cu128 venv.
+transformers==5.10.2
+# Required by Sam3Model.from_pretrained(device_map="cuda") in app.py — the
+# transformers device_map path delegates placement to accelerate. The Blackwell
+# base bundled it; the ampere base does not, so it is pinned in here.
+accelerate
+fastapi
+uvicorn[standard]
+pydantic
+opencv-python-headless
+numpy
+pillow
+python-multipart

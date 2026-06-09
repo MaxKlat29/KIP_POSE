@@ -93,3 +93,24 @@ project/input/*
 !project/input/.gitkeep
 # committet bleibt: project/models/registry/ (wertvolle Face-Registries),
 # die ipynbs, e2e_infer.py, frontend/, cad_input/-Struktur (.usd selbst gitignored).
+
+# ── Multi-Pipeline-POSE Modell-Weights (S-009) — NIE committen ────────────────
+# Liegen auf der GPU-Box unter /mnt/data/kip_pose_weights/ (read-only-mountbar
+# für die Pose-Services), NICHT im Repo. FoundationPose-Weights sind zudem
+# NON-COMMERCIAL (NVIDIA-Lizenz, nur Research/Eval, ADR-021). Diese Patterns
+# verhindern, dass Weights/Checkpoints versehentlich ins Repo wandern, falls
+# sie mal lokal zum Testen gezogen werden:
+weights/
+pretrained/
+**/megapose-models/
+*.ckpt
+*.pth
+*.pth.tar
+# HuggingFace-Token/-Cache gehören NIE in den Tree (nur Box-env / ~/.cache/huggingface):
+.huggingface/
+**/huggingface/token
+hf_token*
+.hf_token
+
+# S-012 local test venv (not committed)
+.venv-s012/

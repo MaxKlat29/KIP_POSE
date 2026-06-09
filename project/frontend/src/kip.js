@@ -5,7 +5,11 @@
 
 import { createViewer } from "./scene.js";
 import { createOriginMarker } from "./origin.js";
-import { createLive } from "./live.js";
+import {
+  evaluate as evalGating, availMapFromResponse, DEFAULT as PIPE_DEFAULT, findCombo,
+  inferredWithText,
+} from "./pipeline.js";
+import { createBatch } from "./batch.js";
 
 const API = "./api";
 const canvas = document.getElementById("scene");
@@ -46,9 +50,11 @@ createOriginMarker(viewer, [0, 0, 0]);
 
 // ── Health-Poll: Workstation-/GPU-Status in der Top-Bar ──
 const gpuEl = document.getElementById("kip-gpu");
+let lastHealth = {};               // letzter /api/health-Stand (Batch-Tab Training-Guard)
 async function pollHealth() {
   try {
     const h = await (await fetch(`${API}/health`)).json();
+    lastHealth = h || {};
     if (h.gpu_training_active) {
       gpuEl.textContent = "Training läuft"; gpuEl.className = "kip-gpu kip-gpu--busy";
     } else {
@@ -56,38 +62,141 @@ async function pollHealth() {
     }
     gpuEl.title = `Trainierte Objekte: ${(h.trained_objects || []).join(", ") || "-"}`;
   } catch {
+    lastHealth = {};
     gpuEl.textContent = "Offline"; gpuEl.className = "kip-gpu kip-gpu--off";
   }
+  batch?.refreshTrainingGuard?.();
 }
-pollHealth(); setInterval(pollHealth, 30000);
 
-// ── Modellauswahl: Pipeline-Vergleich-Seam. Das Dropdown wird aus /api/pipelines
-//    befüllt (verfügbar=enabled, sonst disabled). Fremde Pipelines werden als
-//    Adapter unter pipelines/<id>/ angebunden (siehe docs/PIPELINE_INTEGRATION.md).
-//    Default + Fallback bei Fehler = "gdrnpp" -> unveränderter Live-Pfad. ──
-const modelSel = document.getElementById("model-sel");
-function currentPipeline() { return modelSel.value || "gdrnpp"; }
-modelSel.addEventListener("change", () => {
-  if (!modelSel.value) modelSel.value = "gdrnpp";   // Platzhalter -> zurück auf GDRNPP
-});
-async function populatePipelines() {
-  try {
-    const data = await (await fetch(`${API}/pipelines`)).json();
-    const list = data.pipelines || [];
-    if (!list.length) return;                         // Fallback: statisches Markup behalten
-    modelSel.innerHTML = "";
-    for (const p of list) {
-      const opt = document.createElement("option");
-      opt.value = p.available ? p.id : "";
-      opt.disabled = !p.available;
-      opt.textContent = p.available ? p.name : `${p.name} — noch nicht angebunden`;
-      if (p.id === "gdrnpp") opt.selected = true;
-      modelSel.appendChild(opt);
-    }
-    if (!modelSel.value) modelSel.value = "gdrnpp";
-  } catch {
-    /* Endpoint (noch) nicht da -> statisches gdrnpp-Markup bleibt. */
+// ── Pipeline-Auswahl: 2 gekoppelte Selects (Seg → Post) + 7-Kombi-Gating (S-010) ──
+//   Regelquelle = pipelines/combos.py (gespiegelt in pipeline.js). `available`/
+//   `unavailable_reason` werden aus /api/pipelines per id overlayed (graceful degrade,
+//   wenn die Felder fehlen). currentPipeline() liefert weiter die pose-source-id, damit
+//   die bestehenden infer/sim-Calls unverändert funktionieren. Default = Kombi 1.
+const segSel  = document.getElementById("seg-sel");
+const postSel = document.getElementById("post-sel");
+const pipeCtx = document.getElementById("pipe-ctx");
+let availById = new Map();         // id -> {available, unavailable_reason} aus /api/pipelines
+let pipeMode = "real";             // aktueller Tab-Modus fürs Gating
+let pipeSel = { ...PIPE_DEFAULT }; // {seg, pose}
+let depthFile = null;              // Tiefenbild im Upload-Tab
+let ctxTimer = null;
+let pipeNoneAvailable = false;     // true wenn 0 Kombis verfügbar (Empty-State)
+
+// Real-Inferieren-Button-Zustand: braucht Foto UND eine verfügbare Pipeline; im
+// Upload mit needs_depth zusätzlich ein Tiefenbild. Per DOM gelesen → kein TDZ-Risiko
+// beim ersten renderGating() (läuft vor der REAL-Screen-Sektion).
+function syncRealRunBtn() {
+  const btn = document.getElementById("real-run");
+  if (!btn) return;
+  const combo = currentCombo();
+  const needDepth = pipeMode === "real" && combo && combo.needs_depth;
+  const hasFile = document.getElementById("real-drop")?.classList.contains("kip-drop--has");
+  btn.disabled = pipeNoneAvailable || !hasFile || (needDepth && !depthFile);
+}
+
+function currentCombo() { return findCombo(pipeSel.seg, pipeSel.pose); }
+function currentPipeline() { return currentCombo()?.id || "gdrnpp"; }
+
+// Query-String für den Infer-Call (T-164): die gewählte Kombi REDUNDANT als
+// `pipeline=<combo_id>` UND `seg=&pose=<roh-id>` mitschicken. Das Backend (T-140)
+// resolved beides (is_pipeline_a / resolve_combo_id). Doppelt = robust gg. Backend-
+// Resolution-Varianten; die Felder driften nicht (Quelle = WHITELIST-Eintrag).
+function currentPipelineQuery() {
+  const c = currentCombo();
+  const params = new URLSearchParams({ pipeline: c?.id || "gdrnpp" });
+  if (c?.seg_id)  params.set("seg", c.seg_id);
+  if (c?.pose_id) params.set("pose", c.pose_id);
+  return params.toString();
+}
+
+// "Inferiert mit"-Zeile (T-164): zeigt welches Modell die Schätzung erzeugt hat.
+// Quelle = result.meta (used_seg/used_pose/modality bzw. used_combo, T-140) mit
+// Fallback auf die zum Zeitpunkt des Klicks gewählte Kombi. `chosen` wird beim
+// Absenden festgehalten, falls der User die Dropdowns während des Laufs ändert.
+function setInferredWith(prefix, meta, chosen) {
+  const row = document.getElementById(`${prefix}-inferred`);
+  const val = document.getElementById(`${prefix}-inferred-val`);
+  if (!row || !val) return;
+  const text = inferredWithText(meta, chosen);
+  if (text) { val.textContent = text; row.hidden = false; }
+  else { row.hidden = true; val.textContent = ""; }
+}
+function hideInferredWith(prefix) {
+  const row = document.getElementById(`${prefix}-inferred`);
+  if (row) row.hidden = true;
+}
+
+// Befüllt ein Select aus den Gating-Options (T-158: marken-frei). Logisch unmögliche
+// Kombis kommen gar nicht erst in `opts` (pipeline.js blendet sie aus). Nicht-saubere
+// Kombis sind `disabled` (ausgegraut) — OHNE Grund-Text/Suffix. Das Option-Label trägt
+// IMMER nur den reinen Namen.
+function fillSelect(sel, opts, value, labels) {
+  sel.innerHTML = "";
+  for (const o of opts) {
+    const opt = document.createElement("option");
+    opt.value = o.value;
+    opt.disabled = o.disabled;
+    opt.textContent = o.label;
+    if (o.value === value) opt.selected = true;
+    sel.appendChild(opt);
   }
+}
+
+function setCtx(text, kind) {
+  pipeCtx.textContent = text || "";
+  pipeCtx.className = "kip-pipe__ctx" + (kind ? ` kip-pipe__ctx--${kind}` : "");
+}
+
+// Zentrale Gating-Auswertung → rendert beide Selects + Kontextzeile + Depth-Drop.
+function renderGating(axis = null) {
+  const res = evalGating({
+    sel: pipeSel, axis, mode: pipeMode, availById,
+    depthPresent: !!depthFile,
+  });
+  pipeSel = res.selected;
+  fillSelect(segSel, res.seg, pipeSel.seg);
+  fillSelect(postSel, res.post, pipeSel.pose);
+
+  // Depth-Drop progressive disclosure (nur Upload-Tab).
+  const depthWrap = document.getElementById("real-depth-wrap");
+  if (depthWrap) depthWrap.hidden = !(pipeMode === "real" && res.needsDepth);
+
+  // Empty-State: 0 Kombis available.
+  if (!res.anyAvailable) {
+    if (ctxTimer) { clearTimeout(ctxTimer); ctxTimer = null; }
+    setCtx("Keine Pipeline verfügbar — Dienste starten gerade.", "err");
+  } else if (res.sprang && res.springText) {
+    // Transienter Auto-Spring-Grund ~2 s, dann zurück zur normalen Kontextzeile.
+    if (ctxTimer) clearTimeout(ctxTimer);
+    setCtx(res.springText, "spring");
+    ctxTimer = setTimeout(() => { setCtx(res.ctx); ctxTimer = null; }, 2400);
+  } else if (!ctxTimer) {
+    setCtx(res.ctx);
+  }
+
+  // Inferenz-Buttons sperren, wenn keine Kombi verfügbar (kein Lauf gegen Nichts).
+  pipeNoneAvailable = !res.anyAvailable;
+  syncRealRunBtn();
+  const simBtn = document.getElementById("sim-infer");
+  if (simBtn) simBtn.disabled = pipeNoneAvailable;
+  return res;
+}
+
+segSel.addEventListener("change", () => { pipeSel.seg = segSel.value; renderGating("seg"); });
+postSel.addEventListener("change", () => { pipeSel.pose = postSel.value; renderGating("post"); });
+
+async function populatePipelines() {
+  // Initiales statisches Default (Kombi 1) sofort rendern — nie leerer Anfangszustand.
+  renderGating();
+  try {
+    setCtx("Pipelines werden geladen …");
+    const data = await (await fetch(`${API}/pipelines`)).json();
+    availById = availMapFromResponse(data);
+  } catch {
+    availById = new Map();   // Endpoint (noch) nicht da → Default-Anker (Kombi 1) bleibt.
+  }
+  renderGating();
 }
 populatePipelines();
 
@@ -137,39 +246,48 @@ document.getElementById("reset-view").addEventListener("click", () => {
   viewer.resetView?.();
 });
 
-// ── Tab-Switch (Real / Simulation / Live) ──
+// ── Tab-Switch (Real / Simulation / Batch-Eval) ──
 const tabReal = document.getElementById("tab-real");
 const tabSim  = document.getElementById("tab-sim");
-const tabLive = document.getElementById("tab-live");
+const tabBatch = document.getElementById("tab-batch");
 const scrReal = document.getElementById("screen-real");
 const scrSim  = document.getElementById("screen-sim");
-const scrLive = document.getElementById("screen-live");
+const scrBatch = document.getElementById("screen-batch");
 const legend  = document.getElementById("legend");
-const live = createLive();
 let simInited = false;
+// Batch-Eval-Reiter (S-011). bar()/pollJob() werden geerbt; healthRef liefert den
+// letzten /api/health-Stand für den Training-Guard.
+const batch = createBatch({ bar, pollJob, healthRef: () => lastHealth });
+window.__KIP_BATCH__ = batch;          // QS/Smoke: erlaubt __renderLive/__hideLive ohne Lauf
+pollHealth(); setInterval(pollHealth, 30000);   // Start nach batch (Training-Guard-Sync)
 function showScreen(which) {
+  pipeMode = which;                     // Gating je Tab (Upload: Depth-Regeln)
   tabReal.classList.toggle("kip-tab--active", which === "real");
   tabSim.classList.toggle("kip-tab--active", which === "sim");
-  tabLive.classList.toggle("kip-tab--active", which === "live");
+  tabBatch.classList.toggle("kip-tab--active", which === "batch");
   scrReal.hidden = which !== "real";
   scrSim.hidden  = which !== "sim";
-  scrLive.hidden = which !== "live";
+  scrBatch.hidden = which !== "batch";
   legend.hidden  = which !== "sim";     // blau/rot-Legende nur im Sim-Screen
   const pip = document.getElementById("pip");
-  if (which !== "live") live.onHide();  // Live-Polling stoppen beim Wegwechseln
+  hideInferredWith("sim"); hideInferredWith("real");   // stale "Inferiert mit" beim Tab-Wechsel weg
   if (which === "real") {
     viewer.setParts([]);                // Real ohne Foto: nur Zelle, keine Geister
     if (!chosenFile) pip.hidden = true;
   } else if (which === "sim") {
     loadMetrics();
     simInited = true;
-  } else if (which === "live") {
-    live.onShow();
+  } else if (which === "batch") {
+    pip.hidden = true;                  // Batch ist Tabellen-Ansicht, kein 3D-Live
+    viewer.setParts([]);
+    batch.onShow();
   }
+  if (which !== "batch") batch.onHide();
+  renderGating();                       // Depth-Drop + Auswahl ggf. neu gaten
 }
 tabReal.addEventListener("click", () => showScreen("real"));
 tabSim.addEventListener("click", () => showScreen("sim"));
-tabLive.addEventListener("click", () => showScreen("live"));
+tabBatch.addEventListener("click", () => showScreen("batch"));
 
 // ── PiP-Controls: Boxen-Toggle + Foto-View + Vergroesserung ──
 let lastCamPose = null;   // {cam_pos, look_at, up, fov_y} der zuletzt geladenen Szene
@@ -255,9 +373,10 @@ const realBar   = bar("real-bar");
 let chosenFile  = null;
 
 function setFile(f) {
-  chosenFile = f; runBtn.disabled = !f;
+  chosenFile = f;
   drop.classList.toggle("kip-drop--has", !!f);
   dropTxt.textContent = f ? f.name : "Foto wählen / hierher ziehen";
+  syncRealRunBtn();                       // Pipeline-/Depth-bewusst (S-010)
 }
 fileInput.addEventListener("change", (e) => setFile(e.target.files[0] || null));
 ["dragover", "dragenter"].forEach((ev) => drop.addEventListener(ev, (e) => {
@@ -266,6 +385,26 @@ fileInput.addEventListener("change", (e) => setFile(e.target.files[0] || null));
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => {
   e.preventDefault(); drop.classList.remove("kip-drop--over");
 }));
+
+// ── Tiefenbild-Drop (S-010 §5.2: progressive disclosure, nur Upload+needs_depth) ──
+const depthInput = document.getElementById("real-depth-file");
+const depthDrop  = document.getElementById("real-depth-drop");
+const depthTxt   = depthDrop?.querySelector(".kip-drop__txt");
+function setDepth(f) {
+  depthFile = f;
+  depthDrop?.classList.toggle("kip-drop--has", !!f);
+  if (depthTxt) depthTxt.textContent = f ? f.name : "Tiefenbild auswählen oder hierher ziehen";
+  renderGating();                         // Depth-gesperrte Kombis ggf. freigeben
+  syncRealRunBtn();
+}
+depthInput?.addEventListener("change", (e) => setDepth(e.target.files[0] || null));
+["dragover", "dragenter"].forEach((ev) => depthDrop?.addEventListener(ev, (e) => {
+  e.preventDefault(); depthDrop.classList.add("kip-drop--over");
+}));
+["dragleave", "drop"].forEach((ev) => depthDrop?.addEventListener(ev, (e) => {
+  e.preventDefault(); depthDrop.classList.remove("kip-drop--over");
+}));
+depthDrop?.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) setDepth(e.dataTransfer.files[0]); });
 drop.addEventListener("drop", (e) => { if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
 
 runBtn.addEventListener("click", async () => {
@@ -273,14 +412,22 @@ runBtn.addEventListener("click", async () => {
   runBtn.disabled = true;
   const _origLabel = runBtn.textContent; runBtn.textContent = "Inferiert …";
   realStat.className = "kip-status"; realStat.textContent = "";
+  hideInferredWith("real");                       // alte Anzeige weg bis das neue Result da ist
   realBar.set(5, "Upload empfangen");
   setPip(URL.createObjectURL(chosenFile), "");
+  // Gewählte Kombi beim Absenden festhalten (Fallback fürs "Inferiert mit").
+  const chosen = { ...pipeSel };
+  const chosenCombo = currentCombo();
   try {
     const fd = new FormData();
     fd.append("image", chosenFile);
     fd.append("tta", document.getElementById("real-tta").checked);
     fd.append("refine_rc", document.getElementById("real-rc").checked);
+    // Kombi REDUNDANT mitschicken (T-164): pipeline=<combo_id> UND seg=&pose=<roh-id>.
     fd.append("pipeline", currentPipeline());     // Default gdrnpp = unveränderter Pfad
+    if (chosenCombo?.seg_id)  fd.append("seg", chosenCombo.seg_id);
+    if (chosenCombo?.pose_id) fd.append("pose", chosenCombo.pose_id);
+    if (depthFile) fd.append("depth", depthFile); // RGB-D-Kombis (needs_depth) im Upload
     const r = await fetch(`${API}/real/infer_async`, { method: "POST", body: fd });
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     const { job } = await r.json();
@@ -288,6 +435,7 @@ runBtn.addEventListener("click", async () => {
     const doc = await (await fetch(`${API}/${final.result_url}`)).json();
     await renderSim(doc);
     setPip(`api/real/rgb/${job}`, `api/${final.boxes_url}`);
+    setInferredWith("real", doc.meta, chosen);    // welches Modell die Schätzung machte
     realBar.done("Fertig 100 %");
     realStat.className = "kip-status kip-status--ok";
     const counts = final.counts || {};
@@ -341,9 +489,13 @@ async function inferLiveSim() {
   simInferBtn.disabled = true;
   const origLabel = simInferBtn.textContent; simInferBtn.textContent = "Isaac rendert …";
   simStat.className = "kip-status"; simStat.textContent = "";
+  hideInferredWith("sim");                    // alte Anzeige weg bis das neue Result da ist
   simBar.set(5, "Isaac Sim startet");
+  // Gewählte Kombi JETZT festhalten — als Fallback fürs "Inferiert mit", falls der
+  // User die Dropdowns während des ~60-80s-Laufs noch ändert.
+  const chosen = { ...pipeSel };
   try {
-    const r = await fetch(`${API}/sim/generate_async?pipeline=${encodeURIComponent(currentPipeline())}`);
+    const r = await fetch(`${API}/sim/generate_async?${currentPipelineQuery()}`);
     if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
     const { job } = await r.json();
     // Live-Pipeline dauert ~60-80s, daher laengeres Polling-Intervall.
@@ -351,6 +503,7 @@ async function inferLiveSim() {
     const m = await (await fetch(`${API}/${final.result_url}`)).json();
     await renderSim(m);
     setPip(`./api/sim/live_rgb/${job}`, `./api/sim/live_boxes/${job}`);
+    setInferredWith("sim", m.meta, chosen);   // welches Modell die Schätzung machte
     simBar.done("Live generiert");
     // Szenen-Info: Seed + Teile-pro-Typ (sauber, statt dem grünen Monospace-Block).
     const sceneGt = (m.results || []).filter((r) => r.color === "gt");
@@ -377,4 +530,11 @@ async function inferLiveSim() {
 simInferBtn.addEventListener("click", inferLiveSim);
 
 showScreen("real");
+
+// QS/Smoke-Hooks (T-164): erlauben das "Inferiert mit" + den Pipeline-Query ohne
+// echten ~60-80s-Infer-Lauf zu prüfen (Pattern wie __KIP_BATCH__/__KIP_VIEWER__).
+window.__KIP_INFER__ = {
+  setInferredWith, hideInferredWith, currentPipelineQuery,
+  pipeSel: () => ({ ...pipeSel }),
+};
 window.__KIP_READY__ = true;

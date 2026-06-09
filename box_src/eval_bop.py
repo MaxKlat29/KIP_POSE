@@ -627,12 +627,19 @@ def evaluate_icbin(scenes, models, preds_by_img, scene_gt_info, targets,
                      else 1.0 for j in range(len(gt_insts))]
             info_norm = [{"visib_fract": visib[j]} for j in range(len(gt_insts))]
 
-            # valid GT = visible enough AND (if targets given) within inst_count
+            # valid GT = visible enough AND (if targets given) within inst_count.
+            # OFFICIAL BOP semantics: a targets file IS the list of (scene,im) pairs
+            # to evaluate — an image NOT in the targets file contributes NO valid GT
+            # (it is not part of this eval's denominator). This lets a batch-eval that
+            # only predicts a fixed subset of images (e.g. im=0 per scene) be scored
+            # over exactly that subset instead of the whole split (else recall ~0).
+            # `targets` empty/None (no file) → unrestricted (every visible GT counts).
             tgt = targets.get((sid, im_id)) if targets else None
+            im_in_targets = (not targets) or ((sid, im_id) in targets)
             valid = []
             obj_seen = defaultdict(int)
             for j, g in enumerate(gt_insts):
-                ok = visib[j] >= VISIB_GT_MIN
+                ok = (visib[j] >= VISIB_GT_MIN) and im_in_targets
                 if ok and tgt is not None:
                     oid = g["obj_id"]
                     obj_seen[oid] += 1

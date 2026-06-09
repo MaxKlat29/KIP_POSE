@@ -1,0 +1,231 @@
+# kip-pose-viewer orchestration.
+#
+# NOTE: yolo-svc and fp-svc build FROM the locally-built `foundationpose:ampere`
+#       image (torch cu128, opencv, numpy; sm_86 source-built pytorch3d/nvdiffrast
+#       for the RTX 3090 — see S-001 / recon/S001_BUILD_REPORT.md). Build that
+#       image first (docker/Dockerfile.ampere in the FoundationPose checkout).
+#       gigapose-svc builds FROM the locally-built `gigapose:ampere` image (a
+#       SEPARATE base — GigaPose pins xformers/pytorch-lightning against an older
+#       torch and cannot reuse foundationpose:ampere); build that image too
+#       (docker/Dockerfile.ampere in the GigaPose checkout), and make sure the
+#       GigaPose checkout has rendered templates (datasets/templates/kip2) before
+#       starting gigapose-svc.
+#       All GPU services also require the NVIDIA Container Toolkit
+#       (nvidia-container-toolkit) so Docker can expose the GPU.
+#
+# WEIGHTS (S-006/S-009): pretrained weights live OUTSIDE the repo at
+#       /mnt/data/kip_pose_weights (read-only) and are bind-mounted into the
+#       service-expected layout. fp-svc mounts the FoundationPose `weights/` dir;
+#       gigapose-svc gets gigaPose_v1.ckpt + the megapose-models symlink wired
+#       into its checkout's pretrained/ (the store is mounted at the same absolute
+#       path inside the container so those symlinks resolve). Override via .env
+#       (FP_WEIGHTS_DIR, GIGAPOSE_WEIGHTS_STORE, BOP_WEIGHTS_DIR).
+#
+# Host paths are configurable via .env (copy .env.example to .env and adjust).
+# The defaults assume FoundationPose/ and GigaPose/ are checked out as siblings
+# of this repo; relative paths are resolved against the directory containing
+# this compose file.
+#   FOUNDATIONPOSE_DIR  FoundationPose checkout (code + weights)
+#   GIGAPOSE_DIR        GigaPose checkout (code, pretrained/, datasets/, templates)
+#   YOLO_WEIGHTS_PT     YOLO26n-seg checkpoint (.pt); a copy is bundled at
+#                       ./assets/weights/best.pt
+#   YOLO_OBB_WEIGHTS_PT YOLOv8-OBB detector checkpoint (.pt) for yolo-obb-svc;
+#                       default ./assets/weights/detector.pt (e.g. the box copy
+#                       /mnt/data/kip_pose/data/detector_armvis/detector.pt)
+#   HF_CACHE_DIR        HuggingFace cache holding the gated facebook/sam3
+#                       snapshot (for sam3-svc; offline at runtime)
+#
+# The frontend is run separately in dev mode (cd frontend && npm install && npm run dev)
+# and is not part of this compose file.
+
+services:
+  yolo-svc:
+    build: ./yolo-svc
+    # M1 (SECURITY_GATE, Bruno T-145): NO host port. yolo-svc is reached by the
+    # gateway over the compose network as http://yolo-svc:8001. Exposing it on the
+    # host (0.0.0.0:8001) would make an internal-only service internet-reachable.
+    expose:
+      - "8001"
+    environment:
+      YOLO_WEIGHTS: /weights/best.pt
+    volumes:
+      # YOLO segmentation weights, read-only. Default: copy bundled in this repo;
+      # override YOLO_WEIGHTS_PT in .env to use a checkpoint from a training run.
+      # S-006 NOTE: the only interim weight on the box (/mnt/data/kip_pose/yolo26n.pt)
+      # is STOCK COCO (task=detect, 80 classes) — it produces NO anker masks. A real
+      # anker instance-seg model (S-008 / T-134, YOLO26m-seg, 2 classes) is the actual
+      # source for combos 2/4/5. yolo-seg-svc is infra-green (build/health/request) but
+      # needs that checkpoint before it returns useful masks.
+      - ${YOLO_WEIGHTS_PT:-./assets/weights/best.pt}:/weights/best.pt:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  yolo-obb-svc:
+    # 3rd seg source: YOLOv8-OBB detector -> oriented boxes (combo 1 / Pipeline A,
+    # feeds GDRNPP). LIGHTWEIGHT base (stock pytorch CUDA + ultralytics, sm_86
+    # kernels ship in the torch wheel) — does NOT need foundationpose:ampere /
+    # gigapose:ampere. Measured VRAM ~0.5 GB (S-005 smoke), the cheapest service.
+    build: ./yolo-obb-svc
+    # M1: internal-only, gateway reaches it as http://yolo-obb-svc:8011.
+    expose:
+      - "8011"
+    environment:
+      YOLO_OBB_WEIGHTS: /weights/detector.pt
+      YOLO_OBB_CONF: ${YOLO_OBB_CONF:-0.40}
+      YOLO_OBB_IMGSZ: ${YOLO_OBB_IMGSZ:-1280}
+    volumes:
+      # YOLOv8-OBB detector weights, read-only. Override YOLO_OBB_WEIGHTS_PT in
+      # .env to point at a training run, e.g. the arm-visible retrain on the box
+      # (/mnt/data/kip_pose/data/detector_armvis/detector.pt).
+      - ${YOLO_OBB_WEIGHTS_PT:-./assets/weights/detector.pt}:/weights/detector.pt:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  fp-svc:
+    build: ./fp-svc
+    # M1: internal-only, gateway reaches it as http://fp-svc:8002.
+    expose:
+      - "8002"
+    volumes:
+      # FoundationPose code, read-only. Default: sibling checkout.
+      # NOTE: the foundationpose:ampere image is a BASE image (no FP repo baked);
+      # the FP code (incl. the mycpp C++ extension) comes from this mount. mycpp
+      # must be compiled once into the checkout (bash build_mycpp.sh -> mycpp/build/
+      # *.so) or fp-svc fails at startup with "module 'mycpp' has no attribute
+      # 'cluster_poses'". See S-006 report.
+      - ${FOUNDATIONPOSE_DIR:-../FoundationPose}:/workspace/FoundationPose:ro
+      # Pretrained FP refiner+scorer weights, read-only, mounted into the layout
+      # the estimator expects (FP_REPO/weights/<timestamp>/model_best.pth).
+      # S-009 placed them at /mnt/data/kip_pose_weights/foundationpose/weights.
+      # The host FP checkout must contain an (empty) weights/ dir as the mountpoint,
+      # because this overlays a subdir of the read-only FP repo mount above.
+      - ${FP_WEIGHTS_DIR:-/mnt/data/kip_pose_weights/foundationpose/weights}:/workspace/FoundationPose/weights:ro
+      # CAD meshes (metres), read-only.
+      - ${FP_MESH_DIR:-./assets/meshes}:/assets/meshes:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  gigapose-svc:
+    build: ./gigapose-svc
+    # M1: internal-only, gateway reaches it as http://gigapose-svc:8003.
+    expose:
+      - "8003"
+    volumes:
+      # GigaPose checkout: code + checkpoints (pretrained/), CAD (datasets/kip2/models),
+      # rendered templates (datasets/templates/kip2) and the DINOv2 torch-hub cache
+      # (torch_cache/). Mounted rw so the template loader can write its preprocessed
+      # cache; all weights stay on the host (not baked into the image).
+      # Default: sibling checkout.
+      # NOTE (S-006): templates were NOT pre-rendered on the box — render once with
+      #   python -m src.scripts.render_custom_templates custom_dataset_name=kip2
+      # (panda3d/EGL, ~13s for 2 objects x 162 views) before first start.
+      - ${GIGAPOSE_DIR:-../GigaPose}:/workspace/GigaPose
+      # Pretrained store (S-009), read-only, at the SAME absolute path so the
+      # symlinks pretrained/gigaPose_v1.ckpt + pretrained/megapose-models (which
+      # point at /mnt/data/kip_pose_weights/...) resolve inside the container.
+      - ${GIGAPOSE_WEIGHTS_STORE:-/mnt/data/kip_pose_weights}:/mnt/data/kip_pose_weights:ro
+      # megapose-models live on /mnt/data/bop/weights (the symlink target), also ro.
+      - ${BOP_WEIGHTS_DIR:-/mnt/data/bop/weights}:/mnt/data/bop/weights:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  sam3-svc:
+    build: ./sam3-svc
+    # M1: internal-only, gateway reaches it as http://sam3-svc:8004.
+    expose:
+      - "8004"
+    environment:
+      # facebook/sam3 is gated on HF: weights must already sit in the mounted
+      # cache (accept the license + download once on the host). Offline mode
+      # keeps the service from ever touching the network. HF_HOME must equal the
+      # container mount point below (/hf_cache) so the offline resolver finds the
+      # hub/ layout — see S-009 (Bruno): snapshot lives at
+      # /mnt/data/kip_pose_weights/hf_cache/hub/models--facebook--sam3 (3.3 GB,
+      # safetensors only, NO pickle .pt — RCE vector excluded).
+      HF_HOME: /hf_cache
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      # Tuning knobs (see sam3-svc/app.py). NOTE: the per-class text prompts
+      # find armature instances well but do NOT reliably separate anker_kurz
+      # from anker_lang (measured: a mixed scene came back all-anker_lang).
+      # Treat SAM3 classes as approximate; YOLO remains the classifying source.
+      # SAM3_CONF default is 0.2, NOT the 0.5 docs value (ML_RECON/yannic falle):
+      # SAM3 scores run low on these out-of-domain images.
+      SAM3_CONF: ${SAM3_CONF:-0.2}
+      SAM3_NMS_IOU: ${SAM3_NMS_IOU:-0.5}
+      SAM3_PROMPTS: ${SAM3_PROMPTS:-}
+    volumes:
+      # Host HuggingFace cache with the facebook/sam3 snapshot, read-only. The
+      # container mount point MUST equal HF_HOME above. Default = the box path
+      # Bruno populated (S-009); override HF_CACHE_DIR in .env elsewhere.
+      - ${HF_CACHE_DIR:-/mnt/data/kip_pose_weights/hf_cache}:/hf_cache:ro
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  gateway:
+    build: ./gateway
+    # M1 (SECURITY_GATE, Bruno T-145): bind to LOOPBACK only. The gateway is the
+    # single mesh entry point; the native kip_server (:8077) and the eval runner
+    # reach it on the host at 127.0.0.1:8000. Binding 0.0.0.0 would expose the
+    # whole mesh to the internet (the box has no forward_auth). Override the host
+    # bind via GATEWAY_BIND in .env if a non-loopback interface is ever needed.
+    # GATEWAY_PORT overrides the HOST port (default 8000) — on the box this is set
+    # to 8090 because :8000 is taken by an unrelated civion-api service.
+    ports:
+      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_PORT:-8000}:8000"
+    environment:
+      YOLO_URL: http://yolo-svc:8001
+      FP_URL: http://fp-svc:8002
+      GIGAPOSE_URL: http://gigapose-svc:8003
+      SAM3_URL: http://sam3-svc:8004
+      # yolo-obb seg source (combo 1 -> GDRNPP). The gateway INFER_SOURCES['yolo-obb']
+      # registry entry is added in S-004 (gateway extension); the yolo-obb-svc (S-005)
+      # is a Dockerized ultralytics-OBB compose service. (Merge T-151: this key was
+      # duplicated across the S-004/S-005 merges — de-duped to the env-overridable form.)
+      YOLO_OBB_URL: ${YOLO_OBB_URL:-http://yolo-obb-svc:8011}
+      # gdrnpp-svc (S-004, Pipeline A) is NOT a compose service: GDRNPP runs as a
+      # NATIVE process in the box-native /mnt/data/bop/gdrnpp-venv (detectron2 + the
+      # gdrnpp checkout + per-object checkpoints already exist there — Dockerizing it
+      # would be a ~20GB rebuild for zero gain; see gdrnpp-svc/README.md). The gateway
+      # reaches it on the host via the host-gateway alias.
+      GDRNPP_URL: ${GDRNPP_URL:-http://host.docker.internal:8012}
+    extra_hosts:
+      # lets the containerized gateway reach the native gdrnpp-svc on the host.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - yolo-svc
+      - yolo-obb-svc
+      - fp-svc
+      - gigapose-svc
+      - sam3-svc

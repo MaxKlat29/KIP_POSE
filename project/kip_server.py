@@ -141,6 +141,163 @@ def _resolve_pipeline(pipeline: str) -> str:
     raise HTTPException(501, f"Routing fuer Pipeline '{pid}' folgt — bisher nur gdrnpp live.")
 
 
+# ── Gateway-Proxy-Seam (S-013, additiv; bricht den Boot NIE) ──────────────────
+# kip_server:8077 bleibt der LIVE-Pipeline-A-Pfad (pipeline=gdrnpp byte-identisch).
+# Fuer ALLE NICHT-A feasible-Kombis (T-155: 11) proxyt /api/predict zum Gateway (gateway:8000),
+# damit das FE EINE Origin behaelt (Caddy /KIP, kein zweiter Tunnel). Die testbare
+# Mapping-/Gating-Logik liegt fastapi-/httpx-frei in pipelines.gateway_proxy.
+GATEWAY_URL = os.environ.get("KIP_GATEWAY_URL", "http://gateway:8000").rstrip("/")
+GATEWAY_HEALTH_TIMEOUT = float(os.environ.get("KIP_GATEWAY_HEALTH_TIMEOUT", "5"))
+GATEWAY_PREDICT_TIMEOUT = float(os.environ.get("KIP_GATEWAY_PREDICT_TIMEOUT", "900"))
+# Seg-Quellen, deren Modell gerade trainiert (S-008 yolo-seg medium-Langlaeufer) →
+# unavailable_reason 'training' statt 'service_down'. Kommagetrennt, env-overridebar.
+# Default leer (kein Training-Block); die /team-Session setzt es bei laufendem S-008.
+KIP_TRAINING_SEGS = {s.strip() for s in
+                     os.environ.get("KIP_TRAINING_SEGS", "").split(",") if s.strip()}
+
+try:
+    from pipelines import gateway_proxy as _gwp
+except Exception:  # noqa: BLE001 — Proxy-Seam ist optional, darf den Server nie crashen
+    _gwp = None
+
+
+def _gateway_health() -> Optional[dict]:
+    """Pollt gateway/health (aggregiert yolo/fp/gigapose/sam3). None wenn das Gateway
+    nicht erreichbar ist (dann sind alle NICHT-A-Kombis service_down; Pipeline A
+    bleibt unberuehrt). httpx ist nur in der Box-venv — fehlt es, None (kein Crash)."""
+    try:
+        import httpx
+    except Exception:  # noqa: BLE001
+        return None
+    try:
+        with httpx.Client(timeout=GATEWAY_HEALTH_TIMEOUT) as client:
+            r = client.get(GATEWAY_URL + "/health")
+            r.raise_for_status()
+            return r.json()
+    except Exception:  # noqa: BLE001 — Gateway down ist ein erwarteter Zustand
+        return None
+
+
+def _live_pipeline_a_available() -> bool:
+    """Pipeline A (Kombi 1) lebt, solange der :8078-GDRNPP-Worker erreichbar ist.
+    Mia §6: solange der Live-Pfad lebt, ist Kombi 1 IMMER available (>=1 Kombi da).
+    Defensiv: bei Probe-Fehler True (der Live-Pfad ist der Anker, nicht das Mesh)."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen("http://127.0.0.1:8078/health", timeout=2) as r:
+            return r.status == 200
+    except Exception:  # noqa: BLE001 — Worker-/health optional; Anker bleibt available
+        return True
+
+
+def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
+                               depth_bytes: Optional[bytes], fx: float, fy: float,
+                               cx: float, cy: float, iterations: int,
+                               top_n: Optional[int], want_pointcloud: bool,
+                               seg_prompts: Optional[str],
+                               depth_scale: float = 1.0) -> dict:
+    """Proxyt EINE der NICHT-A feasible-Kombis als multipart an gateway/predict und gibt die
+    rohe Gateway-Antwort (instances[].T_cam_obj + timings) zurueck. httpx nur Box-venv."""
+    import httpx
+    gw = _gwp.combo_to_gateway(combo_id)              # 4xx-Quelle: InvalidCombo → 400 oben
+    files = {"rgb": ("rgb.png", rgb_bytes, "image/png")}
+    if depth_bytes:
+        files["depth"] = ("depth.png", depth_bytes, "image/png")
+    data = {
+        "fx": str(fx), "fy": str(fy), "cx": str(cx), "cy": str(cy),
+        "iterations": str(iterations),
+        "want_pointcloud": str(bool(want_pointcloud)).lower(),
+        "seg_source": gw["seg_source"],
+        "pose_source": gw["pose_source"],
+        # uint16->mm depth factor (T-156); 1.0 = mm sensors, BOP/SDG uploads pass 0.1.
+        "depth_scale": str(depth_scale),
+    }
+    # GDRNPP-degraded-Kombis (yolo-seg/sam3 → gdrnpp): das Gateway braucht degraded=true,
+    # sonst forced es seg→yolo-obb und die Maske geht verloren (T-153-Opt-in, default-off;
+    # identisch zu batch_eval.http_predict). Nur diese 2 Kombis tragen das Flag.
+    if gw.get("degraded"):
+        data["degraded"] = "true"
+    if top_n is not None:
+        data["top_n"] = str(top_n)
+    if seg_prompts:
+        data["seg_prompts"] = seg_prompts
+    with httpx.Client(timeout=GATEWAY_PREDICT_TIMEOUT) as client:
+        r = client.post(GATEWAY_URL + "/predict", data=data, files=files)
+        if r.status_code >= 400:
+            raise HTTPException(502, f"Gateway /predict ({combo_id}) Fehler {r.status_code}: "
+                                     f"{r.text[:300]}")
+        return r.json()
+
+
+# ── Kombi-Routing fuer den Sim/Upload-Inferenz-Pfad (S-014 / T-140) ───────────
+# Der interaktive Sim-/Upload-Pfad war bis S-013 auf gdrnpp (Pipeline A) hardcodiert
+# (_resolve_pipeline → 501 „Routing folgt"). Jetzt routen Sim + Upload die GEWAEHLTE
+# Kombi: Pipeline A weiter ueber den :8078-Live-Worker, die 6 NICHT-A-Kombis ueber das
+# Gateway (genau wie /api/predict, S-013). Diese Helfer kapseln das, damit Sim-Job +
+# Real-Job dieselbe Routing-/Mapping-Naht teilen (keine zweite Implementierung).
+
+def _resolve_combo_for_infer(pipeline: str | None, seg: str | None, pose: str | None):
+    """Loest (pipeline|seg|pose) zu einer Kombi-id auf. Pipeline A → 'gdrnpp'.
+    Ungueltige Kombi → 400 (Mia „niemals 12 Kombis"). Proxy-Seam fehlt → 501."""
+    if _gwp is None:
+        raise HTTPException(501, "Proxy-Seam nicht verfuegbar (pipelines.gateway_proxy fehlt).")
+    try:
+        return _gwp.resolve_combo_id(pipeline=pipeline, seg=seg, pose=pose)
+    except _gwp.InvalidCombo as e:
+        raise HTTPException(400, str(e))
+
+
+def _combo_meta(combo_id: str) -> dict:
+    """used_combo/used_seg/used_pose/modality fuer das Infer-Result (Lena T-164).
+    Single-Source = gateway_proxy.combo_result_meta (FEASIBLE_COMBOS). Defensiv: faellt
+    bei unbekannter id auf gdrnpp/Pipeline A zurueck (das Result traegt IMMER die Felder)."""
+    if _gwp is None:
+        return {"used_combo": combo_id or "gdrnpp", "used_seg": "yolo-obb",
+                "used_pose": "GDRNPP", "modality": "RGB"}
+    try:
+        m = _gwp.combo_result_meta(combo_id)
+    except _gwp.InvalidCombo:
+        m = _gwp.combo_result_meta("gdrnpp")
+    return {"used_combo": m["used_combo"], "used_seg": m["used_seg"],
+            "used_pose": m["used_pose"], "modality": m["modality"]}
+
+
+def _gateway_preds_for_frame(combo_id, *, rgb_path, depth_path, K, R_w2c, t_w2c,
+                             table_origin, iterations=5, top_n=None,
+                             seg_prompts=None, depth_scale=1.0, start_inst_id=1):
+    """Faehrt EINE NICHT-A-Kombi ueber das Gateway fuer einen bereits gerenderten Frame
+    (Sim) bzw. ein Upload-Bild (Real) und gibt Viewer-Overlay-Pred-Eintraege (rot)
+    zurueck. RGB/Depth kommen als Datei-Pfad (der Sim/Real-Job hat das Bild schon auf
+    Disk). Reused _gateway_predict_multipart (S-013) + gateway_proxy.gateway_instances_
+    to_viewer_preds → byte-gleiche Pred-Eintraege wie /api/predict.
+
+    fx/fy/cx/cy kommen aus K (scene_camera des Frames). Welt-Extrinsics (R_w2c,t_w2c mm)
+    ebenso — Sim/Real teilen die feste Zivid-Kamera bzw. die Live-Isaac-Kamera."""
+    import numpy as np
+    Karr = np.asarray(K, float).reshape(3, 3)
+    fx, fy = float(Karr[0, 0]), float(Karr[1, 1])
+    cx, cy = float(Karr[0, 2]), float(Karr[1, 2])
+    rgb_bytes = pathlib.Path(rgb_path).read_bytes()
+    depth_bytes = (pathlib.Path(depth_path).read_bytes()
+                   if depth_path and pathlib.Path(depth_path).exists() else None)
+    gw = _gwp.combo_to_gateway(combo_id)
+    if gw["needs_depth"] and not depth_bytes:
+        # Sim/Live liefern eigentlich immer Depth; fehlt sie (z.B. Isaac ohne Depth-AOV),
+        # klare 400 statt stiller Falschpose (Mia §5, image-only-Konsistenz).
+        raise HTTPException(400, f"Kombi '{combo_id}' braucht ein Tiefenbild (needs_depth=true), "
+                                 f"aber der Frame liefert keines.")
+    gateway_resp = _gateway_predict_multipart(
+        combo_id, rgb_bytes=rgb_bytes, depth_bytes=depth_bytes,
+        fx=fx, fy=fy, cx=cx, cy=cy, iterations=iterations, top_n=top_n,
+        want_pointcloud=False, seg_prompts=seg_prompts, depth_scale=depth_scale)
+    R_w2c_flat = [float(x) for x in np.asarray(R_w2c, float).reshape(9)]
+    t_w2c_flat = [float(x) for x in np.asarray(t_w2c, float).reshape(3)]
+    preds = _gwp.gateway_instances_to_viewer_preds(
+        gateway_resp, R_w2c=R_w2c_flat, t_w2c=t_w2c_flat, table_origin=table_origin,
+        start_inst_id=start_inst_id, snap=True)
+    return preds, gateway_resp
+
+
 # ── Static frontend (gemountet zuletzt, damit /api Vorrang hat) ──
 # /api/* zuerst definieren, dann StaticFiles auf "/" als Catch-all.
 
@@ -209,26 +366,178 @@ def metrics():
 
 @app.get("/api/pipelines")
 def pipelines():
-    """Registrierte Pose-Pipelines fuer den Vergleich (Dropdown + Harness).
+    """Die volle Feasibility-Matrix (~12 Kombis) fuer das FE-Gating (2 Dropdowns,
+    T-147-RELAX). Bis T-138-PIVOT waren es nur die kuratierten 7 — jetzt liefert der
+    Endpoint ALLE feasiblen Kombis (combos.FEASIBLE_COMBOS), die 7 als `recommended`.
 
-    Fallback wenn das Seam-Paket fehlt: nur die gdrnpp-Referenz. Der Web-Viewer
-    befuellt das Modell-Dropdown hieraus (verfuegbar=enabled, sonst disabled)."""
-    if _pipe_registry is None:
+    Pro Kombi (Quelle = combos.FEASIBLE_COMBOS + gateway/health, S-013/T-147):
+      id, name, description, seg, pose, needs_depth, is_pipeline_a,
+      available (bool), unavailable_reason (enum service_down|training|null),
+      recommended (bool), degraded (bool), degraded_reason (str|null),
+      class_ambiguity (bool).
+
+    `unavailable_reason` ist Mias Pflicht-Feld (S-010 §12): das FE muss „Dienst nicht
+    aktiv" von „Modell trainiert noch" unterscheiden. Die T-147-Flags markieren die
+    kuratierten 7 (recommended-Highlight) gegen die 5 zusaetzlichen (degraded/ambig-
+    Hinweis), ohne sie wegzublenden.
+
+    Kombi 1 (gdrnpp/yolo-obb = Pipeline A) haengt NICHT am Mesh — sie ist available,
+    solange der :8078-Live-Worker lebt. Die Mesh-Kombis pollen gateway/health; die
+    GDRNPP-degraded-Kombis (yolo-seg/sam3 → GDRNPP) brauchen Seg-Service + Live-Worker.
+
+    Back-compat: alte Felder (`seam`, je Pipeline `id/name/description/available`)
+    bleiben erhalten; FE-Code, der nur die alten Felder liest, funktioniert weiter."""
+    if _gwp is None:
+        # Proxy-Seam fehlt → minimaler Fallback (nur Pipeline A, wie frueher).
         return {"seam": "unavailable",
-                "pipelines": [{"id": "gdrnpp", "name": "GDRNPP (RGB)",
-                               "description": "Referenz/Baseline", "available": True}]}
-    return {"seam": "ok", "pipelines": _pipe_registry.all_pipelines()}
+                "pipelines": [{"id": "gdrnpp", "name": "GDRNPP (yolo-obb, Pipeline A)",
+                               "description": "Referenz/Baseline", "seg": "yolo-obb",
+                               "pose": "GDRNPP", "needs_depth": False,
+                               "is_pipeline_a": True, "available": True,
+                               "unavailable_reason": None, "recommended": True,
+                               "degraded": False, "degraded_reason": None,
+                               "class_ambiguity": False}]}
+    plist = _gwp.pipelines_status(
+        gateway_health=_gateway_health(),
+        live_pipeline_a_available=_live_pipeline_a_available(),
+        training_segs=KIP_TRAINING_SEGS,
+    )
+    return {"seam": "ok", "pipelines": plist}
 
 
 @app.get("/api/compare")
 def compare(scene: int = 0, im: int = -1, pipelines: str = ""):
-    """STUB: Multi-Pipeline-Side-by-Side. Aktiv sobald >=2 Pipelines verfuegbar sind
+    """STUB: Multi-Pipeline-Side-by-Side. Aktiv (= 501 „folgt") sobald >=2 Kombis
+    available sind; davor 501 „braucht >=2". Side-by-Side-Verdrahtung folgt in S-014+
     (siehe docs/PIPELINE_INTEGRATION.md + compare_pipelines.py)."""
-    avail = _pipe_registry.available_ids() if _pipe_registry else ["gdrnpp"]
+    if _gwp is None:
+        avail = ["gdrnpp"]
+    else:
+        avail = _gwp.available_combo_ids(_gwp.pipelines_status(
+            gateway_health=_gateway_health(),
+            live_pipeline_a_available=_live_pipeline_a_available(),
+            training_segs=KIP_TRAINING_SEGS,
+        ))
     if len(avail) < 2:
-        raise HTTPException(501, f"Vergleich braucht >=2 verfuegbare Pipelines; aktuell verfuegbar: "
-                                 f"{avail}. Fremde Pipelines werden via pipelines/<id>/ angebunden.")
+        raise HTTPException(501, f"Vergleich braucht >=2 verfuegbare Kombis; aktuell verfuegbar: "
+                                 f"{avail}. Sobald ein zweites Mesh-Kombi hochkommt, wird der "
+                                 f"Vergleich aktiv.")
     raise HTTPException(501, "Side-by-Side-Verdrahtung folgt (siehe docs/PIPELINE_INTEGRATION.md).")
+
+
+@app.post("/api/predict")
+async def predict(
+    image: UploadFile = File(...),
+    depth: UploadFile | None = File(None),
+    pipeline: str = Form("gdrnpp"),
+    seg: str | None = Form(None),
+    pose: str | None = Form(None),
+    fx: float | None = Form(None),
+    fy: float | None = Form(None),
+    cx: float | None = Form(None),
+    cy: float | None = Form(None),
+    cam_R_w2c: str | None = Form(None),
+    cam_t_w2c: str | None = Form(None),
+    iterations: int = Form(5),
+    top_n: int | None = Form(None),
+    want_pointcloud: bool = Form(False),
+    seg_prompts: str | None = Form(None),
+    # uint16-depth -> mm factor (metres = png*depth_scale/1000). Default 1.0 = real
+    # mm sensors (Zivid live path, unchanged); BOP/SDG depth uploads pass 0.1 so the
+    # RGB-D combos don't decode depth 10x too far (T-156).
+    depth_scale: float = Form(1.0),
+):
+    """EINE Origin fuers FE — die unified Inferenz-Naht (S-013, Mia S-010).
+
+    Routing (AK 1):
+      * `pipeline=gdrnpp` ODER `seg=yolo-obb & pose=gdrnpp` (oder leer = Default)
+        → **UNVERAENDERTER Live-Pfad** (Pipeline A). Der Guard returnt frueh und
+        delegiert byte-identisch an den bestehenden `_real_infer_job`-Thread (die
+        feste Zivid-Kamera + warmer :8078-GDRNPP-Worker, exakt wie heute). Antwort
+        `{job}` — das FE pollt `/api/real/job/<id>` wie gewohnt.
+      * Eine der NICHT-A feasible-Kombis (per `pipeline=<combo_id>` ODER `seg=&pose=`;
+        T-155: alle 11 NICHT-A = 12 FEASIBLE_COMBOS minus Pipeline A, inkl. der 3
+        yolo-obb-Mesh + 2 gdrnpp-degraded Kombis)
+        → Proxy an `gateway:8000/predict` (httpx), Antwort (instances[].T_cam_obj)
+        → ueber dieselbe composed.py-Mapping-Mathematik → pose_result-Doc. EINE
+        Origin (Caddy /KIP), kein zweiter Tunnel.
+      * Ungueltige (nicht-Whitelist) Kombi → 400 (Mia „niemals 12 Kombis").
+    """
+    if _gwp is None:
+        raise HTTPException(501, "Proxy-Seam nicht verfuegbar (pipelines.gateway_proxy fehlt).")
+
+    # ── Guard: Pipeline A → unveraenderter Live-Pfad (frueh raus, byte-identisch) ──
+    if _gwp.is_pipeline_a(pipeline=pipeline, seg=seg, pose=pose):
+        job = uuid.uuid4().hex[:8]
+        _job_set(job, phase="Upload empfangen", pct=5)
+        img_bytes = await image.read()
+        fname = image.filename or "upload.png"
+        # Delegiert an den UNVERAENDERTEN Live-GDRNPP-Job (identisch zu
+        # /api/real/infer_async, pipeline=gdrnpp). Live-Pfad heilig.
+        threading.Thread(target=_real_infer_job, args=(job, img_bytes, fname), daemon=True).start()
+        return {"job": job, "pipeline": "gdrnpp", "mode": "live", "is_pipeline_a": True,
+                "poll_url": f"api/real/job/{job}", **_combo_meta("gdrnpp")}
+
+    # ── NICHT-A feasible-Kombis → Gateway-Proxy (T-155: alle 11) ──
+    try:
+        combo_id = _gwp.resolve_combo_id(pipeline=pipeline, seg=seg, pose=pose)
+    except _gwp.InvalidCombo as e:
+        raise HTTPException(400, str(e))
+
+    gw = _gwp.combo_to_gateway(combo_id)
+    if None in (fx, fy, cx, cy):
+        raise HTTPException(400, "fx,fy,cx,cy (Kamera-Intrinsik) sind fuer die Mesh-Kombis Pflicht.")
+    depth_bytes = await depth.read() if depth is not None else b""
+    if gw["needs_depth"] and not depth_bytes:
+        raise HTTPException(400, f"Kombi '{combo_id}' braucht ein Tiefenbild (needs_depth=true).")
+    rgb_bytes = await image.read()
+
+    # Welt-Extrinsics fuer den T_cam_obj→Welt-Schritt. Default = feste Zivid-Kamera
+    # (Live/Sim teilen sie); der Upload-Tab kann sie via cam_R_w2c/cam_t_w2c override.
+    R_w2c, t_w2c = _extrinsics_or_zivid(cam_R_w2c, cam_t_w2c)
+    camera = {"cam_K": [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0],
+              "cam_R_w2c": R_w2c, "cam_t_w2c": t_w2c}
+
+    gateway_resp = _gateway_predict_multipart(
+        combo_id, rgb_bytes=rgb_bytes, depth_bytes=(depth_bytes or None),
+        fx=fx, fy=fy, cx=cx, cy=cy, iterations=iterations, top_n=top_n,
+        want_pointcloud=want_pointcloud, seg_prompts=seg_prompts,
+        depth_scale=depth_scale)
+
+    table_origin = _table_origin()
+    doc = _gwp.gateway_predict_to_pose_result(
+        gateway_resp, camera=camera, table_origin=table_origin,
+        source_image=f"predict_{combo_id}")
+    return {
+        "pipeline": combo_id, "mode": "mesh", "is_pipeline_a": False,
+        "seg_source": gw["seg_source"], "pose_source": gw["pose_source"],
+        "pose_result": doc,
+        "timings": gateway_resp.get("timings", {}),
+        "num_detections": gateway_resp.get("num_detections"),
+        **_combo_meta(combo_id),
+    }
+
+
+def _extrinsics_or_zivid(cam_R_w2c: str | None, cam_t_w2c: str | None):
+    """Welt-Extrinsics fuer den Proxy-Mapping-Schritt. Default = feste Zivid-Kamera
+    (Live/Sim, wie der Live-Pfad). Optional via Form-Felder override (Upload-Tab mit
+    eigener Kamera). Kommagetrennte 9 (R) bzw. 3 (t in mm) Werte."""
+    if cam_R_w2c and cam_t_w2c:
+        try:
+            R = [float(v) for v in cam_R_w2c.replace(",", " ").split()]
+            t = [float(v) for v in cam_t_w2c.replace(",", " ").split()]
+            if len(R) == 9 and len(t) == 3:
+                return R, t
+        except Exception:  # noqa: BLE001 — bei Parse-Fehler auf Zivid-Default zurueck
+            pass
+    try:
+        cam = _zivid_cam()
+        return cam["cam_R_w2c"], cam["cam_t_w2c"]
+    except Exception as e:  # noqa: BLE001 — Zivid-Template fehlt (kein val) → klare 400
+        raise HTTPException(
+            400, "Keine Welt-Extrinsics: Zivid-Template (val/000000) fehlt und es wurden "
+                 "keine cam_R_w2c/cam_t_w2c uebergeben. Im Upload-Tab beide Felder mitschicken."
+        ) from e
 
 
 # ── Live-Tab: on-demand Proxy zum Jetson-Zellen-Controller ──────────────────
@@ -444,14 +753,29 @@ def real_rgb(job: str):
     return FileResponse(str(p), media_type="image/png")
 
 
-def _real_infer_job(job, img_bytes, fname):
-    """Hintergrund-Thread fuer Real-Upload mit Phasen-Fortschritt (5 Phasen)."""
+def _real_infer_job(job, img_bytes, fname, combo_id="gdrnpp", depth_bytes=None,
+                    seg_prompts=None):
+    """Hintergrund-Thread fuer Real-Upload mit Phasen-Fortschritt (5 Phasen).
+
+    combo_id (S-014/T-140): die gewaehlte Kombi. Pipeline A ('gdrnpp') → nativer
+    :8078-GDRNPP-Worker (UNVERAENDERTER Live-Pfad — der Default-Aufruf bleibt
+    byte-identisch). Eine der 6 NICHT-A-Kombis → Pose ueber das Gateway.
+
+    image-only (ADR-020): der Upload-Pfad hat KEIN GT — es gibt nur die SCHAETZUNG (rot).
+    Kein blaues/gruenes GT-Overlay, keine `gt`-Seg-Quelle. Depth ist optional: Kombis mit
+    needs_depth verlangen ein hochgeladenes Tiefenbild (depth_bytes) — fehlt es, klare
+    Fehlermeldung statt stiller Falschpose (Mia §5)."""
     import numpy as np
     try:
         updir = UPLOADS / f"real_{job}"
         (updir / "000000" / "rgb").mkdir(parents=True, exist_ok=True)
         src = updir / "000000" / "rgb" / "000000.png"
         with open(src, "wb") as f: f.write(img_bytes)
+        depth_src = None
+        if depth_bytes:
+            (updir / "000000" / "depth").mkdir(exist_ok=True)
+            depth_src = updir / "000000" / "depth" / "000000.png"
+            with open(depth_src, "wb") as f: f.write(depth_bytes)
         cam = _zivid_cam()
         json.dump({"0": cam}, open(updir / "000000" / "scene_camera.json", "w"))
         trained_oids = sorted(_trained_oids()) or [1]
@@ -470,29 +794,46 @@ def _real_infer_job(job, img_bytes, fname):
         _job_set(job, phase="Detektor (YOLOv8-OBB)", pct=20)
         n_det = _run_detector(str(src), str(det_json))
         _job_set(job, phase=f"Detektor: {n_det} Box(en) gefunden", pct=45)
-        if n_det == 0:
-            wp = []
-        else:
-            _job_set(job, phase="GDRNPP-Inferenz (Multi-Objekt-Worker)", pct=55)
-            wp = _worker_infer_upload(str(updir), str(det_json))
-            if wp is None:
-                raise RuntimeError("Worker nicht erreichbar (Port 8078?)")
-        _job_set(job, phase="BOP -> Welt + Boden-Snap", pct=85)
         K = np.array(cam["cam_K"], float).reshape(3, 3)
         R_w2c = np.array(cam["cam_R_w2c"], float).reshape(3, 3)
         t_w2c = np.array(cam["cam_t_w2c"], float)
         table_origin = _table_origin()
+        meta_used = _combo_meta(combo_id)
         results, kept_proj, n_drop = [], [], 0
         iid = 0
-        for p in wp:
-            iid += 1
-            if not _add_pred_filtered(results, kept_proj,
-                                      np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
-                                      R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
-                n_drop += 1
+        is_pipeline_a = (_gwp is None) or _gwp.is_pipeline_a(pipeline=combo_id)
+        if is_pipeline_a:
+            if n_det == 0:
+                wp = []
+            else:
+                _job_set(job, phase="GDRNPP-Inferenz (Multi-Objekt-Worker)", pct=55)
+                wp = _worker_infer_upload(str(updir), str(det_json))
+                if wp is None:
+                    raise RuntimeError("Worker nicht erreichbar (Port 8078?)")
+            _job_set(job, phase="BOP -> Welt + Boden-Snap", pct=85)
+            for p in wp:
+                iid += 1
+                if not _add_pred_filtered(results, kept_proj,
+                                          np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
+                                          R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
+                    n_drop += 1
+        else:
+            # Upload-Depth ist hochgeladen worden? Tiefen-Default = 1.0 (echte mm-Sensoren,
+            # Zivid-Format); _gateway_preds_for_frame gated needs_depth selbst (→ 400).
+            _job_set(job, phase=f"{meta_used['used_seg']} → {meta_used['used_pose']} "
+                                f"(Gateway)", pct=60)
+            preds, _gw_resp = _gateway_preds_for_frame(
+                combo_id, rgb_path=str(src),
+                depth_path=(str(depth_src) if depth_src else None),
+                K=K, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=table_origin,
+                seg_prompts=seg_prompts, depth_scale=1.0, start_inst_id=1)
+            _job_set(job, phase="BOP -> Welt + Boden-Snap", pct=85)
+            for pr in preds:
+                results.append(pr)
         doc = {"meta": {"source_image": f"real_{job}", "table_origin": table_origin, "units": "m",
                         "n_det": n_det, "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
-                        "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin)},
+                        "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin),
+                        **meta_used},
                "results": results}
         # Atomar schreiben (Frontend pollt -> kein Race auf halb-geschriebenes JSON)
         with open(RENDERS / f"real_{job}.json", "w") as _f:
@@ -501,7 +842,9 @@ def _real_infer_job(job, img_bytes, fname):
         for r in results: counts[r["part"]] = counts.get(r["part"], 0) + 1
         _job_set(job, phase="Fertig", pct=100, result_url=f"real/result/{job}",
                  rgb_url=f"real/rgb/{job}", boxes_url=f"real/boxes/{job}",
-                 n_det=n_det, n_parts=len(results), counts=counts)
+                 n_det=n_det, n_parts=len(results), counts=counts, **meta_used)
+    except HTTPException as he:
+        _job_set(job, phase=f"Fehler: {he.detail}", pct=-1, error=str(he.detail))
     except Exception as e:
         import traceback; traceback.print_exc()
         _job_set(job, phase=f"Fehler: {e}", pct=-1, error=str(e))
@@ -509,18 +852,37 @@ def _real_infer_job(job, img_bytes, fname):
 
 @app.post("/api/real/infer_async")
 async def real_infer_async(image: UploadFile = File(...),
-                           pipeline: str = Form("gdrnpp")):
+                           depth: UploadFile | None = File(None),
+                           pipeline: str = Form("gdrnpp"),
+                           seg: str | None = Form(None),
+                           pose: str | None = Form(None),
+                           seg_prompts: str | None = Form(None)):
     """Startet Real-Upload-Inferenz im Hintergrund. Frontend pollt /api/real/job/<id>.
 
-    pipeline (optional, default 'gdrnpp'): waehlt die Pose-Pipeline. Default = der
-    unveraenderte Live-Pfad; fremde Pipelines -> 501 bis angebunden (Seam-Scaffold)."""
-    _resolve_pipeline(pipeline)
+    Routing (S-014/T-140): die GEWAEHLTE Kombi faehrt wirklich live.
+      * `pipeline=gdrnpp` ODER `seg=yolo-obb&pose=gdrnpp` (oder leer) → UNVERAENDERTER
+        Live-Pfad (nativer :8078-GDRNPP-Worker, byte-identisch zum heutigen Default).
+      * Eine der 6 NICHT-A-Kombis (per `pipeline=<combo_id>` ODER `seg=&pose=`) → Pose
+        ueber das Gateway. needs_depth-Kombis verlangen ein hochgeladenes Tiefenbild
+        (`depth`); fehlt es → 400 (keine stille Falschpose, Mia §5).
+      * Ungueltige Kombi → 400.
+
+    image-only (ADR-020): KEIN GT-Overlay im Upload-Pfad, `gt`-Seg-Quelle gesperrt.
+    Result-meta traegt used_combo/used_seg/used_pose/modality (Lena T-164)."""
+    if (seg or "").strip().lower() == "gt":
+        raise HTTPException(400, "Seg-Quelle 'gt' (GT-Masken) ist im Upload-Pfad nicht "
+                                 "erlaubt (kein GT bei realen Fotos). Waehle eine echte "
+                                 "Seg-Quelle (yolo-obb | yolo-seg | sam3).")
+    combo_id = _resolve_combo_for_infer(pipeline, seg, pose)
     job = uuid.uuid4().hex[:8]
     _job_set(job, phase="Upload empfangen", pct=5)
     img_bytes = await image.read()
+    depth_bytes = await depth.read() if depth is not None else None
     fname = image.filename or "upload.png"
-    threading.Thread(target=_real_infer_job, args=(job, img_bytes, fname), daemon=True).start()
-    return {"job": job}
+    threading.Thread(target=_real_infer_job,
+                     args=(job, img_bytes, fname, combo_id, depth_bytes, seg_prompts),
+                     daemon=True).start()
+    return {"job": job, **_combo_meta(combo_id)}
 
 
 @app.get("/api/real/job/{job}")
@@ -1174,13 +1536,22 @@ _GEN_SCRIPT   = "/mnt/data/kip_pose/box_src/gen_sdg_arm_visible.py"
 _CONV_SCRIPT  = "/mnt/data/kip_pose/box_src/isaac_to_bop.py"
 _SCENE_USD    = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files/GST_Scene.usd"
 _USD_DIR      = "/mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files"
-_LIVE_ROOT    = pathlib.Path("/mnt/data/kip_pose/project/temp/kip_live")
+# Box-Default; env-overridebar (KIP_LIVE_ROOT) damit der Modul-Import auch ausserhalb
+# der Box laeuft (Tests/CI haben kein /mnt). Auf der Box bleibt der Default unveraendert.
+_LIVE_ROOT    = pathlib.Path(os.environ.get(
+    "KIP_LIVE_ROOT", "/mnt/data/kip_pose/project/temp/kip_live"))
 _LIVE_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def _sim_generate_job(job):
+def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
     """Live-Isaac-Pipeline: Isaac rendert frisches Frame → BOP-Konvertierung →
-    Detektor → warmer GDRNPP-Worker → fertige Sim-Doc.
+    Detektor → Pose-Stage → fertige Sim-Doc (GT blau + Pred rot).
+
+    combo_id (S-014/T-140): die GEWAEHLTE Kombi. Pipeline A ('gdrnpp') → Pose ueber den
+    nativen :8078-GDRNPP-Worker (UNVERAENDERTER Live-Pfad). Eine der 6 NICHT-A-Kombis →
+    Pose ueber das Gateway (gateway:8000, gleiche Naht wie /api/predict). Das GT-Overlay
+    (blau) kommt IMMER aus scene_gt (Sim hat GT) — image-only-Guard: die SCHAETZUNG (rot)
+    stammt aus Det-/Seg-Boxen der gewaehlten Kombi, NIE aus GT (ADR-020).
 
     Phasen (gesamt ~60-80s):
       10%  Isaac startet (booting SimulationApp, ~25s)
@@ -1275,28 +1646,45 @@ def _sim_generate_job(job):
                     np.array(o["cam_R_m2c"]).reshape(3, 3), np.array(o["cam_t_m2c"]),
                     R_w2c, t_w2c, table_origin, o["obj_id"], iid, "gt", 1.0))
 
-        # Detektor auf dem Live-Bild
+        # Detektor auf dem Live-Bild (fuer die 2D-Boxen-PiP; Pipeline A nutzt sie auch
+        # als Pose-Eingang, die Gateway-Kombis segmentieren selbst).
         rgb_src = scene_dir / "rgb" / "000000.png"
+        depth_src = scene_dir / "depth" / "000000.png"      # uint16, depth_scale 0.1 (T-156)
         det_json = rawdir / "det.json"
         n_det = _run_detector(str(rgb_src), str(det_json))
         _job_set(job, phase=f"Detektor: {n_det} Box(en) gefunden", pct=85)
 
-        # GDRNPP-Worker auf dem Live-Frame
-        if n_det > 0:
-            _job_set(job, phase="GDRNPP-Inferenz (Multi-Objekt-Worker)", pct=90)
-            wp = _worker_infer_upload(str(updir), str(det_json))
-            if wp is None:
-                raise RuntimeError("Worker nicht erreichbar")
-        else:
-            wp = []
-
+        # ── Pose-Stage: gewaehlte Kombi (S-014/T-140) ──
+        # Pipeline A → nativer :8078-GDRNPP-Worker (UNVERAENDERT). NICHT-A → Gateway.
+        # In BEIDEN Faellen liefert die Stage die SCHAETZUNG (rot) aus Det-/Seg-Boxen,
+        # nie aus GT (image-only). Das GT-Overlay (blau) oben bleibt unberuehrt.
+        meta_used = _combo_meta(combo_id)
         kept_proj, n_drop = [], 0
-        for p in wp:
-            iid += 1
-            if not _add_pred_filtered(results, kept_proj,
-                                      np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
-                                      R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
-                n_drop += 1
+        is_pipeline_a = (_gwp is None) or _gwp.is_pipeline_a(pipeline=combo_id)
+        if is_pipeline_a:
+            if n_det > 0:
+                _job_set(job, phase="GDRNPP-Inferenz (Multi-Objekt-Worker)", pct=90)
+                wp = _worker_infer_upload(str(updir), str(det_json))
+                if wp is None:
+                    raise RuntimeError("Worker nicht erreichbar")
+            else:
+                wp = []
+            for p in wp:
+                iid += 1
+                if not _add_pred_filtered(results, kept_proj,
+                                          np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
+                                          R_w2c, t_w2c, table_origin, p["obj_id"], iid, p.get("score", 1.0), K=K):
+                    n_drop += 1
+        else:
+            _job_set(job, phase=f"{meta_used['used_seg']} → {meta_used['used_pose']} "
+                                f"(Gateway)", pct=90)
+            preds, _gw_resp = _gateway_preds_for_frame(
+                combo_id, rgb_path=str(rgb_src), depth_path=str(depth_src),
+                K=K, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=table_origin,
+                seg_prompts=seg_prompts, depth_scale=0.1, start_inst_id=iid + 1)
+            for pr in preds:
+                iid = max(iid, pr["instance_id"])
+                results.append(pr)
 
         _job_set(job, phase="BOP -> Welt + Boden-Snap", pct=95)
         n_gt = sum(1 for r in results if r["color"] == "gt")
@@ -1306,14 +1694,15 @@ def _sim_generate_job(job):
                      "units": "m", "scene": 99, "im": 0, "source": "isaac-live",
                      "n_offtable_dropped": n_drop, "kept_proj": kept_proj,
                      "camera": _camera_pose(R_w2c, t_w2c, K, results, table_origin),
-                     "n_gt": n_gt, "n_pred": n_pred, "seed": seed, "n_obj": n_obj},
+                     "n_gt": n_gt, "n_pred": n_pred, "seed": seed, "n_obj": n_obj,
+                     **meta_used},
             "results": results,
         }
         _SIM_DOCS[job] = doc
         _job_set(job, phase="Fertig", pct=100, result_url=f"sim/job_result/{job}",
                  rgb_url=f"sim/live_rgb/{job}", boxes_url=f"sim/live_boxes/{job}",
                  scene=99, im=0, n_gt=n_gt, n_pred=n_pred, source="isaac-live",
-                 seed=seed, n_obj=n_obj)
+                 seed=seed, n_obj=n_obj, **meta_used)
     except subprocess.TimeoutExpired:
         _job_set(job, phase="Isaac-Timeout (>3 min)", pct=-1, error="timeout")
     except Exception as e:
@@ -1322,16 +1711,33 @@ def _sim_generate_job(job):
 
 
 @app.get("/api/sim/generate_async")
-def sim_generate_async(pipeline: str = "gdrnpp"):
-    """Live-Isaac-Generation: NEUES Isaac-Bild rendern (~60s) → Detektor → GDRNPP.
+def sim_generate_async(pipeline: str = "gdrnpp", seg: str | None = None,
+                       pose: str | None = None, seg_prompts: str | None = None):
+    """Live-Isaac-Generation: NEUES Isaac-Bild rendern (~60s) → Detektor → Pose-Stage.
 
-    pipeline (optional, default 'gdrnpp'): Default = unveraenderter Live-Pfad;
-    fremde Pipelines -> 501 bis angebunden (Seam-Scaffold)."""
-    _resolve_pipeline(pipeline)
+    Routing (S-014/T-140): die GEWAEHLTE Kombi faehrt wirklich live.
+      * `pipeline=gdrnpp` ODER `seg=yolo-obb&pose=gdrnpp` (oder leer) → UNVERAENDERTER
+        Live-Pfad (nativer :8078-GDRNPP-Worker).
+      * Eine der 6 NICHT-A-Kombis (per `pipeline=<combo_id>` ODER `seg=&pose=`) → die
+        Pose-Stage faehrt ueber das Gateway (gleiche Naht wie /api/predict). Sim liefert
+        Depth automatisch → alle RGB-D-Kombis ok.
+      * Ungueltige Kombi → 400 (niemals 12 Kombis).
+    Das GT-Overlay (blau) bleibt IMMER (Sim hat GT). Die SCHAETZUNG (rot) kommt aus der
+    gewaehlten Kombi (image-only, ADR-020). Result-meta traegt used_combo/used_seg/
+    used_pose/modality (Lena T-164).
+
+    `gt`-Seg-Quelle (supplied GT masks) ist hier NICHT erlaubt — Sim segmentiert das
+    gerenderte RGB selbst; GT-Masken sind nur fuers Batch-Eval (S-014-Beschreibung)."""
+    if (seg or "").strip().lower() == "gt":
+        raise HTTPException(400, "Seg-Quelle 'gt' (GT-Masken) ist im interaktiven Sim-Pfad "
+                                 "nicht erlaubt — nur fuers Batch-Eval. Waehle eine echte "
+                                 "Seg-Quelle (yolo-obb | yolo-seg | sam3).")
+    combo_id = _resolve_combo_for_infer(pipeline, seg, pose)
     job = uuid.uuid4().hex[:8]
     _job_set(job, phase="Isaac Sim startet", pct=5)
-    threading.Thread(target=_sim_generate_job, args=(job,), daemon=True).start()
-    return {"job": job}
+    threading.Thread(target=_sim_generate_job, args=(job, combo_id, seg_prompts),
+                     daemon=True).start()
+    return {"job": job, **_combo_meta(combo_id)}
 
 
 @app.get("/api/sim/live_rgb/{job}")
@@ -1437,6 +1843,156 @@ def sim_generate(n_scenes: int = Form(1), force: bool = Form(False)):
     # S-KIP-4: gen_sdg_arm_visible.py (1 Szene) -> BOP-convert -> e2e infer
     #          -> render_gt_vs_pred -> blau/rot pose_result für den Viewer.
     raise HTTPException(501, "Live-SDG-Pipeline wird in S-KIP-4 verdrahtet.")
+
+
+# ── Batch-Eval (S-012 / T-138): 7 Kombis × N SDG-Seeds → AR IC-BIN + Runtime ─────
+# Duenne FastAPI-Schicht ueber dem fastapi-freien `eval.batch_eval`-Kern. Felder =
+# Lenas batch.js-Contract (Mia §14): runs/result/run/job, coverage/crash 0..1, job =
+# gleiches {pct,phase}-Schema wie die sim-job. Der reale 7×20-Lauf braucht best.pt +
+# deployte Services (Gateway/predict) — Code jetzt, GPU-Lauf post-Training.
+import sys as _sys
+_PROJECT_DIR = str(HERE)
+if _PROJECT_DIR not in _sys.path:
+    _sys.path.insert(0, _PROJECT_DIR)
+
+EVAL_OUT = TEMP / "batch_eval"          # project/temp/batch_eval/<run-id>/
+EVAL_OUT.mkdir(parents=True, exist_ok=True)
+# Gateway-/predict-Basis (Env-overridebar; all-resident auf der Box, S006-VRAM).
+MESH_GATEWAY_URL = os.environ.get("MESH_GATEWAY_URL", "http://localhost:8090")
+# BOP-GT-Dataset fuer eval_bop --icbin (nur auf der Box vorhanden).
+EVAL_DATASET_DIR = os.environ.get(
+    "EVAL_DATASET_DIR", "/mnt/data/kip_pose/project/bop/pose_isaac")
+EVAL_SPLIT = os.environ.get("EVAL_SPLIT", "val")
+
+
+@app.get("/api/eval/runs")
+def eval_runs():
+    """Alle persistierten Batch-Eval-Laeufe, neuester zuerst (FE-Run-Dropdown).
+
+    -> {"runs": [{run_id, date, duration_s, n_configs}]}  (Lena batch.js)."""
+    from eval import batch_eval as _be
+    return {"runs": _be.list_runs(EVAL_OUT)}
+
+
+@app.get("/api/eval/result/{run_id}")
+def eval_result(run_id: str):
+    """Die 7-Config-Vergleichstabelle eines Laufs.
+
+    -> {"run_id",...,"configs":[{seg,pose,modality,ar_mean,ar_std,seg_ms,pose_ms,
+       coverage,crash_rate,note,is_pipeline_a,run_config_id,per_class?}]}. modality
+       (T-159) = "RGB"|"RGBD" (FE Input-Spalte). coverage/crash 0..1."""
+    import re as _re
+    # M2 (SECURITY_GATE, Bruno T-145): validate run_id BEFORE load_run. The id is a
+    # generated run-folder name (run_<ts>); restrict to a safe charset so a crafted
+    # path (e.g. "../../etc") can never escape EVAL_OUT via load_run's join.
+    if not _re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):
+        raise HTTPException(400, "ungueltige run_id")
+    from eval import batch_eval as _be
+    res = _be.load_run(EVAL_OUT, run_id)
+    if res is None:
+        raise HTTPException(404, f"Eval-Lauf '{run_id}' nicht gefunden")
+    return res
+
+
+def _eval_run_job(job: str, seeds: int, iterations: int, top_n):
+    """Hintergrund-Thread: faehrt run_batch seed-major + streamt Live-Standings in _JOBS.
+
+    T-153: der Runner laeuft seed-major (Round-Robin) und ruft nach jeder gescorten
+    (config, szene) `standings_cb` → wir spiegeln die nach ar sortierten + geranken
+    Standings (alle Configs) live in den Job-State. Das FE pollt /api/eval/job/<id>
+    und rendert ein live aktualisierendes Scoreboard, statt erst am Ende eine Tabelle.
+
+    Respektiert den Training-Guard: laeuft ein GDRNPP-Training, koennen die schweren
+    Pose-Services 503 liefern — die werden pro (config,szene) als Crash gezaehlt
+    (Crash-Rate-Achse), kein Job-Abbruch. all-resident sonst (S006-VRAM)."""
+    from eval import batch_eval as _be
+    try:
+        _job_set(job, phase="Szenen suchen", pct=3, status="running")
+        # discover_scenes toleriert ein fehlendes VAL_ROOT (gibt [] zurueck) — kein
+        # extra exists()-Gate (das wuerde Test-Mocks von discover_scenes aushebeln).
+        scenes = _be.discover_scenes(str(VAL_ROOT), seeds=seeds)
+        if not scenes:
+            _job_set(job, phase=f"Keine SDG-Seed-Szenen mit GT unter {VAL_ROOT}",
+                     pct=-1, status="error", error="no_scenes")
+            return
+        n_total = len(_be.EVAL_CONFIGS) * len(scenes)
+        # Initiale Standings (alle Configs, ar=null, rank am Ende) — das Scoreboard ist
+        # von Anfang an voll besetzt, noch bevor die erste Szene gescort ist.
+        init_accs = [_be._ConfigAcc(c) for c in _be.EVAL_CONFIGS]
+        _job_set(job, status="running",
+                 standings=_be.build_standings(init_accs),
+                 n_done=0, n_total=n_total)
+
+        predict_fn = _be.http_predict(MESH_GATEWAY_URL, iterations=iterations, top_n=top_n)
+        eval_fn = _be.subprocess_eval(EVAL_DATASET_DIR, split=EVAL_SPLIT)
+
+        def _prog(pct, phase):
+            _job_set(job, phase=phase, pct=int(pct))
+
+        def _standings(standings, n_done, n_total_):
+            _job_set(job, standings=standings, n_done=n_done, n_total=n_total_)
+
+        results = _be.run_batch(
+            _be.EVAL_CONFIGS, scenes, predict_fn, eval_fn, EVAL_OUT,
+            progress=_prog, standings_cb=_standings, warn=lambda m: None)
+        _job_set(job, phase="Fertig", pct=100, status="done",
+                 result_url=f"eval/result/{results['run_id']}",
+                 run_id=results["run_id"], n_configs=results["n_configs"],
+                 n_scenes=results["n_scenes"],
+                 standings=results["standings"],
+                 n_done=n_total, n_total=n_total)
+    except Exception as e:  # noqa: BLE001
+        import traceback; traceback.print_exc()
+        _job_set(job, phase=f"Fehler: {e}", pct=-1, status="error", error=str(e))
+
+
+@app.post("/api/eval/run")
+def eval_run(seeds: int = Form(20), iterations: int = Form(5),
+             top_n: Optional[int] = Form(None), force: bool = Form(False)):
+    """Startet einen Batch-Eval-Lauf im Hintergrund (async → Job).
+
+    Guard: laeuft ein Training, verweigern (override force=true) — der Lauf zieht
+    die schweren Pose-Services, die das Training crashen koennten. -> {"job": <id>},
+    Frontend pollt /api/eval/job/<id> (gleiches Schema wie sim-job)."""
+    if _gpu_busy_with_training() and not force:
+        raise HTTPException(
+            503, "GPU trainiert gerade — Batch-Eval spaeter (override force=true).")
+    job = uuid.uuid4().hex[:8]
+    _job_set(job, phase="Lauf startet", pct=2, status="running")
+    threading.Thread(target=_eval_run_job, args=(job, seeds, iterations, top_n),
+                     daemon=True).start()
+    return {"job": job}
+
+
+@app.get("/api/eval/job/{job}")
+def eval_job_status(job: str):
+    """Job-Fortschritt + Live-Standings (T-153 Scoreboard-Contract).
+
+    -> {"status":"running|done|error","pct":0-100,"phase":"...","n_done":int,
+        "n_total":int,"run_id":"...","standings":[{rank,config_key,seg,pose,modality,
+        ar,ar_std,n_scenes,seg_ms,pose_ms,coverage,crash_rate,recommended,degraded,
+        degraded_reason,class_ambiguity,is_pipeline_a}]}
+        modality (T-159) = "RGB"|"RGBD" (FE Input-Spalte, aus needs_depth).
+
+    standings ist nach ar DESC sortiert (rank ab 1), enthaelt ALLE ~12 Configs — auch
+    noch-nicht-gestartete (ar=null, rank am Ende) — und wird nach jeder gescorten
+    Szene aktualisiert. Behaelt zusaetzlich pct/phase (sim-job-Schema, FE-Progressbar).
+    Solange noch keine Szene durch ist, ist standings die Initial-Tabelle (alle ar=null);
+    fehlt sie noch ganz (Thread noch im Setup), liefern wir [] statt key-error."""
+    st = _job_get(job)
+    if not st:
+        return {"error": "unknown job"}
+    # status aus pct ableiten falls der Thread es (noch) nicht gesetzt hat:
+    # pct=100 → done, pct=-1 → error, sonst running.
+    status = st.get("status")
+    if status is None:
+        pct = st.get("pct", 0)
+        status = "done" if pct == 100 else ("error" if pct == -1 else "running")
+    st["status"] = status
+    st.setdefault("standings", [])
+    st.setdefault("n_total", 0)
+    st.setdefault("n_done", 0)
+    return st
 
 
 # ── Frontend entry: "/" -> kip.html (2-Screen-Shell). Der alte Single-Viewer

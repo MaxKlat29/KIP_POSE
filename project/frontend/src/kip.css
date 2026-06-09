@@ -122,5 +122,180 @@
 .kip-scene__seed  { font-family: var(--mono); color: var(--text); }
 .kip-scene__parts { color: var(--text); font-weight: 600; }
 
+/* ── "Inferiert mit: <seg> + <pose> (<modality>)" (T-164): welches Modell die
+      Schätzung gemacht hat. Schlichte Zeile, kein Badge/Emoji (T-158-Linie). ── */
+.kip-inferred { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
+.kip-inferred__val { font-family: var(--mono); color: var(--text); font-weight: 600; }
+
 /* ── "Neue Szene live generieren": volle Breite + dicker ── */
 #sim-infer { width: 100%; margin: 0; padding: 11px 16px; font-size: 14px; font-weight: 600; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   S-010 — Pipeline-Auswahl (2 gekoppelte Selects, Seg → Post). Erbt .kip-sel.
+   ══════════════════════════════════════════════════════════════════════════ */
+.kip-pipe {
+  display: inline-flex; align-items: flex-end; gap: 8px;
+  font-size: 12px; color: var(--text-dim); margin-left: 8px;
+}
+.kip-pipe__lbl { align-self: center; color: var(--text-dim); white-space: nowrap; }
+.kip-pipe__field { display: inline-flex; flex-direction: column; gap: 2px; }
+.kip-pipe__sub {
+  font-size: 10px; letter-spacing: 0.03em; color: var(--text-dim); text-transform: uppercase;
+}
+.kip-pipe .kip-sel { margin-left: 0; }
+.kip-pipe__arrow { align-self: center; color: var(--text-dim); font-size: 14px; padding-bottom: 4px; }
+/* Kontextzeile unter den Selects: Modus / Tiefe / Verfahren + Auto-Spring-Grund. */
+.kip-pipe__ctx {
+  position: absolute; top: 50px; left: 18px; margin: 0; padding: 2px 0 0;
+  font-size: 11px; color: var(--text-dim); font-family: var(--mono);
+  max-width: 70vw; pointer-events: none; min-height: 14px;
+}
+.kip-pipe__ctx--spring { color: rgb(140, 230, 170); }
+.kip-pipe__ctx--err    { color: #fca5a5; }
+/* disabled-Option-Grund soll lesbar bleiben (Kontrast-Floor gg dunklen Panel-BG). */
+.kip-sel option:disabled { color: var(--text-dim); }
+
+/* ── Depth-Drop (Upload, progressive disclosure) ── */
+.kip-drop__label { margin: 14px 0 6px; font-size: 12px; color: var(--text); font-weight: 600; }
+.kip-drop__req   { color: var(--text-dim); font-weight: 400; font-size: 11px; }
+.kip-drop--depth { padding: 16px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   S-011 — Batch-Eval. Breitere Card + semantische Tabelle, Mobile→Cards.
+   ══════════════════════════════════════════════════════════════════════════ */
+.kip-screen--wide { right: 16px; left: 16px; }
+.kip-card--wide { width: min(960px, 94vw); }
+.kip-row--batch { flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.kip-pipe__field--run { min-width: 220px; }
+.kip-hint--inline { margin: 0; align-self: center; }
+.eval-running .kip-pipe__field--run { opacity: 0.6; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+.kip-eval-wrap { margin-top: 14px; overflow-x: auto; }
+.kip-eval {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.kip-eval caption { text-align: left; }
+.kip-eval th, .kip-eval td {
+  padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.kip-eval thead th {
+  color: var(--text-dim); font-weight: 600; font-size: 11px; letter-spacing: 0.02em;
+  white-space: nowrap; vertical-align: bottom;
+}
+/* Sortier-Header = echter Button in <th> (Tastatur Enter/Space). */
+.kip-eval__sortbtn {
+  font: inherit; font-size: 11px; color: var(--text-dim); background: none; border: 0;
+  padding: 2px 0; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  letter-spacing: 0.02em;
+}
+.kip-eval__sortbtn:hover { color: var(--text); }
+.kip-eval th[aria-sort] .kip-eval__sortbtn { color: var(--text); font-weight: 700; }
+.kip-eval__caret { width: 8px; height: 8px; opacity: 0.85; }
+/* Zahlen rechtsbündig + mono, damit Spalten fluchten. */
+.kip-eval td.kip-eval__num, .kip-eval th.kip-eval__numh {
+  text-align: right; font-family: var(--mono);
+}
+.kip-eval__num .kip-eval__std { color: var(--text-dim); font-size: 11px; margin-left: 3px; }
+.kip-eval__cfg { color: var(--text); font-weight: 600; }
+.kip-eval td { color: var(--text); }
+
+.kip-eval-empty { font-style: italic; }
+.kip-eval-foot { margin-top: 14px; }
+/* Skeleton-Zeilen während Result lädt. */
+.kip-eval__skel td { color: transparent; }
+.kip-eval__skel td > span {
+  display: inline-block; width: 70%; height: 10px; border-radius: 4px;
+  background: rgba(255,255,255,0.08);
+}
+.kip-eval-sortm { display: none; margin-top: 12px; }
+
+/* ── Mobile: Tabelle → Config-Cards (kein Doppel-Markup, ::before aus data-label) ── */
+@media (max-width: 760px) {
+  .kip-eval thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+  .kip-eval, .kip-eval tbody, .kip-eval tr, .kip-eval td { display: block; width: 100%; }
+  .kip-eval tr {
+    margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    padding: 8px 10px; background: rgba(255,255,255,0.03);
+  }
+  .kip-eval td { border-bottom: 0; padding: 4px 0; display: flex; justify-content: space-between; gap: 12px; }
+  .kip-eval td::before {
+    content: attr(data-label); color: var(--text-dim); font-weight: 600; font-size: 11px;
+  }
+  .kip-eval td.kip-eval__num { text-align: right; }
+  .kip-eval-sortm { display: flex; flex-direction: column; gap: 2px; }
+}
+
+/* ── S-010 Mobile: Top-Bar 2-zeilig, Pipeline-Selects volle Breite ── */
+@media (max-width: 860px) {
+  .kip-top { flex-wrap: wrap; height: auto; padding: 8px 18px; row-gap: 8px; }
+  .kip-pipe { width: 100%; margin-left: 0; }
+  .kip-pipe__field { flex: 1 1 0; }
+  .kip-pipe .kip-sel { width: 100%; }
+  .kip-pipe__ctx { position: static; max-width: 100%; padding-top: 4px; }
+}
+@media (max-width: 420px) {
+  .kip-pipe { flex-wrap: wrap; }
+  .kip-pipe__arrow { display: none; }
+}
+
+/* ── Live-Scoreboard (T-147): re-sortierende Tabelle während eines Eval-Laufs ── */
+.kip-live { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+.kip-live__head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px;
+}
+.kip-live__title { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0.02em; }
+.kip-live__prog { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+.kip-live__wrap { overflow-x: auto; }
+.kip-live__tbl {
+  width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.kip-live__tbl th, .kip-live__tbl td {
+  padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.kip-live__tbl thead th {
+  color: var(--text-dim); font-weight: 600; font-size: 10.5px; letter-spacing: 0.02em; white-space: nowrap;
+}
+.kip-live__numh, .kip-live__rankh { text-align: right; }
+.kip-live__rankh { text-align: center; }
+.kip-live__numc { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.kip-live__rankc { text-align: center; width: 44px; }
+/* Zeilen wandern beim Re-Sortieren (FLIP via JS-transform). Wichtig: will-change für GPU. */
+.kip-live__row { will-change: transform; }
+.kip-live__rank {
+  display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; color: var(--text-dim); background: rgba(255,255,255,0.06);
+}
+.kip-live__ar { color: var(--text); font-weight: 600; }
+.kip-live__scenes { color: var(--text-dim); font-size: 11px; }
+/* Mini-Fortschrittsbalken pro Zeile (n_scenes/20). */
+.kip-live__minibar {
+  display: inline-block; vertical-align: middle; width: 46px; height: 4px; margin-left: 6px;
+  border-radius: 999px; background: rgba(255,255,255,0.1); overflow: hidden;
+}
+.kip-live__minibar > span {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(52,211,153,0.6), rgba(52,211,153,0.9));
+  transition: width 0.3s ease;
+}
+
+@media (max-width: 760px) {
+  .kip-live__minibar { display: none; }
+}
+
+/* ── Reduced-Motion: Phasen-Puls statt Animation (A11y, S-010/S-011/T-147 AK) ── */
+@media (prefers-reduced-motion: reduce) {
+  .kip-bar__fill--pulse {
+    animation: none; left: 0; width: 100%;
+    background: linear-gradient(90deg, rgba(52,211,153,0.30), rgba(52,211,153,0.45));
+  }
+  .kip-sel, .kip-tab, .kip-btn, .kip-drop { transition: none; }
+  /* Live-Scoreboard re-sortiert ohne Bewegung (FLIP-Transform wird in JS unterdrückt;
+     hier zusätzlich die mini-bar-Transition + etwaige Rest-Transitions hart aus). */
+  .kip-live__row, .kip-live__minibar > span { transition: none !important; }
+}
