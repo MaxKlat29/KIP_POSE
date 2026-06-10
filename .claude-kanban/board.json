@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-10T10:28:06Z",
+  "updated": "2026-06-10T11:53:25Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 178,
+  "next_id": 179,
   "tickets": [
     {
       "id": "T-001",
@@ -11034,6 +11034,32 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-178",
+      "title": "MoE-Pipeline: IR-Schatten-Raytracing-Sim + RGB/RGBD-Hybrid-Routing + Schatten-Reiter",
+      "description": "Real-Problem: Depth-Cam (gleiche Hoehe wie RGB-Cam, leicht links versetzt/geneigt, von vorne rechts) wirft via Arm einen IR-Schatten auf den Tisch -> dort keine Depth -> RGBD-Erkennung faellt aus. Plan: (1) Raytracing-Sim des Schattens (IR-Emitter + Arm-Mesh + Tischebene, parametrisch), (2) Max zeigen + einzeichnen lassen, (3) Bereich fixieren, (4) MoE-Routing: Teile im Schatten=RGB-Pose, sonst RGBD-Pose, (5) neuer FE-Reiter mit Tisch + umrandetem Schattenbereich (MoE-Screen).",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "moe"
+      ],
+      "session": "",
+      "created": "2026-06-10T10:33:50Z",
+      "updated": "2026-06-10T11:53:25Z",
+      "started_at": "2026-06-10T10:33:50Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-10T11:53:25Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Raytracing-Sim v1 fertig (eigener vektorisierter Moeller-Trumbore, 279k Tris cell.glb mit Arm in Zivid-Pose, 6.5k Strahlen/Quelle): IR-Schatten 38.9% des Tischs, View-Schatten 39.3%, MoE-RGB-Zone (Depth tot, RGB ok) 305cm2 = 8.3%. Annahme: IR-Quelle = RGB-Cam +100mm in +x (Operator-rechts), gleiche Hoehe 1100mm. Outputs: recon/t178_shadow_topdown.png (Operator-Sicht, vorne=unten) + t178_shadow_overlay.png (echtes RGB-Frame) + t178_moe_shadow.json (Polygone Welt-mm). WARTE auf Max: Einzeichnen/Offset-Korrektur."
         }
       ]
     }
