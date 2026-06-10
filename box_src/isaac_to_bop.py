@@ -202,6 +202,24 @@ def render_full_mask(mesh, K, R_m2c, t_m2c_mm, W, H):
     return np.asarray(im) > 0
 
 
+def planar_cos_map(K33, W, H):
+    """Per-pixel cos(theta) between the viewing ray and the optical axis.
+
+    Isaac's distance_to_camera annotator stores the EUCLIDEAN ray length per
+    pixel, but BOP depth PNGs are by convention PLANAR Z — every consumer
+    (gateway backprojection, FoundationPose, GigaPose ICP, bop_toolkit)
+    multiplies (u-cx)/fx etc. by the PNG value as if it were Z. Stored-euclid
+    read-as-planar is +3.4% off-axis (≈ +40 mm @ 1.1 m), which radially biased
+    every RGB-D combo in the batch eval (T-177; the +35/+41 mm radial offsets
+    of GigaPose-3D/FoundationPose match the 1/cos prediction with corr 0.91).
+    euclid * cos = planar Z."""
+    fx, fy, cx, cy = K33[0, 0], K33[1, 1], K33[0, 2], K33[1, 2]
+    u = (np.arange(W, dtype=np.float64) - cx) / fx
+    v = (np.arange(H, dtype=np.float64) - cy) / fy
+    uu, vv = np.meshgrid(u, v)
+    return (1.0 / np.sqrt(uu * uu + vv * vv + 1.0)).astype(np.float32)
+
+
 def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale, models=None,
                   min_visib=0.0):
     """min_visib: drop any instance whose visib_fract <= min_visib (under-arm scoping,
@@ -237,6 +255,9 @@ def convert_frame(raw_dir, gt_raw, bop_scene_dir, im_id, depth_scale, models=Non
         dep_m = np.nan_to_num(dep_m, nan=0.0, posinf=0.0, neginf=0.0)
         if dep_m.ndim > 2:
             dep_m = dep_m[..., 0]
+        # euclid ray length -> planar Z (BOP convention), see planar_cos_map.
+        dep_m = dep_m * planar_cos_map(
+            np.asarray(K, np.float64).reshape(3, 3), W, H)
         dep_mm = dep_m * 1000.0
         dep_png = np.clip(dep_mm / depth_scale, 0, 65535).astype(np.uint16)
         Image.fromarray(dep_png).save(os.path.join(bop_scene_dir, "depth", f"{im_id:06d}.png"))
