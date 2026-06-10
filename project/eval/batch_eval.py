@@ -66,8 +66,10 @@ from compare_pipelines import doc_to_bop_rows  # noqa: E402
 #     echten orientierten Boxen "yolo-obb" → gdrnpp-svc liest `obb` (S-004) nativ.
 _SEG_SOURCE = {"yolo-obb": "yolo", "yolo-seg": "yolo", "sam3": "sam3"}
 # FE-Verfahren-Note (Lena batch.js NOTE_BY-Degrade-Fallback) pro pose_id.
+# gigapose_rgb traegt seit T-177 den Tisch-Ebenen-Prior (table_plane-Snap im
+# Gateway) — im Label ausgewiesen, damit die Tabelle die Methode ehrlich nennt.
 _NOTE = {"gdrnpp": "Pipeline A", "foundationpose": "RGB-D 6DoF",
-         "gigapose_rgbd": "coarse+ICP", "gigapose_rgb": "coarse"}
+         "gigapose_rgbd": "coarse+ICP", "gigapose_rgb": "coarse+Ebenen-Prior"}
 
 
 def _build_eval_configs():
@@ -107,11 +109,36 @@ EVAL_CONFIGS = _build_eval_configs()
 # Identisch zu composed.CLASS_TO_OBJ_ID (Single-Source des 2-Klassen-Scope D1).
 CLASS_TO_OBJ_ID = {"anker_kurz": 1, "anker_lang": 2}
 
-# sam3-Default-Prompts (combos._SAM3_PROMPTS) — sam3 ist promptable.
-SAM3_PROMPTS = {"anker_kurz": "short anchor metal part",
-                "anker_lang": "long anchor metal part"}
+# sam3-Prompts: kein Override mehr — die sam3-svc-Env-Defaults sind die Single
+# Source of Truth (T-177: die frueheren Override-Strings lieferten 0 Detections
+# auf val-Frames = der eigentliche 37%-Coverage-Killer, s. combos._COMBO_SPECS).
 
 TABLE_ORIGIN_M = (0.0, 0.0, 0.08)   # e2e_infer.TABLE_ORIGIN_SCENE (Welt-Nullpunkt, m)
+
+# T-177 Tisch-Ebenen-Prior (nur gigapose_rgb): Welt-Hoehe des OBJEKT-ZENTRUMS in
+# Ruhelage auf dem Tisch, mm. Rig-Kalibrierkonstante — gemessen als Median der
+# GT-Welt-Hoehen ueber alle val-Anker (Probe 4: kurz 14.9 / lang 13.8). Teile,
+# die gestapelt/gekippt liegen (~45%), verletzen die Ebene um bis zu ~20mm —
+# der gemessene NETTO-Effekt inkl. dieser Faelle bleibt stark positiv:
+# AR 0.414 -> 0.609 (+0.20), weil der RGB-coarse-Pfad ~rein radial falsch ist
+# (92mm radial vs 5.3mm lateral median) und die Ebene genau diese Komponente
+# fixiert.
+TABLE_REST_Z_MM = 14.3
+
+
+def table_plane_cam(camera: dict, rest_z_mm: float = TABLE_REST_Z_MM) -> dict | None:
+    """Ebene des Objekt-Zentrums-Rest-Levels im KAMERA-Frame, METER — fuer das
+    Gateway-`table_plane`-Param (T-177). Braucht cam_R_w2c/cam_t_w2c (mm) aus
+    scene_camera.json; ohne Extrinsics None (kein Snap)."""
+    R9, t3 = camera.get("cam_R_w2c"), camera.get("cam_t_w2c")
+    if not R9 or not t3:
+        return None
+    import numpy as _np
+    R = _np.asarray(R9, dtype=float).reshape(3, 3)
+    t = _np.asarray(t3, dtype=float).reshape(3)
+    n_c = R @ _np.array([0.0, 0.0, 1.0])              # Welt-Z-Normale im Cam-Frame
+    p_c = (R @ _np.array([0.0, 0.0, rest_z_mm]) + t) / 1000.0   # Punkt auf Ebene, m
+    return {"n": [float(x) for x in n_c], "d": float(n_c @ p_c)}
 
 
 def config_key(cfg: dict) -> str:
@@ -299,8 +326,13 @@ def http_predict(gateway_url: str, iterations: int = 5, top_n=None, timeout: flo
             data["degraded"] = "true"
         if top_n is not None:
             data["top_n"] = top_n
-        if cfg["seg_source"] == "sam3":
-            data["seg_prompts"] = json.dumps(SAM3_PROMPTS)
+        # T-177: Tisch-Ebenen-Prior NUR fuer den RGB-coarse-Pfad (gigapose_rgb)
+        # — dessen Translation ist ~rein radial falsch; FP/GigaPose-3D haben
+        # metrische Tiefe, GDRNPP-RGB liegt bei 2.3mm radial (kein Bedarf).
+        if cfg["pose_source"] == "gigapose_rgb":
+            plane = table_plane_cam(scene.get("camera") or {})
+            if plane is not None:
+                data["table_plane"] = json.dumps(plane)
         with httpx.Client(timeout=timeout) as client:
             r = client.post(base + "/predict", data=data, files=files)
             r.raise_for_status()
@@ -700,7 +732,8 @@ def build_standings(accs) -> list:
 
 # ── Stage D: der ganze Lauf (12 × N, seed-major Round-Robin) ─────────────────────
 def run_batch(configs, scenes, predict_fn, eval_fn, out_dir,
-              run_id=None, progress=None, warn=None, standings_cb=None) -> dict:
+              run_id=None, progress=None, warn=None, standings_cb=None,
+              eval_every: int = 1) -> dict:
     """Faehrt alle Configs × alle Szenen **seed-major** (Round-Robin), scored
     inkrementell, streamt Live-Standings, aggregiert, persistiert.
 
@@ -754,9 +787,15 @@ def run_batch(configs, scenes, predict_fn, eval_fn, out_dir,
 
             # Inkrementelle AR IC-BIN: config-CSV (akkumuliert ueber die bisherigen
             # Seeds) neu schreiben + eval_bop auf dem akkumulierten Set neu rechnen.
+            # eval_every (T-177): Scoring nur jede N-te Szene + IMMER die letzte —
+            # die End-AR kommt ohnehin vom letzten Eval ueber die VOLLE CSV, die
+            # Zwischen-Evals sind reine Live-Scoreboard-UX. Bei langen Laeufen
+            # dominiert sonst eval_bop die Wall-Clock (O(N) Evals x O(N) Zeilen).
+            # Default 1 = byte-identisches Verhalten (Live-Scoreboard wie gehabt).
             csv_path = csv_dir / f"{acc.key}.csv"
             _write_bop_csv(csv_path, acc.rows)
-            if acc.n_ok and acc.rows:
+            do_eval = ((si + 1) % max(1, eval_every) == 0) or (si == len(scenes) - 1)
+            if acc.n_ok and acc.rows and do_eval:
                 try:
                     report = eval_fn(str(csv_path), str(scene.get("dir", "")),
                                      str(eval_dir / acc.key))
@@ -1010,7 +1049,21 @@ def main(argv=None):
     ap.add_argument("--run-id", default=None)
     ap.add_argument("--iterations", type=int, default=5)
     ap.add_argument("--top-n", type=int, default=None)
+    ap.add_argument("--configs", default=None,
+                    help="Komma-Liste von config_keys (z.B. 'yolo_obb__foundationpose,"
+                         "gdrnpp') — nur diese Kombis laufen. Default: alle feasiblen.")
     args = ap.parse_args(argv)
+
+    configs = EVAL_CONFIGS
+    if args.configs:
+        want = {c.strip() for c in args.configs.split(",") if c.strip()}
+        known = {config_key(c) for c in EVAL_CONFIGS}
+        unknown = want - known
+        if unknown:
+            print(f"[batch_eval] unbekannte --configs: {sorted(unknown)} "
+                  f"(bekannt: {sorted(known)})", file=sys.stderr)
+            return 2
+        configs = [c for c in EVAL_CONFIGS if config_key(c) in want]
 
     scenes = discover_scenes(args.scenes_dir, seeds=args.seeds)
     if not scenes:
@@ -1019,7 +1072,7 @@ def main(argv=None):
     predict_fn = http_predict(args.gateway, iterations=args.iterations, top_n=args.top_n)
     eval_fn = subprocess_eval(args.dataset_dir, split=args.split)
 
-    results = run_batch(EVAL_CONFIGS, scenes, predict_fn, eval_fn, args.out,
+    results = run_batch(configs, scenes, predict_fn, eval_fn, args.out,
                         run_id=args.run_id, warn=lambda m: print(m, file=sys.stderr))
     print(f"[batch_eval] {results['run_id']}: {results['n_configs']} Configs, "
           f"{results['n_scenes']} Szenen, {results['duration_s']}s")
