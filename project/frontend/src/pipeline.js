@@ -19,11 +19,13 @@
 
 // ── Seg-Source-Registry (Spiegel von combos.SEG_SOURCES) ──────────────────────
 // gives_obb: yolo-obb liefert eine OBB; yolo-seg/sam3 liefern Masken.
-// class_ambiguity: sam3 trennt kurz/lang nicht zuverlässig (S006-Befund).
+// sam3 war klassen-ambig (S006) — seit T-177 transferiert das Gateway die
+// Klassen (+OBB) per IoU-Match von yolo-obb auf die sam3-Masken → nicht mehr
+// ambig (combos.SEG_SOURCES traegt dieselbe Aenderung).
 const SEG_SOURCES = [
   { id: "yolo-obb", label: "YOLO-OBB", gives_obb: true,  class_ambiguity: false },
   { id: "yolo-seg", label: "YOLO-Seg", gives_obb: false, class_ambiguity: false },
-  { id: "sam3",     label: "SAM 3",    gives_obb: false, class_ambiguity: true  },
+  { id: "sam3",     label: "SAM 3 (Klassen via YOLO-OBB)", gives_obb: false, class_ambiguity: false },
 ];
 
 // ── Pose-Source-Registry (Spiegel von combos.POSE_SOURCES) ────────────────────

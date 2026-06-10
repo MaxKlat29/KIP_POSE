@@ -186,9 +186,9 @@ def test_standings_entry_pipeline_a_and_degraded_flags():
     ed = d.standings_entry()
     assert ed["degraded"] is True and ed["degraded_reason"] == "aabb_from_mask"
     assert ed["is_pipeline_a"] is False and ed["pose"] == "gdrnpp"
-    # sam3-Kombi: class_ambiguity.
+    # sam3-Kombi: Klassen via yolo-obb-Transfer (T-177) — nicht mehr ambig.
     s = be._ConfigAcc(by_key["sam3__foundationpose"])
-    assert s.standings_entry()["class_ambiguity"] is True
+    assert s.standings_entry()["class_ambiguity"] is False
 
 
 def test_modality_rgb_vs_rgbd_per_combo():

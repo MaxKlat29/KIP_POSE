@@ -84,18 +84,22 @@ def make_gigapose_rgb() -> PoseAdapter:
 
 # ── Die 6 NICHT-A-ComposedPipelines (Kombi 2..7) ──────────────────────────────
 # (combo_id, name, seg-Fabrik, pose-Fabrik, seg_prompts?)  — Reihenfolge = §5 #2..#7.
-_SAM3_PROMPTS = {
-    "anker_kurz": "short anchor metal part",
-    "anker_lang": "long anchor metal part",
-}
-
+#
+# sam3-Prompts: KEIN Override mehr (T-177). Die frueheren hier verdrahteten
+# Strings ("short/long anchor metal part") waren von den getunten sam3-svc-
+# Env-Defaults ("short/long metal motor armature part") weggedriftet und
+# lieferten auf val-Frames **0 Detections** (gemessen: 0 vs 27 auf demselben
+# Frame) — DAS war der eigentliche 37%-Coverage-Killer der sam3-Kombis im
+# Batch-Eval. Single Source of Truth fuer die Prompts ist der sam3-svc
+# (SAM3_PROMPTS-Env bzw. seine Defaults); der per-Request-Override bleibt als
+# Mechanismus erhalten, wird aber nicht mehr mit eigenen Strings befuellt.
 _COMBO_SPECS = [
     # #2
     ("yolo_seg__foundationpose", "yolo-seg → FoundationPose (RGB-D)",
      make_yolo_seg, make_foundationpose, None),
     # #3
     ("sam3__foundationpose", "sam3 → FoundationPose (RGB-D)",
-     make_sam3, make_foundationpose, _SAM3_PROMPTS),
+     make_sam3, make_foundationpose, None),
     # #4
     ("yolo_seg__gigapose_rgbd", "yolo-seg → GigaPose-3D (rgbd)",
      make_yolo_seg, make_gigapose_rgbd, None),
@@ -104,10 +108,10 @@ _COMBO_SPECS = [
      make_yolo_seg, make_gigapose_rgb, None),
     # #6
     ("sam3__gigapose_rgbd", "sam3 → GigaPose-3D (rgbd)",
-     make_sam3, make_gigapose_rgbd, _SAM3_PROMPTS),
+     make_sam3, make_gigapose_rgbd, None),
     # #7
     ("sam3__gigapose_rgb", "sam3 → GigaPose-2D (rgb)",
-     make_sam3, make_gigapose_rgb, _SAM3_PROMPTS),
+     make_sam3, make_gigapose_rgb, None),
 ]
 
 
@@ -156,15 +160,19 @@ RECOMMENDED_COMBO_IDS = frozenset(c["id"] for c in COMBO_WHITELIST)
 # Die kuratierten 7 (COMBO_WHITELIST) bleiben als RECOMMENDED-Subset bestehen.
 #
 # Seg-Source-Registry: id (Mesh-/FE-Name), pose-Kopplung. yolo-obb liefert eine OBB
-# (+ rasterisierte Maske), yolo-seg/sam3 liefern Masken. sam3 ist klassen-ambig
-# (S006-Befund: trennt kurz/lang nicht zuverlaessig) → class_ambiguity-Flag.
+# (+ rasterisierte Maske), yolo-seg/sam3 liefern Masken. sam3 war klassen-ambig
+# (S006-Befund: trennt kurz/lang nicht zuverlaessig — die Teile differieren nur
+# 3 mm) → seit T-177 transferiert das Gateway die KLASSEN (+OBB) per IoU-Match
+# von yolo-obb auf die sam3-Masken (SAM3_CLASS_FROM_YOLO=1, Default an) und
+# droppt ungematchte Konzept-FPs. class_ambiguity damit False; Herkunft der
+# Labels wird als class_source='yolo-obb' im /predict-Response ausgewiesen.
 SEG_SOURCES = [
     {"id": "yolo-obb", "label": "YOLOv8-OBB", "gives_obb": True,
      "class_ambiguity": False},
     {"id": "yolo-seg", "label": "YOLO26m-seg", "gives_obb": False,
      "class_ambiguity": False},
-    {"id": "sam3", "label": "SAM3 (prompt)", "gives_obb": False,
-     "class_ambiguity": True},
+    {"id": "sam3", "label": "SAM3 (prompt, Klassen via yolo-obb)", "gives_obb": False,
+     "class_ambiguity": False},
 ]
 # Pose-Source-Registry: id (combo-id-Suffix / Gateway-pose-id), FE-Label, needs_depth,
 # pipeline-Variante (rgb/rgbd), wants_obb (gdrnpp ist nativ OBB-gekoppelt §4).

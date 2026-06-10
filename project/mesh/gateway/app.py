@@ -131,6 +131,120 @@ HEALTH_TIMEOUT = httpx.Timeout(5.0)
 PC_STRIDE = 8
 PC_MAX_POINTS = 20000
 
+# ── sam3 class-label transfer (T-177) ────────────────────────────────────────
+# sam3's concept prompts find every armature instance (mask coverage ~100% on
+# the val probe) but CANNOT separate anker_kurz from anker_lang — the parts
+# differ by 3 mm (112 vs 115 mm), so neither prompts nor mask geometry can tell
+# them apart (S006 + T-177 probe: all final-run sam3 detections came back as
+# ONE class, the other class scored AR 0.0). yolo-obb separates them at mAP50
+# 0.95 in ~76 ms. When enabled, sam3 keeps ITS masks but each detection takes
+# its CLASS and oriented box from the best-overlapping yolo-obb detection;
+# sam3 detections with no yolo match are dropped (kills the concept-prompt
+# false positives — 260/295 unmatched dets on the probe — that flooded the
+# eval). On any yolo failure the raw sam3 detections pass through unchanged.
+SAM3_CLASS_FROM_YOLO = os.environ.get("SAM3_CLASS_FROM_YOLO", "1") == "1"
+SAM3_YOLO_IOU = float(os.environ.get("SAM3_YOLO_IOU", "0.30"))
+
+
+def _mask_b64_bbox(mask_b64):
+    """Nonzero bbox [x,y,w,h] of a base64 PNG mask, or None if empty."""
+    if not mask_b64:
+        return None
+    m = cv2.imdecode(np.frombuffer(base64.b64decode(mask_b64), np.uint8),
+                     cv2.IMREAD_GRAYSCALE)
+    if m is None:
+        return None
+    ys, xs = np.nonzero(m > 127)
+    if len(xs) == 0:
+        return None
+    return [float(xs.min()), float(ys.min()),
+            float(xs.max() - xs.min() + 1), float(ys.max() - ys.min() + 1)]
+
+
+def _obb_enclosing_aabb(obb):
+    """[cx,cy,w,h,theta(rad)] -> enclosing axis-aligned [x,y,w,h]."""
+    ocx, ocy, w, h, th = [float(v) for v in obb[:5]]
+    c, s = abs(np.cos(th)), abs(np.sin(th))
+    ex, ey = (c * w + s * h) / 2.0, (s * w + c * h) / 2.0
+    return [ocx - ex, ocy - ey, 2.0 * ex, 2.0 * ey]
+
+
+def _aabb_iou(a, b):
+    ix0, iy0 = max(a[0], b[0]), max(a[1], b[1])
+    ix1 = min(a[0] + a[2], b[0] + b[2])
+    iy1 = min(a[1] + a[3], b[1] + b[3])
+    inter = max(0.0, ix1 - ix0) * max(0.0, iy1 - iy0)
+    if inter <= 0.0:
+        return 0.0
+    return inter / (a[2] * a[3] + b[2] * b[3] - inter)
+
+
+def _snap_T_to_plane(T, plane, max_shift_m=0.30):
+    """Rescale T's translation along its viewing ray so the object center lands
+    on the given table plane (T-177 'Stable-Pose-Snap', the planar-scene prior
+    from the original project concept).
+
+    plane = {"n": [3], "d": float} in the CAMERA frame, METERS: n·X = d at the
+    object-center rest level (table height + rest height — a fixed-rig
+    calibration constant, supplied by the caller). RGB-only coarse estimators
+    (GigaPose-2D) get translation from template-scale matching and are ~purely
+    radially wrong (probe C: 92 mm radial vs 5.3 mm lateral median); the snap
+    fixes exactly that component. Guarded: never moves more than max_shift_m
+    along the ray, never flips behind the camera. Returns (T, snapped)."""
+    t = np.array([T[0][3], T[1][3], T[2][3]], dtype=np.float64)
+    norm = float(np.linalg.norm(t))
+    if norm < 1e-9:
+        return T, False
+    ray = t / norm
+    n = np.asarray(plane["n"], dtype=np.float64).reshape(3)
+    denom = float(n @ ray)
+    if abs(denom) < 1e-6:
+        return T, False
+    s = float(plane["d"]) / denom
+    if s <= 0.0 or abs(s - norm) > max_shift_m:
+        return T, False
+    t_new = ray * s
+    T = [list(row) for row in T]
+    T[0][3], T[1][3], T[2][3] = float(t_new[0]), float(t_new[1]), float(t_new[2])
+    return T, True
+
+
+async def _transfer_classes_from_yolo(detections, rgb_b64):
+    """Relabel sam3 detections with yolo-obb classes (T-177).
+
+    Greedy: sam3 dets by conf desc, each claims the best-IoU unused yolo-obb
+    box (mask-bbox vs obb-enclosing-aabb, >= SAM3_YOLO_IOU). Claimed dets get
+    the yolo class AND the oriented box (so gdrnpp can consume a real obb
+    instead of its mask-AABB fallback); unclaimed dets are dropped.
+    Returns (detections, transferred: bool)."""
+    try:
+        ydets = await _segment("yolo-obb", rgb_b64, None)
+    except HTTPException:
+        return detections, False
+    yboxes = [(yd, _obb_enclosing_aabb(yd["obb"]))
+              for yd in ydets if yd.get("obb") is not None]
+    if not yboxes:
+        return detections, False
+    out, used = [], set()
+    for d in sorted(detections, key=lambda x: x.get("conf", 0.0), reverse=True):
+        bb = _mask_b64_bbox(d.get("mask_b64"))
+        if bb is None:
+            continue
+        best, bi = 0.0, -1
+        for i, (_, yb) in enumerate(yboxes):
+            if i in used:
+                continue
+            v = _aabb_iou(bb, yb)
+            if v > best:
+                best, bi = v, i
+        if best >= SAM3_YOLO_IOU:
+            used.add(bi)
+            nd = dict(d)
+            nd["class"] = yboxes[bi][0]["class"]
+            nd["obb"] = yboxes[bi][0].get("obb")
+            out.append(nd)
+    return out, True
+
 app = FastAPI(title="kip-pose-gateway")
 app.add_middleware(
     CORSMiddleware,
@@ -506,6 +620,12 @@ async def predict(
     gt_masks: str | None = Form(None),
     seg_prompts: str | None = Form(None),
     degraded: bool = Form(False),
+    # Optional table-plane prior (T-177): JSON {"n":[nx,ny,nz], "d":float} in
+    # the CAMERA frame, METERS — the plane of the object-center rest level
+    # (fixed-rig calibration). When given, every returned pose translation is
+    # snapped along its viewing ray onto this plane (see _snap_T_to_plane).
+    # Meant for RGB-only coarse estimators (gigapose_rgb); the caller decides.
+    table_plane: str | None = Form(None),
     # uint16-depth -> millimetres factor (metres = png*depth_scale/1000). Default 1.0
     # = real mm sensors (the historical assumption); BOP/SDG depth PNGs carry a
     # depth_scale (0.1: png*0.1 = mm) in their scene_camera.json and MUST pass it,
@@ -561,6 +681,13 @@ async def predict(
     # 1. segmentation (chosen pipeline source: an inference model, or supplied GT)
     t_seg0 = time.perf_counter()
     detections = await _segment(seg_source, rgb_b64, gt_masks, seg_prompts)
+    # 1b. sam3 class-label transfer (T-177): sam3 masks + yolo-obb classes/obb.
+    #     Inside the seg timing window — the extra yolo call is seg-stage cost.
+    class_source = None
+    if seg_source == "sam3" and SAM3_CLASS_FROM_YOLO:
+        detections, transferred = await _transfer_classes_from_yolo(
+            detections, rgb_b64)
+        class_source = "yolo-obb" if transferred else None
     seg_ms = (time.perf_counter() - t_seg0) * 1000.0
 
     # 2. keep top_n by confidence
@@ -613,6 +740,30 @@ async def predict(
             raise HTTPException(status_code=502, detail=f"{pose_source}-svc error: {e}")
         pose_ms = (time.perf_counter() - t_pose0) * 1000.0
 
+    # 3b. optional table-plane snap (T-177): radial rescale onto the rig's
+    #     object-center rest plane. Caller-controlled via the table_plane param.
+    n_snapped = 0
+    plane = None
+    if table_plane:
+        try:
+            plane = json.loads(table_plane)
+            assert (isinstance(plane.get("n"), list) and len(plane["n"]) == 3
+                    and isinstance(plane.get("d"), (int, float)))
+        except (ValueError, AssertionError):
+            raise HTTPException(
+                status_code=400,
+                detail='table_plane must be JSON {"n":[nx,ny,nz],"d":float} '
+                       "(camera frame, metres)")
+    if plane is not None:
+        for p in poses:
+            T = p.get("T_cam_obj")
+            if T is None:
+                continue
+            T, snapped = _snap_T_to_plane(T, plane)
+            if snapped:
+                p["T_cam_obj"] = T
+                n_snapped += 1
+
     # 4. merge conf + mask back by id (the mask lets the frontend's 2D mode draw
     #    the predicted segmentation; it round-trips from the detection stage).
     mask_by_id = {d["id"]: d.get("mask_b64") for d in detections}
@@ -640,6 +791,11 @@ async def predict(
         "height": height,
         "K": {"fx": fx, "fy": fy, "cx": cx, "cy": cy},
         "seg_source": seg_source,
+        # set when sam3 detections were relabeled via yolo-obb (T-177); None
+        # otherwise. Additive — older callers ignore it.
+        "class_source": class_source,
+        # number of poses snapped onto the caller-supplied table plane (T-177).
+        "plane_snapped": n_snapped,
         "pose_source": pose_source,
         "num_detections": len(detections),
         "instances": out_instances,

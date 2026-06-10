@@ -21,6 +21,15 @@ classes needs a trained classifier - that is YOLO's job. Use SAM3 here for
 training-free, class-agnostic instance masks; treat its class labels as
 approximate.
 
+RESOLVED AT THE GATEWAY (T-177): the gateway relabels sam3 detections via
+yolo-obb (mask-bbox vs obb IoU match, SAM3_CLASS_FROM_YOLO=1 default): class
++ oriented box come from yolo-obb, masks stay sam3, unmatched concept-FPs are
+dropped. The depth-PCA upgrade path below is moot for the CURRENT 2-class
+scope: the real parts differ by only 3 mm (112 vs 115 mm full extent — the
+[<128 / >133] band was measured on a different part set), so NO geometric
+classifier can separate them. Keep it in mind for genuinely size-distinct
+novel objects.
+
 UPGRADE PATH (validated offline in the 2026-06-05 SAM3 spike, not yet
 implemented here): two-pass self-prompting - (1) generic text prompt
 ("small metal object"), (2) back-project each candidate mask through metric

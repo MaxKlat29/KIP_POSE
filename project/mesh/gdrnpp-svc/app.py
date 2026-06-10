@@ -149,8 +149,19 @@ def _obb_to_aabb(obb):
     return [float(x0), float(y0), float(x1 - x0), float(y1 - y0)]
 
 
+# Visible-mask bboxes are ~16% tighter than the amodal detector boxes
+# (sqrt-area ratio 0.842 median, T-177 probe D) — but compensating with a
+# 1.19x expansion MEASURED WORSE: yolo_seg__gdrnpp AR 0.856 (x1.19) vs 0.885
+# (x1.0) on the same 30 val frames. GDRNPP's own ROI pipeline (DZI-style
+# zoom-out padding) already absorbs the tight-box bias; an extra expansion
+# double-pads and shifts the crop statistics away from training. Default
+# stays 1.0; the knob remains for future per-model calibration experiments.
+MASK_AABB_EXPAND = float(os.environ.get("GDRNPP_MASK_AABB_EXPAND", "1.0"))
+
+
 def _mask_to_aabb(mask_b64):
-    """Fallback when no obb: AABB of the mask's nonzero bbox."""
+    """Fallback when no obb: AABB of the mask's nonzero bbox, expanded by
+    MASK_AABB_EXPAND around the center (amodal-ROI calibration, T-177)."""
     import cv2
     raw = base64.b64decode(mask_b64)
     m = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_GRAYSCALE)
@@ -158,7 +169,10 @@ def _mask_to_aabb(mask_b64):
     if xs.size == 0:
         return None
     x0, y0, x1, y1 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
-    return [float(x0), float(y0), float(x1 - x0 + 1), float(y1 - y0 + 1)]
+    w, h = float(x1 - x0 + 1), float(y1 - y0 + 1)
+    cx, cy = x0 + w / 2.0, y0 + h / 2.0
+    w, h = w * MASK_AABB_EXPAND, h * MASK_AABB_EXPAND
+    return [cx - w / 2.0, cy - h / 2.0, w, h]
 
 
 # ── temp BOP scene + det.json, then GDRNPP det-driven inference ─────────────

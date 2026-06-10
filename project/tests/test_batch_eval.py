@@ -135,8 +135,9 @@ def test_pivot_flags_present():
     assert by_key["yolo_seg__gdrnpp"]["degraded"] is True
     assert by_key["yolo_seg__gdrnpp"]["degraded_reason"] == "aabb_from_mask"
     assert by_key["yolo_seg__gdrnpp"]["recommended"] is False
-    # sam3-Kombis → class_ambiguity (S006).
-    assert by_key["sam3__foundationpose"]["class_ambiguity"] is True
+    # sam3-Kombis: seit T-177 transferiert das Gateway die Klassen von yolo-obb
+    # (SAM3_CLASS_FROM_YOLO) — sam3 ist nicht mehr klassen-ambig (S006 obsolet).
+    assert by_key["sam3__foundationpose"]["class_ambiguity"] is False
     assert by_key["yolo_seg__foundationpose"]["class_ambiguity"] is False
     # Pipeline A nicht degraded.
     assert by_key["gdrnpp"]["degraded"] is False
