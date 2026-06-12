@@ -75,6 +75,31 @@ def _job_set(job, **kv):
     with _JOBS_LOCK:
         _JOBS.setdefault(job, {}).update(kv)
 
+
+# ── T-148 (M3): Upload-Groessen-/Pixel-Limits fuer /api/predict + /api/real ──
+# Schutz gegen versehentliche/boeswillige Riesen-Uploads (Decode-Bomben, RAM).
+# Header-only-Check via PIL (dekodiert NICHT das ganze Bild). Env-overridebar.
+KIP_MAX_UPLOAD_MB = float(os.environ.get("KIP_MAX_UPLOAD_MB", "32"))
+KIP_MAX_PIXELS = int(os.environ.get("KIP_MAX_PIXELS", str(6144 * 6144)))
+
+
+def _check_upload_image(name: str, data: bytes):
+    if not data:
+        return
+    if len(data) > KIP_MAX_UPLOAD_MB * 1_000_000:
+        raise HTTPException(413, f"{name}: Datei zu gross "
+                                 f"(> {KIP_MAX_UPLOAD_MB:.0f} MB, T-148-Limit).")
+    import io
+    from PIL import Image as _Img
+    try:
+        with _Img.open(io.BytesIO(data)) as im:
+            w, h = im.size
+    except Exception:
+        raise HTTPException(400, f"{name}: kein dekodierbares Bild.")
+    if w * h > KIP_MAX_PIXELS:
+        raise HTTPException(413, f"{name}: {w}x{h} ueberschreitet das Pixel-Limit "
+                                 f"({KIP_MAX_PIXELS} px, T-148).")
+
 def _job_get(job):
     with _JOBS_LOCK:
         return dict(_JOBS.get(job, {}))
@@ -539,6 +564,7 @@ async def predict(
         job = uuid.uuid4().hex[:8]
         _job_set(job, phase="Upload empfangen", pct=5)
         img_bytes = await image.read()
+        _check_upload_image("image", img_bytes)        # T-148 (M3)
         fname = image.filename or "upload.png"
         # Delegiert an den UNVERAENDERTEN Live-GDRNPP-Job (identisch zu
         # /api/real/infer_async, pipeline=gdrnpp). Live-Pfad heilig.
@@ -559,6 +585,8 @@ async def predict(
     if gw["needs_depth"] and not depth_bytes:
         raise HTTPException(400, f"Kombi '{combo_id}' braucht ein Tiefenbild (needs_depth=true).")
     rgb_bytes = await image.read()
+    _check_upload_image("image", rgb_bytes)            # T-148 (M3)
+    _check_upload_image("depth", depth_bytes)
 
     # Welt-Extrinsics fuer den T_cam_obj→Welt-Schritt. Default = feste Zivid-Kamera
     # (Live/Sim teilen sie); der Upload-Tab kann sie via cam_R_w2c/cam_t_w2c override.
@@ -946,6 +974,8 @@ async def real_infer_async(image: UploadFile = File(...),
     _job_set(job, phase="Upload empfangen", pct=5)
     img_bytes = await image.read()
     depth_bytes = await depth.read() if depth is not None else None
+    _check_upload_image("image", img_bytes)            # T-148 (M3)
+    _check_upload_image("depth", depth_bytes or b"")
     fname = image.filename or "upload.png"
     threading.Thread(target=_real_infer_job,
                      args=(job, img_bytes, fname, combo_id, depth_bytes, seg_prompts),
@@ -2111,8 +2141,19 @@ def eval_run(seeds: int = Form(20), iterations: int = Form(5),
     if _gpu_busy_with_training() and not force:
         raise HTTPException(
             503, "GPU trainiert gerade — Batch-Eval spaeter (override force=true).")
+    # T-149 (M4): genau EIN Eval-Lauf zur Zeit. Ein zweiter 12-Kombi-Lauf
+    # wuerde sich GPU/Pose-Services mit dem ersten pruegeln (VRAM-Wand T-133)
+    # und beide Laeufe verfaelschen. force ueberstimmt das NICHT (es gibt
+    # keinen legitimen Grund fuer parallele Laeufe; der Training-Override
+    # oben bleibt davon unberuehrt).
+    with _JOBS_LOCK:
+        for jid, j in _JOBS.items():
+            if j.get("kind") == "eval" and j.get("status") == "running":
+                raise HTTPException(
+                    429, f"Eval-Lauf {jid} laeuft bereits — erst abwarten "
+                         f"(/api/eval/job/{jid}).")
     job = uuid.uuid4().hex[:8]
-    _job_set(job, phase="Lauf startet", pct=2, status="running")
+    _job_set(job, phase="Lauf startet", pct=2, status="running", kind="eval")
     threading.Thread(target=_eval_run_job, args=(job, seeds, iterations, top_n),
                      daemon=True).start()
     return {"job": job}

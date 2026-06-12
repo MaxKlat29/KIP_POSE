@@ -30,9 +30,28 @@
   position: fixed; left: 12px; bottom: 0; z-index: 30;
   display: flex; align-items: flex-end; gap: 16px;
 }
+/* T-178g: Modellauswahl wohnt mit Luft UEBER dem Mappen-Register. */
+.kip-bottombar__stack { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.kip-bottombar__stack .kip-pipe { margin-left: 0; background: rgba(20, 24, 32, 0.88); }
+.kip-bottombar__stack .kip-pipe__ctx { position: static; margin: 0 0 -6px 2px; max-width: 60vw; }
 .kip-sheetbar { display: flex; gap: 3px; align-items: flex-end; }
 /* Legende sitzt in der Bottom-Leiste RECHTS neben den Mappen (T-178f). */
 .kip-bottombar .legend { position: static; margin-bottom: 8px; }
+
+/* T-178g: Branding-Chip oben links — Logos auf weissem Grund (das offizielle
+   KIT-Logo traegt schwarze Schrift), daneben die wbk-Wortmarke (weiss auf
+   wbk-Blau; Platzhalter — offizielle Datei kann als wbk_logo.png rein). */
+.kip-brand { display: inline-flex; align-items: center; gap: 10px; }
+.kip-brand__logos {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: #fff; border-radius: 8px; padding: 4px 10px;
+}
+.kip-logo-kit { height: 22px; display: block; }
+.kip-logo-wbk {
+  background: #00569d; color: #fff; font-weight: 800; font-size: 13px;
+  letter-spacing: 0.02em; padding: 3px 8px; border-radius: 4px; line-height: 1;
+}
+.kip-brand__dash { color: var(--text-dim); font-weight: 400; }
 .kip-sheetbar .kip-tab {
   font: inherit; font-size: 13px; color: #46505e;
   background: #d8dde5; border: 1px solid #b9c0cb; border-bottom: none;

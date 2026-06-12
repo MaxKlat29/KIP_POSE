@@ -22,26 +22,18 @@
     <div id="app">
       <canvas id="scene"></canvas>
 
-      <!-- Kopfzeile: Ansichtswechsel, Modellauswahl, Workstation-Status -->
+      <!-- Kopfzeile (T-178g, Max): nur noch Branding — KIT- und wbk-Logo,
+           Bindestrich, Titel. Modellauswahl wohnt unten ueber den Mappen,
+           Reset-Button und Status-Badge sind raus. Oben bleibt Luft. -->
       <header id="kip-top" class="kip-top">
-        <span class="kip-brand">KIP <span class="kip-brand__sub">Posenschätzung</span></span>
-        <!-- Pipeline-Auswahl: zwei gekoppelte Selects (Seg → Post) ergeben genau die
-             7 validen Kombis (S-010). Ersetzt das alte Einzel-"Modell"-Dropdown. -->
-        <div class="kip-pipe" id="pipe-group" role="group" aria-label="Pipeline-Auswahl">
-          <span class="kip-pipe__lbl" id="pipe-label">Pipeline:</span>
-          <label class="kip-pipe__field">
-            <span class="kip-pipe__sub">Segmentierung</span>
-            <select id="seg-sel" class="kip-sel" aria-label="Segmentierung"></select>
-          </label>
-          <span class="kip-pipe__arrow" aria-hidden="true">→</span>
-          <label class="kip-pipe__field">
-            <span class="kip-pipe__sub">Lageschätzung</span>
-            <select id="post-sel" class="kip-sel" aria-label="Lageschätzung"></select>
-          </label>
-        </div>
-        <p id="pipe-ctx" class="kip-pipe__ctx" aria-live="polite"></p>
-        <button id="reset-view" class="kip-btn" title="Kameraperspektive auf Standardansicht zurücksetzen">Ansicht zurücksetzen</button>
-        <span id="kip-gpu" class="kip-gpu" title="Status der Workstation">Status wird geladen</span>
+        <span class="kip-brand">
+          <span class="kip-brand__logos">
+            <img src="./assets/kit_logo.svg" alt="KIT" class="kip-logo-kit" />
+            <span class="kip-logo-wbk" title="wbk Institut für Produktionstechnik">wbk</span>
+          </span>
+          <span class="kip-brand__dash" aria-hidden="true">–</span>
+          KIP <span class="kip-brand__sub">Posenschätzung</span>
+        </span>
       </header>
 
       <!-- Ansicht: Reales Foto hochladen, inferieren, im 3D-Modell anzeigen -->
@@ -210,12 +202,29 @@
            blätter, die Farb-Legende sitzt RECHTS DANEBEN in derselben Zeile.
            IDs unverändert (tab-real/sim/moe/batch), nur Ort + Optik. -->
       <div class="kip-bottombar">
-        <nav class="kip-sheetbar" role="tablist" aria-label="Ansichten">
-          <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
-          <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
-          <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
-          <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
-        </nav>
+        <div class="kip-bottombar__stack">
+          <!-- Modellauswahl (T-178g): wohnt jetzt mit Luft UEBER den Mappen.
+               Zwei gekoppelte Selects (Seg → Post) = die validen Kombis (S-010). -->
+          <p id="pipe-ctx" class="kip-pipe__ctx" aria-live="polite"></p>
+          <div class="kip-pipe" id="pipe-group" role="group" aria-label="Pipeline-Auswahl">
+            <span class="kip-pipe__lbl" id="pipe-label">Pipeline:</span>
+            <label class="kip-pipe__field">
+              <span class="kip-pipe__sub">Segmentierung</span>
+              <select id="seg-sel" class="kip-sel" aria-label="Segmentierung"></select>
+            </label>
+            <span class="kip-pipe__arrow" aria-hidden="true">→</span>
+            <label class="kip-pipe__field">
+              <span class="kip-pipe__sub">Lageschätzung</span>
+              <select id="post-sel" class="kip-sel" aria-label="Lageschätzung"></select>
+            </label>
+          </div>
+          <nav class="kip-sheetbar" role="tablist" aria-label="Ansichten">
+            <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
+            <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
+            <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
+            <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
+          </nav>
+        </div>
         <aside id="legend" class="legend" aria-label="Legende" hidden>
           <span class="legend__item"><i class="legend__swatch" style="background:#2878ff"></i>Ground-Truth (echte Lage)</span>
           <span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>

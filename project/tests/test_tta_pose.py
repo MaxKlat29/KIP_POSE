@@ -110,7 +110,11 @@ def test_tta_wrapper_recovers_true_rotation():
             crop, None, None, 6, n_rot=4, agg=agg)
         assert is_SO3(R_agg)
         ang = np.degrees(T.geodesic_angle(R_agg, R_true))
-        assert ang < 1e-6, f"agg={agg}: {ang:.4f}° off"
+        # T-088: 1e-6 war fuer die medoid-Float64-Akkumulation 12x zu eng
+        # (gemessen 1.2074e-6 bei mathematisch exakt 0.0000 Grad, S172) —
+        # deterministischer Toleranz-Flake, kein Rotations-Fehler. 5e-6 laesst
+        # die Akkumulation durch und faengt echte Abweichungen weiter sicher.
+        assert ang < 5e-6, f"agg={agg}: {ang:.4f}° off"
         assert np.allclose(t, [0, 0, 500.0])
         assert info["n"] == 4
 

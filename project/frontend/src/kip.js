@@ -80,21 +80,21 @@ viewer.loadCollisionProxy("./assets/cell.glb", () => {});
 createOriginMarker(viewer, [0, 0, 0]);
 
 // ── Health-Poll: Workstation-/GPU-Status in der Top-Bar ──
-const gpuEl = document.getElementById("kip-gpu");
+const gpuEl = document.getElementById("kip-gpu");   // T-178g: Badge entfernt -> kann null sein
 let lastHealth = {};               // letzter /api/health-Stand (Batch-Tab Training-Guard)
 async function pollHealth() {
   try {
     const h = await (await fetch(`${API}/health`)).json();
     lastHealth = h || {};
     if (h.gpu_training_active) {
-      gpuEl.textContent = "Training läuft"; gpuEl.className = "kip-gpu kip-gpu--busy";
+      if (gpuEl) { gpuEl.textContent = "Training läuft"; gpuEl.className = "kip-gpu kip-gpu--busy"; }
     } else {
-      gpuEl.textContent = "Bereit"; gpuEl.className = "kip-gpu kip-gpu--ok";
+      if (gpuEl) { gpuEl.textContent = "Bereit"; gpuEl.className = "kip-gpu kip-gpu--ok"; }
     }
-    gpuEl.title = `Trainierte Objekte: ${(h.trained_objects || []).join(", ") || "-"}`;
+    if (gpuEl) gpuEl.title = `Trainierte Objekte: ${(h.trained_objects || []).join(", ") || "-"}`;
   } catch {
     lastHealth = {};
-    gpuEl.textContent = "Offline"; gpuEl.className = "kip-gpu kip-gpu--off";
+    if (gpuEl) { gpuEl.textContent = "Offline"; gpuEl.className = "kip-gpu kip-gpu--off"; }
   }
   batch?.refreshTrainingGuard?.();
 }
@@ -273,7 +273,9 @@ async function pollJob(statusUrl, barRef, intervalMs = 350) {
 }
 
 // ── Reset-View-Button (oben rechts) ──
-document.getElementById("reset-view").addEventListener("click", () => {
+// "Ansicht zuruecksetzen"-Button entfernt (T-178g, Max) — Guard, falls
+// aeltere HTML-Caches den Button noch tragen.
+document.getElementById("reset-view")?.addEventListener("click", () => {
   viewer.resetView?.();
 });
 

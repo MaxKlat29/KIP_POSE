@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-12T09:49:55Z",
+  "updated": "2026-06-12T16:27:36Z",
   "columns": [
     {
       "id": "backlog",
@@ -11050,7 +11050,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-12T09:49:55Z",
+      "updated": "2026-06-12T16:27:36Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11120,6 +11120,12 @@
           "agent": "claude",
           "level": "info",
           "msg": "T-178e deployed+verifiziert (E2E 66479699): (1) T-113-Filter auf Gateway-Pfad portiert -> Wand-Decal-Phantome gefiltert (inkl. PiP-Box-Konsistenz via kept_proj). (2) FP kann zahnrad (Mesh registriert, 3 Estimators, VRAM 9.5GB) -> Capability-Route weg, Zahnraeder routen nach Zone gruen/blau. (3) Stilles Verdeckungs-Gate <20% Sichtbarkeit (View-Schatten-Sampling). rgb_cap_n=0 im E2E, 288 Tests, main c540fe0->neu."
+        },
+        {
+          "ts": "2026-06-12T16:27:36Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "T-178f UI-Polish deployed: Legende rechts neben Mappen (eine Bottom-Zeile), Modellauswahl als Pill-Gruppe, Texte gekuerzt (keine Bindestrich-Ketten), Zoom zoomSpeed=1.8 + zoomToCursor. Edge verifiziert."
         }
       ]
     },
