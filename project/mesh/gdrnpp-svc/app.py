@@ -73,12 +73,13 @@ try:
 except Exception:
     pass
 
-# D1 scope: 2 Anker classes only. Mesh class name (lowercase) -> BOP obj_id.
-# Matches CONTRACT §6 (anker_kurz=1, anker_lang=2). Zahnrad explicitly out-of-scope.
-CLASS_TO_OBJ_ID = {"anker_kurz": 1, "anker_lang": 2}
+# Mesh-Scope: 2 Anker (D1) + zahnrad (T-178c — Checkpoint existiert, der
+# :8078-Worker laedt ihn seit T-115; jetzt auch im Mesh-Service, damit die
+# MoE-Pipeline Zahnraeder inferiert). Mesh class name (lowercase) -> BOP obj_id.
+CLASS_TO_OBJ_ID = {"anker_kurz": 1, "anker_lang": 2, "zahnrad": 6}
 OBJ_ID_TO_CLASS = {v: k for k, v in CLASS_TO_OBJ_ID.items()}
-# (slug, obj_id) load order — only the 2 Anker checkpoints (no zahnrad in the mesh).
-SVC_OBJS = [("anker_kurz", 1), ("anker_lang", 2)]
+# (slug, obj_id) load order — 2 Anker + zahnrad (T-178c).
+SVC_OBJS = [("anker_kurz", 1), ("anker_lang", 2), ("zahnrad", 6)]
 
 STATE = {"ready": False, "error": None, "models": {}}  # obj_id -> dict(cfg,model,slug)
 

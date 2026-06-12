@@ -220,6 +220,14 @@ def _snap_T_to_plane(T, plane, max_shift_m=0.30):
 # Routing NICHT gebraucht (Teile liegen auf dem Tisch) — genau der Witz.
 MOE_RGB_DEFAULT = "gdrnpp"
 MOE_RGBD_DEFAULT = "gigapose_rgbd"
+# Klassen, die der RGB-D-Zweig beherrscht (T-178c): GigaPose hat (noch) nur
+# Templates fuer die 2 Anker (Dataset kip2) — zahnrad wuerde dort stumm
+# gedroppt. Klassen ausserhalb dieser Menge routet der MoE-Router IMMER ueber
+# den RGB-Zweig (gdrnpp kann zahnrad, T-115), markiert als route='rgb_cap'
+# (capability-Routing, nicht Schatten). Nach einem GigaPose-Template-Rebuild
+# mit zahnrad einfach das Env erweitern.
+MOE_RGBD_CLASSES = {c.strip() for c in os.environ.get(
+    "MOE_RGBD_CLASSES", "anker_kurz,anker_lang").split(",") if c.strip()}
 
 
 def _point_in_poly(x, y, poly):
@@ -251,11 +259,20 @@ def _moe_route_world_xy(u, v, K, R_w2c, t_w2c_mm):
     return float(Xw[0]), float(Xw[1])
 
 
-def _moe_split(detections, zone_polys_mm, K, R_w2c, t_w2c_mm):
+def _moe_split(detections, zone_polys_mm, K, R_w2c, t_w2c_mm,
+               rgbd_classes=None):
     """Detections -> (rgb_dets, rgbd_dets, route_by_id). Anker-Pixel = obb-Zentrum
-    (yolo-obb) bzw. Mask-BBox-Zentrum (Fallback)."""
+    (yolo-obb) bzw. Mask-BBox-Zentrum (Fallback).
+
+    rgbd_classes (T-178c): Klassen, die der RGB-D-Zweig kann. Detections mit
+    anderer Klasse (z.B. zahnrad ohne GigaPose-Templates) gehen IMMER ueber den
+    RGB-Zweig — route='rgb_cap' (capability, nicht Schatten)."""
     rgb, rgbd, route = [], [], {}
     for d in detections:
+        if rgbd_classes is not None and d.get("class") not in rgbd_classes:
+            rgb.append(d)
+            route[d["id"]] = "rgb_cap"
+            continue
         if d.get("obb") is not None:
             u, v = float(d["obb"][0]), float(d["obb"][1])
         else:
@@ -839,7 +856,8 @@ async def predict(
                        f"rgbd='{moe_rgbd_source}'")
         K_arr = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]])
         rgb_dets, rgbd_dets, route_by_id = _moe_split(
-            detections, polys, K_arr, R_w2c_m, t_w2c_m)
+            detections, polys, K_arr, R_w2c_m, t_w2c_m,
+            rgbd_classes=MOE_RGBD_CLASSES)
         inst_by_id = {i["id"]: i for i in instances}
 
         async def _moe_pose(src, src_name, dets):
@@ -868,7 +886,9 @@ async def predict(
         poses = (await _moe_pose(rgb_src, moe_rgb_source, rgb_dets)
                  + await _moe_pose(rgbd_src, moe_rgbd_source, rgbd_dets))
         pose_ms = (time.perf_counter() - t_pose0) * 1000.0
-        moe_meta = {"rgb_n": len(rgb_dets), "rgbd_n": len(rgbd_dets),
+        n_cap = sum(1 for r in route_by_id.values() if r == "rgb_cap")
+        moe_meta = {"rgb_n": len(rgb_dets) - n_cap, "rgb_cap_n": n_cap,
+                    "rgbd_n": len(rgbd_dets),
                     "rgb_source": moe_rgb_source, "rgbd_source": moe_rgbd_source}
     elif instances:
         t_pose0 = time.perf_counter()

@@ -46,7 +46,10 @@ if str(_PROJECT) not in sys.path:
 
 # ── §6: lowercase Mesh-Klasse → BOP obj_id (= numerisch konsistent ueber das Mesh) ──
 # yolo:{0:anker_kurz,1:anker_lang}+1 == gigapose CLASS_TO_OBJ_ID == bop_adapter obj_id.
-CLASS_TO_OBJ_ID = {"anker_kurz": 1, "anker_lang": 2}
+# zahnrad (obj 6) seit T-178c im VIEWER-/Live-Scope (GDRNPP-Checkpoint existiert,
+# T-115). Die EVAL-Hauptmetrik bleibt bewusst D1 = 2 Klassen — batch_eval traegt
+# dafuer seine EIGENE CLASS_TO_OBJ_ID-Kopie (active_class_parts haengt daran).
+CLASS_TO_OBJ_ID = {"anker_kurz": 1, "anker_lang": 2, "zahnrad": 6}
 
 
 def tcamobj_to_world_entry(*, cls: str, T_cam_obj, R_w2c, t_w2c, table_origin,

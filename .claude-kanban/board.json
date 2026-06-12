@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-12T08:04:36Z",
+  "updated": "2026-06-12T08:39:45Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 179,
+  "next_id": 180,
   "tickets": [
     {
       "id": "T-001",
@@ -11050,7 +11050,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-12T08:04:36Z",
+      "updated": "2026-06-12T08:39:45Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11084,8 +11084,39 @@
           "agent": "claude",
           "level": "info",
           "msg": "Scope-Erweiterung (Max): IR-Schatten-WIRKUNG simulieren statt Real-Validierung — MoE-Sim-Pfad maskiert die gerenderte Depth im IR-Schatten (wie die echte Anlage), plus A/B-Zaehler RGB-D-only vs MoE auf demselben Frame. Sim exportiert dafuer zusaetzlich ir_shadow_polys_mm."
+        },
+        {
+          "ts": "2026-06-12T08:21:11Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "T-178b FERTIG: IR-Schatten-Wirkung in der Sim — MoE-Sim-Pfad maskiert gerenderte Depth im IR-Schatten (~76k px/Frame, pipelines/moe_shadow.py, 7 Unit-Tests) + A/B auf demselben Frame (RGB-D-only vs MoE, Zonen-GT-Treffer in 3D — Lesson: XY-only-Metrik war blind fuer den Z-Bruch). DETERMINISTISCHER BEWEIS (val 000000/3, maskierte Depth): Zonen-Teil anker_kurz MoE-RGB 3.4mm vs RGB-D-only 424.6mm (Faktor ~125), ausserhalb unveraendert. FE-Status zeigt Maske+Vergleich. 288 Tests. main d59a5b8 gepusht. Bleibt in_review fuer Max' Kegel-Abnahme im Browser."
+        },
+        {
+          "ts": "2026-06-12T08:39:45Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "T-178c implementiert+deployt: (1) PiP-Boxen-Fix (kept_proj-Filter versteckte ALLE Boxen auf Gateway-/MoE-Jobs — nur noch filtern wenn kept_proj gefuellt). (2) Kameraperspektive: Pose bleibt 1:1, Up-Vektor normalisiert sich beim ersten Drag auf Welt-Z (+Nadir-Offset) -> Steuerung danach stabil. (3) ZAHNRAD in der MoE-Kette: yolo-obb-svc laesst zahnrad durch (cls 5 -> obj 6), gdrnpp-svc laedt 3. Modell (ready [1,2,6] live!), composed-Viewer-Mapping +zahnrad (EVAL bleibt 2-Klassen — eigene Kopie), Gateway capability-Routing: Klassen ohne RGBD-Support -> route=rgb_cap (Zahnrad immer via GDRNPP bis GigaPose-Templates da sind, FU-Ticket). 288 Tests. E2E mit Zahnrad-Szene laeuft."
         }
       ]
+    },
+    {
+      "id": "T-179",
+      "title": "FU: GigaPose-Zahnrad-Templates (RGBD-Zweig der MoE kann dann auch Zahnrad)",
+      "description": "Aktuell routet MoE Zahnraeder capability-bedingt IMMER ueber den RGB-Zweig (MOE_RGBD_CLASSES=anker_kurz,anker_lang). Upgrade: (1) BOP obj_000006.ply -> obj000006.obj nach GigaPose/datasets/kip2/ + models_info-Eintrag, (2) Template-Render fuer 000006 (src/custom_megapose-Pfad, wie S-009/kip2-Onboarding), (3) preprocessed neu, (4) gigapose-svc restart + MOE_RGBD_CLASSES um zahnrad erweitern. Danach Zahnrad auch im RGBD-Zweig (ausserhalb der Zone).",
+      "column": "backlog",
+      "assignee": "kai-ml",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "moe"
+      ],
+      "session": "",
+      "created": "2026-06-12T08:39:45Z",
+      "updated": "2026-06-12T08:39:45Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
     }
   ]
 }

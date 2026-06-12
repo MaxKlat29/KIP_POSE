@@ -152,15 +152,19 @@ def test_composed_tcamobj_to_world_uses_mm_correctly(camera):
 def test_class_mapping_via_obj_id_not_lowercase():
     """Die §6-Falle: die lowercase Mesh-Klasse darf NICHT direkt in PART_SYMMETRY.
     Ueber obj_id muss der CamelCase-Part kommen, und DER muss Symmetrie haben."""
-    assert CLASS_TO_OBJ_ID == {"anker_kurz": 1, "anker_lang": 2}
+    # T-178c: Viewer-/Live-Scope = 2 Anker (D1) + zahnrad. Die EVAL-Hauptmetrik
+    # bleibt 2-Klassen (batch_eval traegt eine EIGENE Kopie, dort getestet).
+    assert CLASS_TO_OBJ_ID == {"anker_kurz": 1, "anker_lang": 2, "zahnrad": 6}
     for cls, obj_id in CLASS_TO_OBJ_ID.items():
         part = A.part_for_obj_id(obj_id)
-        assert part in ("Anker_Kurz", "Anker_Lang")     # CamelCase!
+        assert part in ("Anker_Kurz", "Anker_Lang", "Zahnrad")   # CamelCase!
         # Die direkte (falsche) Variante liefert None — DAS ist die Falle:
         assert A.PART_SYMMETRY.get(cls) is None
-        # Der korrekte (CamelCase) Part hat die continuous-Y-Symmetrie:
+        # Der korrekte (CamelCase) Part hat seine Symmetrie: Anker continuous-Y,
+        # Zahnrad discrete C_7.
         sym = A.PART_SYMMETRY.get(part)
-        assert sym is not None and sym["type"] == "continuous"
+        assert sym is not None
+        assert sym["type"] == ("discrete" if part == "Zahnrad" else "continuous")
         assert sym["axis"] == [0.0, 1.0, 0.0]
 
 

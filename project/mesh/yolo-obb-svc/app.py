@@ -37,11 +37,13 @@ WEIGHTS = os.environ.get("YOLO_OBB_WEIGHTS", "/weights/detector.pt")
 CONF = float(os.environ.get("YOLO_OBB_CONF", "0.40"))
 IMGSZ = int(os.environ.get("YOLO_OBB_IMGSZ", "1280"))
 
-# D1 scope: only the two Anker classes are part of the mesh (CONTRACT.md §6).
-# Class-id -> mesh class name (lowercase, as the rest of the mesh expects).
-# Ids >= 2 (buerstenhalter_2polig, getriebegehaeuse_typ4, ringmagnet, zahnrad)
-# are dropped. The detector's own r.names confirms this order at startup.
-ANKER_CLASS_NAMES = {0: "anker_kurz", 1: "anker_lang"}
+# Mesh-Klassen-Scope: die 2 Anker (D1) + zahnrad (T-178c, Max: Zahnraeder in
+# der MoE-Pipeline mit einbeziehen — der GDRNPP-zahnrad-Checkpoint existiert,
+# der :8078-Worker nutzt ihn seit T-115). Die 3 untrainierten Distraktoren
+# (buerstenhalter_2polig, getriebegehaeuse_typ4, ringmagnet; ids 2-4) bleiben
+# gedroppt. Detector ist 6-class FROZEN (train_detector_armvis:38); obj_id =
+# cls_id + 1 — zahnrad: cls 5 -> obj_id 6.
+MESH_CLASS_NAMES = {0: "anker_kurz", 1: "anker_lang", 5: "zahnrad"}
 
 app = FastAPI(title="yolo-obb-svc")
 MODEL = None
@@ -58,7 +60,7 @@ def load_model():
     # Sanity: the FROZEN order must place anker_kurz=0, anker_lang=1. If a model
     # ever ships a different order we still trust its own r.names per-detection,
     # but warn loudly because the gdrnpp coupling assumes obj_id = cls_id + 1.
-    for cid, expect in ANKER_CLASS_NAMES.items():
+    for cid, expect in MESH_CLASS_NAMES.items():
         got = str(names.get(cid, "")).lower()
         if got and got != expect:
             print(f"[yolo-obb-svc] WARN class-id {cid} is '{got}', expected "
@@ -122,7 +124,7 @@ def segment(req: SegmentReq):
     for i in range(len(xywhr)):
         cls_id = int(classes[i])
         # D1 scope: keep only the two Anker classes; drop the rest (incl. zahnrad).
-        cls_name = ANKER_CLASS_NAMES.get(cls_id)
+        cls_name = MESH_CLASS_NAMES.get(cls_id)
         if cls_name is None:
             continue
         # Cross-check against the model's own label (defensive; FROZEN order).

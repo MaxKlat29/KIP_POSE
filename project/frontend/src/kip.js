@@ -383,6 +383,25 @@ function wirePip() {
     c.fov = p.fov_y; c.updateProjectionMatrix();
     ctl.target.set(p.look_at[0], p.look_at[1], p.look_at[2]);
     ctl.update();
+    // T-178c (Max): mit dem Extrinsics-up ist die OrbitControls-Steuerung nach
+    // der Foto-Pose invertiert/gerollt ("Maschine auf Kopf"). Die Pose bleibt
+    // 1:1 stehen, solange man nur SCHAUT — aber beim ERSTEN Drag normalisiert
+    // sich der up-Vektor einmalig auf Welt-Z (+ Mini-Offset gegen die Nadir-
+    // Degeneration), damit die Steuerung danach stabil ist. Der minimale Roll-
+    // Sprung beim Drag-Start ist gewollt — wer dreht, verlaesst den 1:1-
+    // Vergleich ohnehin.
+    const normalizeUp = () => {
+      ctl.removeEventListener("start", normalizeUp);
+      c.up.set(0, 0, 1);
+      const dir = c.position.clone().sub(ctl.target);
+      const rxy = Math.hypot(dir.x, dir.y);
+      if (rxy < dir.length() * 0.02) {       // quasi-exakter Nadir → leicht kippen
+        dir.x += dir.length() * 0.03;
+        c.position.copy(ctl.target.clone().add(dir));
+      }
+      ctl.update();
+    };
+    ctl.addEventListener("start", normalizeUp);
     viewer.saveView?.();                 // Perspektive persistieren (inkl. up/fov)
     btnCam.classList.add("pip__btn--on");
     setTimeout(() => btnCam.classList.remove("pip__btn--on"), 600);
@@ -609,6 +628,9 @@ async function inferMoe() {
     if (mm) {
       let html = `<strong>${mm.rgb_n}</strong> Teil(e) im IR-Schatten → RGB (${mm.rgb_source})`
         + ` · <strong>${mm.rgbd_n}</strong> → RGB-D (${mm.rgbd_source})`;
+      if (mm.rgb_cap_n > 0) {
+        html += ` · <strong>${mm.rgb_cap_n}</strong> → RGB (Klasse ohne RGB-D-Support, z.B. Zahnrad)`;
+      }
       if (mm.shadow_sim?.applied) {
         html += `<br>IR-Schatten simuliert: ${Math.round((mm.shadow_sim.masked_px || 0) / 1000)}k`
           + ` Depth-Pixel entfernt (wie an der echten Anlage)`;

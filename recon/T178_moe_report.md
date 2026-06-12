@@ -110,3 +110,31 @@ Max: „will das auch simuliert haben, nicht mit echten Bildern." Umgesetzt:
 → Das Routing rettet das Schatten-Teil (Faktor ~125); außerhalb der Zone
 bleibt RGB-D unangetastet. E2E-Sim-Läufe: Maske greift jedes Mal (~76k px),
 Routing-/Vergleichszähler im Result-Meta (`moe.shadow_sim`, `zone_hits_*`).
+
+## 8. Nachtrag T-178c (2026-06-12): Max' Abnahme-Befunde gefixt + Zahnrad in der MoE-Kette
+
+1. **PiP-Boxen weg (Bug):** der T-113-`kept_proj`-Filter versteckte auf
+   Gateway-/MoE-Jobs ALLE Boxen (kept_proj wird nur im Pipeline-A-Zweig
+   gefüllt). Fix: Filter nur anwenden, wenn kept_proj Daten trägt.
+   Beweis: `recon/t178c_boxes_check.png` (5 Boxen inkl. „Zahnrad 95%").
+2. **Kameraperspektive → invertierte Steuerung:** der Extrinsics-up (T-114,
+   bewusst für den 1:1-Foto-Vergleich) blieb nach dem Klick aktiv. Fix: Pose
+   bleibt exakt stehen, beim ERSTEN Drag normalisiert sich up einmalig auf
+   Welt-Z (+ Mini-Offset gegen Nadir-Degeneration) → Steuerung danach stabil.
+3. **Zahnräder nicht inferiert (D1-Scope an 3 Stellen):**
+   - yolo-obb-svc filterte cls≥2 → lässt jetzt zahnrad (cls 5 → obj 6) durch
+   - gdrnpp-svc lädt das 3. Modell (Checkpoint existiert seit T-115; live:
+     `ready [1,2,6]`)
+   - composed-Viewer-Mapping +zahnrad:6 — **EVAL-Hauptmetrik bleibt bewusst
+     2-Klassen** (batch_eval trägt eine eigene Mapping-Kopie)
+   - **Gateway capability-Routing:** Klassen ohne RGBD-Support (GigaPose-
+     Templates = nur 2 Anker) gehen IMMER über den RGB-Zweig, `route=rgb_cap`,
+     Env `MOE_RGBD_CLASSES`. → Zahnräder funktionieren überall auf dem
+     MoE-Screen, in und außerhalb der Zone.
+
+**E2E (job afbbc74c):** 5/5 Teile inferiert (2 Kurz, 2 Lang, **1 Zahnrad**,
+`rgb_cap_n:1`), Schatten-Sim aktiv (75.9k px), Boxen sichtbar. 288 Tests.
+
+**Follow-up T-179 (Backlog):** GigaPose-Zahnrad-Templates (Mesh →
+`datasets/kip2/` + Template-Render + preprocessed + `MOE_RGBD_CLASSES`+=zahnrad)
+→ danach kann auch der RGBD-Zweig Zahnräder.

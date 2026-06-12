@@ -1872,9 +1872,13 @@ def sim_live_boxes(job: str):
         # T-113: nur Boxen mit behaltener (on-table) Pred — Off-Table-FPs raus (2D == 3D).
         # Doc fehlt (z.B. Server-Neustart nach Generation) -> konservativ: alle
         # Boxen zeichnen (lieber ein FP durch als alle Boxen verstecken).
+        # T-178c-Fix: kept_proj wird NUR im Pipeline-A-Zweig gefuellt — Gateway-/
+        # MoE-Jobs liessen es leer und der Filter versteckte ALLE Boxen (Max:
+        # "sehe die Preview nicht mehr"). Filter nur anwenden, wenn kept_proj
+        # tatsaechlich Daten traegt (= A-Pfad mit Off-Table-Filter gelaufen).
         _doc = _SIM_DOCS.get(job)
-        _filter = _doc is not None
         kept_proj = (_doc or {}).get("meta", {}).get("kept_proj", [])
+        _filter = _doc is not None and bool(kept_proj)
         for k, lst in det.items():
             for b in lst:
                 oid = int(b["obj_id"]); x, y, w, h = b["bbox_est"]
