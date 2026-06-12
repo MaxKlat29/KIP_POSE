@@ -47,10 +47,7 @@
   background: #fff; border-radius: 8px; padding: 4px 10px;
 }
 .kip-logo-kit { height: 22px; display: block; }
-.kip-logo-wbk {
-  background: #00569d; color: #fff; font-weight: 800; font-size: 13px;
-  letter-spacing: 0.02em; padding: 3px 8px; border-radius: 4px; line-height: 1;
-}
+.kip-logo-wbk-img { height: 24px; display: block; }
 .kip-brand__dash { color: var(--text-dim); font-weight: 400; }
 .kip-sheetbar .kip-tab {
   font: inherit; font-size: 13px; color: #46505e;
