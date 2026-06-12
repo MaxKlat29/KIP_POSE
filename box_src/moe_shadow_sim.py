@@ -207,18 +207,24 @@ def render_overlay(path, ir_polys, view_polys, K, R, t):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--offset", default="0.10,0,0",
+    ap.add_argument("--offset", default=None,
                     help="IR-Quelle relativ zur RGB-Cam, Meter 'dx,dy,dz'")
+    ap.add_argument("--ir-pos", default="0.20,0.088,1.10",
+                    help="IR-Quelle ABSOLUT in Welt-Metern 'x,y,z' (Max-Rig: "
+                         "~20cm rechts vom Nullpunkt an der Decke, RGB-Cam-"
+                         "Hoehe 1.10m, Montagelinie y=88mm). --offset gewinnt.")
     ap.add_argument("--grid-res", type=float, default=0.005)
     ap.add_argument("--out-dir", default="/mnt/data/kip_pose/recon_t178")
     args = ap.parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
 
     cam_c, K, R, t = rgb_cam_world()
-    off = np.array([float(v) for v in args.offset.split(",")])
-    ir_c = cam_c + off
+    if args.offset:
+        ir_c = cam_c + np.array([float(v) for v in args.offset.split(",")])
+    else:
+        ir_c = np.array([float(v) for v in args.ir_pos.split(",")])
     print(f"[sim] RGB-Cam Welt: {np.round(cam_c*1000,1)} mm")
-    print(f"[sim] IR-Quelle:    {np.round(ir_c*1000,1)} mm (offset {off*1000} mm)")
+    print(f"[sim] IR-Quelle:    {np.round(ir_c*1000,1)} mm")
 
     mesh = load_occluder()
     print(f"[sim] Occluder: {len(mesh.faces)} Tris (>z={SRC_MIN_Z}m)")
