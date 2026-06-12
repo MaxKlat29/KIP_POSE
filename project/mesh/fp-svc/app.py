@@ -29,7 +29,10 @@ from pydantic import BaseModel
 
 FP_REPO = os.environ.get("FP_REPO", "/workspace/FoundationPose")
 MESH_DIR = os.environ.get("FP_MESH_DIR", "/assets/meshes")
-CLASS_TO_MESH = {"anker_kurz": "anker_kurz.obj", "anker_lang": "anker_lang.obj"}
+# zahnrad seit T-178e: FoundationPose ist mesh-basiert zero-shot — das Zahnrad-
+# Mesh (aus BOP obj_000006, mm->m konvertiert) reicht, kein Training noetig.
+CLASS_TO_MESH = {"anker_kurz": "anker_kurz.obj", "anker_lang": "anker_lang.obj",
+                 "zahnrad": "zahnrad.obj"}
 
 import sys
 sys.path.insert(0, FP_REPO)

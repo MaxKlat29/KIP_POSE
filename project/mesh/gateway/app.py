@@ -259,6 +259,33 @@ def _moe_route_world_xy(u, v, K, R_w2c, t_w2c_mm):
     return float(Xw[0]), float(Xw[1])
 
 
+def _moe_visible_fraction(det, view_polys_mm, K, R_w2c, t_w2c_mm, n=5):
+    """Anteil der Detection, der NICHT im View-Schatten (Arm verdeckt die
+    Kamera-Sicht) liegt: n x n Sample-Punkte der Box -> Tischebene -> Anteil
+    ausserhalb der view_polys. Grobe Sichtbarkeits-Schaetzung ohne GT."""
+    if det.get("obb") is not None:
+        cx_, cy_, w, h, th = [float(v) for v in det["obb"][:5]]
+        c, s = np.cos(th), np.sin(th)
+    else:
+        bb = _mask_b64_bbox(det.get("mask_b64"))
+        if bb is None:
+            return 1.0
+        cx_, cy_ = bb[0] + bb[2] / 2.0, bb[1] + bb[3] / 2.0
+        w, h, c, s = bb[2], bb[3], 1.0, 0.0
+    vis, total = 0, 0
+    for a in np.linspace(-0.5, 0.5, n):
+        for b in np.linspace(-0.5, 0.5, n):
+            u = cx_ + a * w * c - b * h * s
+            v = cy_ + a * w * s + b * h * c
+            xy = _moe_route_world_xy(u, v, K, R_w2c, t_w2c_mm)
+            if xy is None:
+                continue
+            total += 1
+            if not any(_point_in_poly(xy[0], xy[1], p) for p in view_polys_mm):
+                vis += 1
+    return (vis / total) if total else 1.0
+
+
 def _moe_split(detections, zone_polys_mm, K, R_w2c, t_w2c_mm,
                rgbd_classes=None):
     """Detections -> (rgb_dets, rgbd_dets, route_by_id). Anker-Pixel = obb-Zentrum
@@ -719,6 +746,10 @@ async def predict(
     moe_w2c: str | None = Form(None),
     moe_rgb_source: str = Form(MOE_RGB_DEFAULT),
     moe_rgbd_source: str = Form(MOE_RGBD_DEFAULT),
+    # Klassen, die der gewaehlte RGB-D-Zweig beherrscht (csv). Default = Env
+    # MOE_RGBD_CLASSES. FoundationPose kann seit T-178e auch zahnrad (mesh-
+    # basiert) -> der Aufrufer schickt dann 'anker_kurz,anker_lang,zahnrad'.
+    moe_rgbd_classes: str | None = Form(None),
     # uint16-depth -> millimetres factor (metres = png*depth_scale/1000). Default 1.0
     # = real mm sensors (the historical assumption); BOP/SDG depth PNGs carry a
     # depth_scale (0.1: png*0.1 = mm) in their scene_camera.json and MUST pass it,
@@ -838,6 +869,7 @@ async def predict(
         try:
             z = json.loads(moe_zone or "")
             polys = z["polys_mm"] if isinstance(z, dict) else z
+            view_polys = (z.get("view_polys_mm") or []) if isinstance(z, dict) else []
             assert isinstance(polys, list) and polys
             w = json.loads(moe_w2c or "")
             R_w2c_m = np.asarray(w["R"], dtype=np.float64).reshape(3, 3)
@@ -854,10 +886,18 @@ async def predict(
                 status_code=400,
                 detail=f"moe sub-sources unbekannt: rgb='{moe_rgb_source}' "
                        f"rgbd='{moe_rgbd_source}'")
+        rgbd_cls = (MOE_RGBD_CLASSES if not moe_rgbd_classes
+                    else {c.strip() for c in moe_rgbd_classes.split(",") if c.strip()})
         K_arr = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]])
+        # Verdeckungs-Gate: Detections, die zu >80% im View-Schatten des Arms
+        # liegen (= <20% sichtbar), existieren fuer die Pipeline nicht.
+        if view_polys:
+            detections = [d for d in detections
+                          if _moe_visible_fraction(d, view_polys, K_arr,
+                                                   R_w2c_m, t_w2c_m) >= 0.20]
         rgb_dets, rgbd_dets, route_by_id = _moe_split(
             detections, polys, K_arr, R_w2c_m, t_w2c_m,
-            rgbd_classes=MOE_RGBD_CLASSES)
+            rgbd_classes=rgbd_cls)
         inst_by_id = {i["id"]: i for i in instances}
 
         async def _moe_pose(src, src_name, dets):

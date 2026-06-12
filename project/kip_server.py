@@ -170,6 +170,10 @@ KIP_MOE_RGBD_SOURCE = os.environ.get("KIP_MOE_RGBD_SOURCE", "foundationpose")
 # A/B-Vergleichskombi passend zum RGB-D-Zweig (gleiche Modellfamilie = fair).
 _MOE_AB_COMBO = {"foundationpose": "yolo_obb__foundationpose",
                  "gigapose_rgbd": "yolo_obb__gigapose_rgbd"}
+# Klassen je RGB-D-Zweig (T-178e): FoundationPose ist mesh-basiert und kann
+# zahnrad (Mesh registriert); GigaPose hat nur Anker-Templates (FU T-179).
+_MOE_RGBD_CLASSES = {"foundationpose": "anker_kurz,anker_lang,zahnrad",
+                     "gigapose_rgbd": "anker_kurz,anker_lang"}
 _moe_shadow_cache: dict = {"mtime": None, "data": None}
 
 
@@ -330,9 +334,15 @@ def _gateway_preds_for_frame(combo_id, *, rgb_path, depth_path, K, R_w2c, t_w2c,
             raise HTTPException(503, "MoE-Zone fehlt (project/config/moe_shadow.json) — "
                                      "Raytracing-Sim zuerst laufen lassen (T-178).")
         extra_form = {
-            "moe_zone": json.dumps({"polys_mm": shadow["moe_rgb_zone_polys_mm"]}),
+            "moe_zone": json.dumps({
+                "polys_mm": shadow["moe_rgb_zone_polys_mm"],
+                # View-Schatten fuers Verdeckungs-Gate des Gateways.
+                "view_polys_mm": shadow.get("view_shadow_polys_mm") or [],
+            }),
             "moe_w2c": json.dumps({"R": R_w2c_flat, "t_mm": t_w2c_flat}),
             "moe_rgbd_source": KIP_MOE_RGBD_SOURCE,
+            "moe_rgbd_classes": _MOE_RGBD_CLASSES.get(
+                KIP_MOE_RGBD_SOURCE, "anker_kurz,anker_lang"),
         }
     gateway_resp = _gateway_predict_multipart(
         combo_id, rgb_bytes=rgb_bytes, depth_bytes=depth_bytes,
@@ -1761,6 +1771,27 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
                 combo_id, rgb_path=str(rgb_src), depth_path=depth_for_pose,
                 K=K, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=table_origin,
                 seg_prompts=seg_prompts, depth_scale=0.1, start_inst_id=iid + 1)
+            # T-178e: Off-Table-/Wand-FP-Filter (T-113) auch fuer Gateway-Preds —
+            # bisher lief er NUR im Pipeline-A-Zweig, deshalb platzierten die
+            # Gateway-Kombis Wand-Decal-Phantome ("Teile die es nicht gibt").
+            # Gefilterte Preds fuellen kept_proj -> die PiP blendet deren
+            # 2D-Boxen konsistent aus (2D == 3D).
+            _kept_gw = []
+            for pr in preds:
+                oid = _OID.get((pr.get("part") or "").lower())
+                if not _pred_on_table(pr["t_world"], table_origin):
+                    n_drop += 1
+                    continue
+                if oid is not None and _is_static_wall_fp(
+                        pr["t_world"], pr["R_world"], table_origin, oid):
+                    n_drop += 1
+                    continue
+                _kept_gw.append(pr)
+                proj = _project_world_to_image(pr["t_world"], table_origin,
+                                               R_w2c, t_w2c, K)
+                if proj is not None and oid is not None:
+                    kept_proj.append({"obj_id": int(oid), "u": proj[0], "v": proj[1]})
+            preds = _kept_gw
             # MoE (T-178): Routing-Zaehler (rgb_n/rgbd_n) ins Result-Meta —
             # das FE zeigt "X Teile RGB (Schatten) / Y RGB-D".
             if _gw_resp.get("moe"):
