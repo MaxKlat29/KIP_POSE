@@ -402,7 +402,9 @@ function wirePip() {
       ctl.update();
     };
     ctl.addEventListener("start", normalizeUp);
-    viewer.saveView?.();                 // Perspektive persistieren (inkl. up/fov)
+    // KEIN saveView hier (T-178c): die Foto-Pose ist transient — persistiert
+    // wuerde der Isaac-up die Default-Steuerung beim naechsten Laden vergiften
+    // (scene.js speichert/restauriert up ohnehin nicht mehr).
     btnCam.classList.add("pip__btn--on");
     setTimeout(() => btnCam.classList.remove("pip__btn--on"), 600);
   });

@@ -691,10 +691,15 @@ export function createViewer(canvas) {
   const VIEW_KEY = "kip.viewer.view.v1";
   function saveView() {
     try {
+      // T-178c: up wird NICHT mehr persistiert. Das Welt-Z-up ist das einzige
+      // gueltige Orbit-Up dieses Viewers; die Kameraperspektive (Foto-Pose,
+      // Isaac-Extrinsics-up) ist ein TRANSIENTER Vergleichszustand. Frueher
+      // persistierte change->scheduleSave den schiefen up und tryRestoreView
+      // stellte ihn beim naechsten Laden wieder her -> die DEFAULT-Steuerung
+      // war ab dann dauerhaft invertiert (Max: "movement komplett kaputt").
       localStorage.setItem(VIEW_KEY, JSON.stringify({
         pos: camera.position.toArray(),
         tgt: controls.target.toArray(),
-        up:  camera.up.toArray(),
         fov: camera.fov,
       }));
     } catch (_) { /* private mode / quota — egal */ }
@@ -707,7 +712,9 @@ export function createViewer(canvas) {
       if (!Array.isArray(v.pos) || !Array.isArray(v.tgt)) return false;
       camera.position.fromArray(v.pos);
       controls.target.fromArray(v.tgt);
-      if (Array.isArray(v.up)) camera.up.fromArray(v.up);
+      // up bewusst IGNORIEREN (auch aus Alt-Eintraegen): immer Welt-Z —
+      // heilt vergiftete localStorage-Stände von vor T-178c automatisch.
+      camera.up.set(0, 0, 1);
       if (Number.isFinite(v.fov)) camera.fov = v.fov;
       refreshClipping(true);
       controls.update();
