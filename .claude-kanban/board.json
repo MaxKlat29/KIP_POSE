@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-12T16:27:36Z",
+  "updated": "2026-06-12T19:06:15Z",
   "columns": [
     {
       "id": "backlog",
@@ -5046,7 +5046,7 @@
       "id": "T-088",
       "title": "Fix pre-existing TTA medoid-Float-Flake (test_tta_wrapper_recovers_true_rotation 1.2e-6<1e-6)",
       "description": "",
-      "column": "backlog",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P3",
@@ -5055,11 +5055,24 @@
       ],
       "session": "",
       "created": "2026-06-01T16:20:05Z",
-      "updated": "2026-06-01T16:20:05Z",
+      "updated": "2026-06-12T19:06:13Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-12T19:06:13Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-12T19:06:12Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "FIX (2bd5ed5): Assert-Schranke 1e-6 -> 5e-6 (medoid-Float64-Akkumulation, gemessen 1.2074e-6 bei mathematisch 0 Grad — deterministischer Toleranz-Flake, S172-Empfehlung). Suite jetzt 289/289 ohne Deselect."
+        },
+        {
+          "ts": "2026-06-12T19:06:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-089",
@@ -6068,17 +6081,24 @@
       ],
       "session": "",
       "created": "2026-06-03T08:50:27Z",
-      "updated": "2026-06-03T08:50:27Z",
+      "updated": "2026-06-12T19:06:15Z",
       "started_at": null,
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-12T19:06:15Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Hinweis: T-178c hat zahnrad in den Mesh-/Live-Pfad geholt (yolo-obb-svc laesst cls5 durch, gdrnpp-svc laedt obj6, composed mappt) — Live/Sim/MoE zeigen Zahnrad-Preds. Eval-seitig (gt/pred-Haeufigkeit in Runs) noch unverifiziert -> Ticket bleibt offen bis zum naechsten Eval-Check."
+        }
+      ]
     },
     {
       "id": "T-104",
       "title": "T-104: vereinzelte anomale GT-Tiefe (Anker_Lang t.z=-0.85, Teil 'im Wagen')",
       "description": "Kai-Nebenbefund: einzelne GT-Posen mit anomaler Tiefe weit unter der Arbeitsfläche. Daten-/Pose-Thema, kein Frame/Viewer. Prüfen: Sim-Physik-Settle / GT-Export-Tiefe für Ausreißer.",
-      "column": "backlog",
+      "column": "done",
       "assignee": "kai-ml",
       "instance": "",
       "priority": "P3",
@@ -6088,11 +6108,24 @@
       ],
       "session": "",
       "created": "2026-06-03T08:50:27Z",
-      "updated": "2026-06-03T08:50:27Z",
+      "updated": "2026-06-12T19:06:13Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-12T19:06:13Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-12T19:06:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "GELOEST durch T-177: Die 'anomale GT-Tiefe' war der Euclid-vs-Planar-Konventionsfehler im Isaac->BOP-Konverter (distance_to_camera 1:1 als planares Z geschrieben, +3.4% off-axis). Konverter gefixt (planar_cos_map), Bestandsdaten repariert (repair_depth_planar.py). Details: bugs/kip-pose-depth-euclid-vs-planar-convention."
+        },
+        {
+          "ts": "2026-06-12T19:06:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-105",
@@ -8656,7 +8689,7 @@
       "id": "T-148",
       "title": "M3: Upload-Size/Pixel-Limits auf /api/predict + gateway (DoS)",
       "description": "Caddy request_body max_size + PIL.MAX_IMAGE_PIXELS. Bruno CWE-400. P1 nach Deploy.",
-      "column": "backlog",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P2",
@@ -8666,17 +8699,30 @@
       ],
       "session": "2026-06-07-multi-pipeline-pose",
       "created": "2026-06-07T18:32:12Z",
-      "updated": "2026-06-07T18:32:12Z",
+      "updated": "2026-06-12T19:06:14Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-12T19:06:14Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-12T19:06:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "DONE (2bd5ed5): Upload-Limits auf /api/predict + /api/real/infer_async — 32MB Datei + 6144x6144 Pixel (Header-only-PIL-Check, keine Decode-Bombe; env KIP_MAX_UPLOAD_MB/KIP_MAX_PIXELS). Live verifiziert: 40MB-Upload -> 413."
+        },
+        {
+          "ts": "2026-06-12T19:06:14Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-149",
       "title": "M4: Job-Cap/Rate-Limit fuer /api/eval/run (unbounded spawn)",
       "description": "_JOBS-Cap + Rate-Limit; force=true umgeht Training-Guard. Bruno CWE-770. P1 nach Deploy.",
-      "column": "backlog",
+      "column": "done",
       "assignee": "jonas-backend",
       "instance": "",
       "priority": "P2",
@@ -8686,11 +8732,24 @@
       ],
       "session": "2026-06-07-multi-pipeline-pose",
       "created": "2026-06-07T18:32:12Z",
-      "updated": "2026-06-07T18:32:12Z",
+      "updated": "2026-06-12T19:06:15Z",
       "started_at": null,
-      "completed_at": null,
+      "completed_at": "2026-06-12T19:06:15Z",
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-06-12T19:06:14Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "DONE (2bd5ed5): Job-Cap /api/eval/run — genau EIN Eval-Lauf zur Zeit (429 mit Job-Verweis bei laufendem kind=eval-Job; force ueberstimmt nicht). Begruendung: parallele 12-Kombi-Laeufe pruegeln sich um GPU/Services (VRAM-Wand T-133) und verfaelschen beide."
+        },
+        {
+          "ts": "2026-06-12T19:06:15Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → done"
+        }
+      ]
     },
     {
       "id": "T-150",
@@ -11050,7 +11109,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-12T16:27:36Z",
+      "updated": "2026-06-12T19:06:15Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11126,6 +11185,12 @@
           "agent": "claude",
           "level": "info",
           "msg": "T-178f UI-Polish deployed: Legende rechts neben Mappen (eine Bottom-Zeile), Modellauswahl als Pill-Gruppe, Texte gekuerzt (keine Bindestrich-Ketten), Zoom zoomSpeed=1.8 + zoomToCursor. Edge verifiziert."
+        },
+        {
+          "ts": "2026-06-12T19:06:15Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "T-178g UI-Finale (2bd5ed5): Header = KIT-Logo + wbk-Marke + Titel (oben frei), Modellauswahl ueber den Mappen im Bottom-Stack, Reset-Button + Bereit-Badge raus. Nebenbei T-088/T-104/T-148/T-149 geschlossen (Suite 289/289). Offen bewusst gelassen: T-179 (GigaPose-Zahnrad-Templates, niedrig — FP deckt ab), T-133 (VRAM-Manager, invasiv), T-150 (Max-Entscheid Auth), T-141/142 (formale QS-Gates), Zahnrad-Retrain (nur auf Zuruf)."
         }
       ]
     },
