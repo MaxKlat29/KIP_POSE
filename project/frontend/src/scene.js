@@ -691,6 +691,11 @@ export function createViewer(canvas) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
+  // T-178f (Max: "Ranzoomen echt langsam"): schnelleres Dolly + Zoom ZUM
+  // CURSOR (CAD-Standard, vgl. setreo-cloud-Viewer-ADR) — man landet direkt
+  // am angepeilten Teil statt langsam Richtung Orbit-Target zu kriechen.
+  controls.zoomSpeed = 1.8;
+  controls.zoomToCursor = true;
   // Grosszuegige Range — bei zu engem Min/Max bleibt man bei falschem Zoom haengen.
   // 5 mm rein, 50 m raus deckt alles vom CAD-Detail bis zur Halle ab.
   controls.minDistance = 0.005;

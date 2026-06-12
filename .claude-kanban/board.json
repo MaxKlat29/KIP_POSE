@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-12T09:34:47Z",
+  "updated": "2026-06-12T09:49:55Z",
   "columns": [
     {
       "id": "backlog",
@@ -11050,7 +11050,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-12T09:34:47Z",
+      "updated": "2026-06-12T09:49:55Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11114,6 +11114,12 @@
           "agent": "claude",
           "level": "info",
           "msg": "T-178d deployed+verifiziert (E2E 9c1f7cba): Routing-Farben gruen/blau live (GT grau auf MoE), RGBD-Zweig = FoundationPose 0.968 (KIP_MOE_RGBD_SOURCE, A/B gleiche Familie), Dropdowns auf MoE ausgeblendet, Mappen-Register unten links (Excel-Optik). Routen im Doc: 2x rgb + 4x rgb_cap (Zahnraeder) + 2x rgbd. Hinweis: Zonen-Treffer 0/2 in der Testszene = Zonen-GTs waren Zahnraeder, GDRNPP-Zahnrad-Checkpoint ist der schwaechste (ehrliche Messung)."
+        },
+        {
+          "ts": "2026-06-12T09:49:55Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "T-178e deployed+verifiziert (E2E 66479699): (1) T-113-Filter auf Gateway-Pfad portiert -> Wand-Decal-Phantome gefiltert (inkl. PiP-Box-Konsistenz via kept_proj). (2) FP kann zahnrad (Mesh registriert, 3 Estimators, VRAM 9.5GB) -> Capability-Route weg, Zahnraeder routen nach Zone gruen/blau. (3) Stilles Verdeckungs-Gate <20% Sichtbarkeit (View-Schatten-Sampling). rgb_cap_n=0 im E2E, 288 Tests, main c540fe0->neu."
         }
       ]
     },

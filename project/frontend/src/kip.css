@@ -26,10 +26,13 @@
    Karteikarten mit oben gerundeten Ecken, aktives Blatt "liegt obenauf"
    (weiß, leicht erhaben), inaktive Blätter zurückgesetzt grau. Überschreibt
    die generischen Header-.kip-tab-Styles per spezifischerem Selektor. */
-.kip-sheetbar {
+.kip-bottombar {
   position: fixed; left: 12px; bottom: 0; z-index: 30;
-  display: flex; gap: 3px; align-items: flex-end;
+  display: flex; align-items: flex-end; gap: 16px;
 }
+.kip-sheetbar { display: flex; gap: 3px; align-items: flex-end; }
+/* Legende sitzt in der Bottom-Leiste RECHTS neben den Mappen (T-178f). */
+.kip-bottombar .legend { position: static; margin-bottom: 8px; }
 .kip-sheetbar .kip-tab {
   font: inherit; font-size: 13px; color: #46505e;
   background: #d8dde5; border: 1px solid #b9c0cb; border-bottom: none;
@@ -43,9 +46,6 @@
   border-color: #aab2bf; padding: 9px 18px 10px;
   box-shadow: 0 -3px 8px rgba(0,0,0,.12);
 }
-/* Legende dem Blatt-Register ausweichen (beide unten links). */
-#legend.legend { bottom: 52px; }
-
 .kip-gpu { font-size: 12px; color: #a8b2c2; font-family: var(--mono); }
 .kip-gpu--ok    { color: #34d399; }
 .kip-gpu--busy  { color: #f5b942; }
@@ -157,17 +157,29 @@
 /* ══════════════════════════════════════════════════════════════════════════
    S-010 — Pipeline-Auswahl (2 gekoppelte Selects, Seg → Post). Erbt .kip-sel.
    ══════════════════════════════════════════════════════════════════════════ */
+/* T-178f (Max): Modellauswahl als aufgeräumte Pill-Gruppe — Rahmen-Karte,
+   größere klickbare Selects mit Hover/Focus, grüner Verbindungspfeil. */
 .kip-pipe {
-  display: inline-flex; align-items: flex-end; gap: 8px;
+  display: inline-flex; align-items: center; gap: 10px;
   font-size: 12px; color: var(--text-dim); margin-left: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 5px 12px;
 }
-.kip-pipe__lbl { align-self: center; color: var(--text-dim); white-space: nowrap; }
-.kip-pipe__field { display: inline-flex; flex-direction: column; gap: 2px; }
+.kip-pipe__lbl { color: var(--text); font-weight: 600; white-space: nowrap; }
+.kip-pipe__field { display: inline-flex; flex-direction: column; gap: 1px; }
 .kip-pipe__sub {
-  font-size: 10px; letter-spacing: 0.03em; color: var(--text-dim); text-transform: uppercase;
+  font-size: 9.5px; letter-spacing: 0.05em; color: var(--text-dim); text-transform: uppercase;
 }
-.kip-pipe .kip-sel { margin-left: 0; }
-.kip-pipe__arrow { align-self: center; color: var(--text-dim); font-size: 14px; padding-bottom: 4px; }
+.kip-pipe .kip-sel {
+  margin-left: 0; font-size: 12.5px; min-width: 150px;
+  background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.22);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer;
+  transition: background .12s;
+}
+.kip-pipe .kip-sel:hover { background: rgba(255,255,255,0.18); }
+.kip-pipe .kip-sel:focus-visible { outline: 2px solid rgba(52,211,153,0.55); outline-offset: 1px; }
+.kip-pipe__arrow { align-self: center; color: rgb(140, 230, 170); font-size: 16px; }
 /* Kontextzeile unter den Selects: Modus / Tiefe / Verfahren + Auto-Spring-Grund. */
 .kip-pipe__ctx {
   position: absolute; top: 50px; left: 18px; margin: 0; padding: 2px 0 0;

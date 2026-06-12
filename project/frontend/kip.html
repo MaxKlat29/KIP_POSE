@@ -81,11 +81,10 @@
       <!-- Ansicht: Simulationsszene — Ground-Truth (blau) gegen Schätzung (rot) -->
       <section id="screen-sim" class="kip-screen" hidden>
         <div class="kip-card">
-          <h2 class="kip-card__h">Simulationsszene: Ground-Truth gegen Schätzung</h2>
-          <p class="kip-card__sub">Jeder Klick erzeugt eine <strong>frische Isaac-Sim-Szene</strong>:
-            zufaellige Teile-Anordnung, Physics-Settle, Render (~60-80&nbsp;s) — dann laufen
-            BOP-Konvertierung, Detektor (YOLOv8) und GDRNPP-Pose-Worker live ueber dieses neue
-            Bild. Ground-Truth (blau) gegen Schaetzung (rot).</p>
+          <h2 class="kip-card__h">Simulation: Soll gegen Schätzung</h2>
+          <p class="kip-card__sub">Jeder Klick erzeugt eine frische Isaac Szene und
+            inferiert sie live (ca. 60 bis 80&nbsp;Sekunden).
+            Blau zeigt die echte Lage, Rot die Schätzung.</p>
           <div class="kip-row">
             <button id="sim-infer" class="kip-btn kip-btn--primary">Neue Szene live generieren</button>
           </div>
@@ -101,16 +100,13 @@
       <!-- Ansicht: MoE-Pipeline (T-178) — IR-Schatten-Routing RGB/RGB-D -->
       <section id="screen-moe" class="kip-screen" hidden>
         <div class="kip-card">
-          <h2 class="kip-card__h">MoE-Pipeline: IR-Schatten-Routing</h2>
-          <p class="kip-card__sub">Der Arm blockt einen Teil der IR-Strahlen der seitlich
-            versetzten Tiefenkamera — im <strong>rot umrandeten Bereich</strong> auf dem
-            Tisch gibt es keine Tiefe (Raytracing-Sim). Teile dort werden per
-            <strong>RGB</strong> (GDRNPP, <span style="color:#16a34a">grün</span>) geschätzt,
-            alle übrigen per <strong>RGB-D</strong> (FoundationPose,
-            <span style="color:#2563eb">blau</span>). Der rötliche Kegel zeigt den
-            IR-„Scheinwerfer" der Tiefenkamera. Die Simulation entfernt die
-            gerenderte Tiefe im IR-Schatten (wie an der echten Anlage) und
-            vergleicht: <strong>MoE vs RGB-D-only</strong> auf derselben Szene.</p>
+          <h2 class="kip-card__h">MoE Pipeline</h2>
+          <p class="kip-card__sub">Der Arm wirft einen IR Schatten auf den Tisch
+            (<strong>rot umrandet</strong>). Dort fehlt die Tiefe, deshalb laufen
+            diese Teile per <strong>RGB</strong>
+            (<span style="color:#16a34a">grün</span>), alle übrigen per
+            <strong>RGB&#8209;D</strong> (<span style="color:#2563eb">blau</span>).
+            Der Kegel zeigt das Licht der Tiefenkamera.</p>
           <div class="kip-row">
             <label class="kip-chk"><input type="checkbox" id="moe-show-zone" checked />
               Schattenbereich anzeigen</label>
@@ -208,23 +204,23 @@
         <div class="kip-bar" hidden="false"><div class="kip-bar__fill"></div></div>
       </div>
 
-      <!-- Legende (unten links): Bedeutung der Farben in der Simulationsansicht -->
-      <aside id="legend" class="legend" aria-label="Legende" hidden>
-        <span class="legend__item"><i class="legend__swatch" style="background:#2878ff"></i>Ground-Truth (echte Lage)</span>
-        <span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>
-      </aside>
-
       <div id="status" class="status" hidden></div>
 
-      <!-- Mappen-Leiste (T-178d, Max): Screen-Wechsel wie Excel-Tabellenblätter
-           unten links — Karteikarten statt Header-Buttons. IDs unverändert
-           (tab-real/sim/moe/batch), nur Ort + Optik. -->
-      <nav class="kip-sheetbar" role="tablist" aria-label="Ansichten">
-        <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
-        <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
-        <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
-        <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
-      </nav>
+      <!-- Bottom-Leiste (T-178d/f, Max): Mappen-Register wie Excel-Tabellen-
+           blätter, die Farb-Legende sitzt RECHTS DANEBEN in derselben Zeile.
+           IDs unverändert (tab-real/sim/moe/batch), nur Ort + Optik. -->
+      <div class="kip-bottombar">
+        <nav class="kip-sheetbar" role="tablist" aria-label="Ansichten">
+          <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
+          <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
+          <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
+          <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
+        </nav>
+        <aside id="legend" class="legend" aria-label="Legende" hidden>
+          <span class="legend__item"><i class="legend__swatch" style="background:#2878ff"></i>Ground-Truth (echte Lage)</span>
+          <span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>
+        </aside>
+      </div>
     </div>
     <script type="module" src="./src/kip.js"></script>
   </body>
