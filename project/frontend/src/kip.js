@@ -305,8 +305,25 @@ function showScreen(which) {
   scrSim.hidden  = which !== "sim";
   scrMoe.hidden  = which !== "moe";
   scrBatch.hidden = which !== "batch";
-  // blau/rot-Legende im Sim- UND MoE-Screen (beide rendern GT vs Schaetzung)
+  // Pipeline-Dropdowns auf dem MoE-Screen ausblenden (T-178d, Max): die MoE
+  // ist eine feste Spezial-Pipeline — oben darf nichts umschaltbar sein.
+  const pipeGroup = document.getElementById("pipe-group");
+  const pipeCtx = document.getElementById("pipe-ctx");
+  if (pipeGroup) pipeGroup.hidden = which === "moe";
+  if (pipeCtx) pipeCtx.hidden = which === "moe";
+  // Legende pro Screen: Sim = GT blau / inferiert rot; MoE = GT grau +
+  // Routing-Farben (gruen = RGB-Zweig, blau = RGB-D-Zweig).
   legend.hidden  = which !== "sim" && which !== "moe";
+  if (which === "moe") {
+    legend.innerHTML =
+      '<span class="legend__item"><i class="legend__swatch" style="background:#9aa3af"></i>Ground-Truth (Soll)</span>'
+      + '<span class="legend__item"><i class="legend__swatch" style="background:#22c55e"></i>Inferiert per RGB (GDRNPP)</span>'
+      + '<span class="legend__item"><i class="legend__swatch" style="background:#2563eb"></i>Inferiert per RGB-D (FoundationPose)</span>';
+  } else if (which === "sim") {
+    legend.innerHTML =
+      '<span class="legend__item"><i class="legend__swatch" style="background:#2878ff"></i>Ground-Truth (echte Lage)</span>'
+      + '<span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>';
+  }
   const pip = document.getElementById("pip");
   hideInferredWith("sim"); hideInferredWith("real");   // stale "Inferiert mit" beim Tab-Wechsel weg
   if (which === "real") {
@@ -619,6 +636,11 @@ async function inferMoe() {
     const { job } = await r.json();
     const final = await pollJob(`${API}/sim/job/${job}`, moeBar, 700);
     const m = await (await fetch(`${API}/${final.result_url}`)).json();
+    // MoE-Faerbung (T-178d): GT dezent grau ("Soll"), Preds nach route
+    // (scene.colorFor: rgb/rgb_cap -> gruen, rgbd -> blau).
+    for (const r of (m.results || [])) {
+      if (r.color === "gt") r.color = "gt_moe";
+    }
     await renderSim(m);
     setPip(`./api/sim/live_rgb/${job}`, `./api/sim/live_boxes/${job}`);
     document.getElementById("moe-inferred-val").textContent =

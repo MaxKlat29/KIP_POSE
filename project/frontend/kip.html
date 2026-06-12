@@ -25,12 +25,6 @@
       <!-- Kopfzeile: Ansichtswechsel, Modellauswahl, Workstation-Status -->
       <header id="kip-top" class="kip-top">
         <span class="kip-brand">KIP <span class="kip-brand__sub">Posenschätzung</span></span>
-        <nav class="kip-tabs" role="tablist">
-          <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
-          <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
-          <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
-          <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
-        </nav>
         <!-- Pipeline-Auswahl: zwei gekoppelte Selects (Seg → Post) ergeben genau die
              7 validen Kombis (S-010). Ersetzt das alte Einzel-"Modell"-Dropdown. -->
         <div class="kip-pipe" id="pipe-group" role="group" aria-label="Pipeline-Auswahl">
@@ -111,8 +105,9 @@
           <p class="kip-card__sub">Der Arm blockt einen Teil der IR-Strahlen der seitlich
             versetzten Tiefenkamera — im <strong>rot umrandeten Bereich</strong> auf dem
             Tisch gibt es keine Tiefe (Raytracing-Sim). Teile dort werden per
-            <strong>RGB</strong> (GDRNPP) geschätzt, alle übrigen per
-            <strong>RGB-D</strong> (GigaPose-3D). Der rötliche Kegel zeigt den
+            <strong>RGB</strong> (GDRNPP, <span style="color:#16a34a">grün</span>) geschätzt,
+            alle übrigen per <strong>RGB-D</strong> (FoundationPose,
+            <span style="color:#2563eb">blau</span>). Der rötliche Kegel zeigt den
             IR-„Scheinwerfer" der Tiefenkamera. Die Simulation entfernt die
             gerenderte Tiefe im IR-Schatten (wie an der echten Anlage) und
             vergleicht: <strong>MoE vs RGB-D-only</strong> auf derselben Szene.</p>
@@ -220,6 +215,16 @@
       </aside>
 
       <div id="status" class="status" hidden></div>
+
+      <!-- Mappen-Leiste (T-178d, Max): Screen-Wechsel wie Excel-Tabellenblätter
+           unten links — Karteikarten statt Header-Buttons. IDs unverändert
+           (tab-real/sim/moe/batch), nur Ort + Optik. -->
+      <nav class="kip-sheetbar" role="tablist" aria-label="Ansichten">
+        <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
+        <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
+        <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
+        <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
+      </nav>
     </div>
     <script type="module" src="./src/kip.js"></script>
   </body>

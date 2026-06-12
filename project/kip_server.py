@@ -162,6 +162,14 @@ KIP_TRAINING_SEGS = {s.strip() for s in
 MOE_SHADOW_PATH = pathlib.Path(
     os.environ.get("KIP_MOE_SHADOW",
                    str(pathlib.Path(__file__).resolve().parent / "config" / "moe_shadow.json")))
+# RGB-D-Zweig der MoE (T-178d, Max: "die BESTEN Modelle"): FoundationPose
+# (AR 0.968, bestes RGB-D) statt GigaPose-3D (0.838). FP ist non-commercial —
+# fuer dieses INTERNE Eval-/Demo-Tool ok (kein Produktiv-Deployment); fuer
+# einen produktiven MoE-Einsatz auf 'gigapose_rgbd' umstellen.
+KIP_MOE_RGBD_SOURCE = os.environ.get("KIP_MOE_RGBD_SOURCE", "foundationpose")
+# A/B-Vergleichskombi passend zum RGB-D-Zweig (gleiche Modellfamilie = fair).
+_MOE_AB_COMBO = {"foundationpose": "yolo_obb__foundationpose",
+                 "gigapose_rgbd": "yolo_obb__gigapose_rgbd"}
 _moe_shadow_cache: dict = {"mtime": None, "data": None}
 
 
@@ -324,6 +332,7 @@ def _gateway_preds_for_frame(combo_id, *, rgb_path, depth_path, K, R_w2c, t_w2c,
         extra_form = {
             "moe_zone": json.dumps({"polys_mm": shadow["moe_rgb_zone_polys_mm"]}),
             "moe_w2c": json.dumps({"R": R_w2c_flat, "t_mm": t_w2c_flat}),
+            "moe_rgbd_source": KIP_MOE_RGBD_SOURCE,
         }
     gateway_resp = _gateway_predict_multipart(
         combo_id, rgb_bytes=rgb_bytes, depth_bytes=depth_bytes,
@@ -1763,8 +1772,10 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
                 # MoE im Schatten verloren ginge. Fehler im Vergleichslauf
                 # brechen den Job nie (None = "RGB-D-only schlug fehl").
                 try:
+                    ab_combo = _MOE_AB_COMBO.get(KIP_MOE_RGBD_SOURCE,
+                                                 "yolo_obb__gigapose_rgbd")
                     preds_b, _ = _gateway_preds_for_frame(
-                        "yolo_obb__gigapose_rgbd", rgb_path=str(rgb_src),
+                        ab_combo, rgb_path=str(rgb_src),
                         depth_path=depth_for_pose, K=K, R_w2c=R_w2c, t_w2c=t_w2c,
                         table_origin=table_origin, depth_scale=0.1,
                         start_inst_id=500)

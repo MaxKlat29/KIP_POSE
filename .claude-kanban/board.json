@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-12T08:39:45Z",
+  "updated": "2026-06-12T08:45:32Z",
   "columns": [
     {
       "id": "backlog",
@@ -11050,7 +11050,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-12T08:39:45Z",
+      "updated": "2026-06-12T08:45:32Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11096,6 +11096,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "T-178c implementiert+deployt: (1) PiP-Boxen-Fix (kept_proj-Filter versteckte ALLE Boxen auf Gateway-/MoE-Jobs — nur noch filtern wenn kept_proj gefuellt). (2) Kameraperspektive: Pose bleibt 1:1, Up-Vektor normalisiert sich beim ersten Drag auf Welt-Z (+Nadir-Offset) -> Steuerung danach stabil. (3) ZAHNRAD in der MoE-Kette: yolo-obb-svc laesst zahnrad durch (cls 5 -> obj 6), gdrnpp-svc laedt 3. Modell (ready [1,2,6] live!), composed-Viewer-Mapping +zahnrad (EVAL bleibt 2-Klassen — eigene Kopie), Gateway capability-Routing: Klassen ohne RGBD-Support -> route=rgb_cap (Zahnrad immer via GDRNPP bis GigaPose-Templates da sind, FU-Ticket). 288 Tests. E2E mit Zahnrad-Szene laeuft."
+        },
+        {
+          "ts": "2026-06-12T08:41:47Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "T-178c verifiziert+gepusht (dca42fa): E2E job afbbc74c = 5/5 Teile inferiert inkl. ZAHNRAD (rgb_cap_n:1, via GDRNPP), PiP zeigt alle 5 Boxen inkl. 'Zahnrad 95%' (recon/t178c_boxes_check.png), Schatten-Sim aktiv. Kamera-Fix deployed (up-Normalisierung beim ersten Drag). FU T-179 (GigaPose-Zahnrad-Templates) im Backlog. Bleibt in_review fuer Max' Gegen-Check im Browser."
+        },
+        {
+          "ts": "2026-06-12T08:45:32Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Kamera-NACHFIX (Max: 'movement jetzt komplett kaputt, Default vorher top'): Root Cause war PERSISTENZ — change->scheduleSave speicherte den Isaac-Extrinsics-up nach dem Kameraperspektive-Klick in localStorage, tryRestoreView stellte ihn beim naechsten Laden wieder her -> Default-Steuerung dauerhaft invertiert. Fix: up wird NIE mehr persistiert/restauriert (Welt-Z erzwungen, heilt vergiftete Alt-Eintraege beim naechsten Laden automatisch), Foto-Pose bleibt transient, Drag-Normalisierung bleibt. Live deployed + Edge verifiziert. main 13ee71f."
         }
       ]
     },

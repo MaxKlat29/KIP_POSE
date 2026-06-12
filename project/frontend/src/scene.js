@@ -27,11 +27,23 @@ const COLOR_FLAT     = 0x4f9dff;   // dezenter Status-Tint liegend
 const COLOR_UPRIGHT  = 0xffb23d;   // dezenter Status-Tint hochkant
 const COLOR_GT       = 0x2878ff;   // GT (echt) — blau  [KIP Sim-Screen]
 const COLOR_PRED     = 0xff2d2d;   // inferred — rot    [KIP Sim-Screen]
+// MoE-Screen (T-178d, Max): Pred-Farbe nach Routing-Zweig — GRUEN = RGB
+// (GDRNPP), BLAU = RGB-D (FoundationPose). GT wird dort dezent grau
+// ("Soll"), damit das Routing-Blau nicht mit dem GT-Blau kollidiert.
+const COLOR_ROUTE_RGB  = 0x22c55e;
+const COLOR_ROUTE_RGBD = 0x2563eb;
+const COLOR_GT_MOE     = 0x9aa3af;
 
-// result.color: "gt"->blau, "pred"->rot (KIP GT-vs-Pred), sonst flat/upright.
+// result.color: "gt"->blau, "pred"->rot (KIP GT-vs-Pred), "gt_moe"->grau;
+// Preds MIT route (MoE) faerben nach Zweig. Sonst flat/upright.
 function colorFor(r) {
-  if (r.color === "gt")   return COLOR_GT;
-  if (r.color === "pred") return COLOR_PRED;
+  if (r.color === "gt")     return COLOR_GT;
+  if (r.color === "gt_moe") return COLOR_GT_MOE;
+  if (r.color === "pred") {
+    if (r.route === "rgb" || r.route === "rgb_cap") return COLOR_ROUTE_RGB;
+    if (r.route === "rgbd") return COLOR_ROUTE_RGBD;
+    return COLOR_PRED;
+  }
   return r.upright === true ? COLOR_UPRIGHT : COLOR_FLAT;
 }
 const PARTS_BASE_URL = "./assets/parts";

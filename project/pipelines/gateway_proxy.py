@@ -237,6 +237,10 @@ def _gateway_world_entries(gateway_resp: dict, *, R_w2c, t_w2c, table_origin,
             snap=snap, warn=warn,
         )
         if entry is not None:                # None = Klasse out-of-scope (§6) → still weg
+            # MoE-Route (T-178d): "rgb" | "rgb_cap" | "rgbd" | None — fuer die
+            # Viewer-Faerbung. Der frozen-Doc-Pfad (gateway_predict_to_pose_result)
+            # entfernt das Feld vor assemble_doc (Schema unangetastet).
+            entry["route"] = inst.get("route")
             entries.append(entry)
             iid += 1
     return entries
@@ -275,6 +279,8 @@ def gateway_predict_to_pose_result(gateway_resp: dict, *, camera: dict,
     entries = _gateway_world_entries(
         gateway_resp, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=to,
         with_bbox=True, snap=snap, warn=warn)
+    for e in entries:                  # route ist Viewer-only (T-178d), frozen Doc bleibt
+        e.pop("route", None)
     return contract.assemble_doc(source_image, entries, table_origin=to)
 
 
@@ -528,5 +534,7 @@ def gateway_instances_to_viewer_preds(gateway_resp: dict, *, R_w2c, t_w2c,
             # upright-Heuristik identisch zu _bop_pose_to_result: Objekt-Y-Achse ~ Welt-Z.
             "upright": bool(abs(float(Rw[2, 1])) > 0.6),
             "color": "pred",
+            # MoE-Route (T-178d): Viewer faerbt RGB-Zweig gruen / RGB-D blau.
+            "route": entry.get("route"),
         })
     return preds
