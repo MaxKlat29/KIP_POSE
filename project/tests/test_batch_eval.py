@@ -173,12 +173,17 @@ def test_runner_gateway_routing_consistent():
     http_predict) und der direkte /api/predict-Proxy (gateway_proxy.COMBO_TO_GATEWAY)
     MUESSEN jede NICHT-A-Kombi auf dasselbe (seg_source, pose_source, degraded) routen.
     Sonst gibt derselbe Eval andere Zahlen als die manuelle Inferenz desselben Modells."""
-    from pipelines.gateway_proxy import COMBO_TO_GATEWAY
+    from pipelines.gateway_proxy import COMBO_TO_GATEWAY, MOE_COMBO_ID
     by_key = {be.config_key(c): c for c in be.EVAL_CONFIGS}
-    # Beide Pfade decken dieselben NICHT-A feasible-Kombis ab.
+    # Beide Pfade decken dieselben NICHT-A feasible-Kombis ab. 'moe' (T-178)
+    # proxyt zwar, ist aber bewusst KEINE Eval-Matrix-Kombi (kuratierte
+    # Spezial-Pipeline, eigener FE-Screen) — hier ausgenommen.
     non_a_runner = {k for k, c in by_key.items() if not c["is_pipeline_a"]}
-    assert non_a_runner == set(COMBO_TO_GATEWAY), "Runner ↔ Gateway: gleiche NICHT-A-Kombis"
+    assert non_a_runner == set(COMBO_TO_GATEWAY) - {MOE_COMBO_ID}, \
+        "Runner ↔ Gateway: gleiche NICHT-A-Kombis (MoE ausgenommen)"
     for cid, gw in COMBO_TO_GATEWAY.items():
+        if cid == MOE_COMBO_ID:
+            continue
         cfg = by_key[cid]
         assert cfg["seg_source"] == gw["seg_source"], f"{cid}: seg_source-Drift"
         assert cfg["pose_source"] == gw["pose_source"], f"{cid}: pose_source-Drift"

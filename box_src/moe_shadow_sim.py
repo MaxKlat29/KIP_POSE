@@ -209,10 +209,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--offset", default=None,
                     help="IR-Quelle relativ zur RGB-Cam, Meter 'dx,dy,dz'")
-    ap.add_argument("--ir-pos", default="0.20,0.088,1.10",
-                    help="IR-Quelle ABSOLUT in Welt-Metern 'x,y,z' (Max-Rig: "
-                         "~20cm rechts vom Nullpunkt an der Decke, RGB-Cam-"
-                         "Hoehe 1.10m, Montagelinie y=88mm). --offset gewinnt.")
+    ap.add_argument("--ir-pos", default="0.30,0.088,1.10",
+                    help="IR-Quelle ABSOLUT in Welt-Metern 'x,y,z'. Max-Rig "
+                         "(bestaetigt 2026-06-12): 15cm LINKS der RGB-Cam "
+                         "(450,88,1100) -> (300,88,1100), gleiche Hoehe/"
+                         "Montagelinie. --offset (relativ zur RGB-Cam) gewinnt.")
     ap.add_argument("--grid-res", type=float, default=0.005)
     ap.add_argument("--out-dir", default="/mnt/data/kip_pose/recon_t178")
     args = ap.parse_args()
@@ -255,7 +256,8 @@ def main():
     render_overlay(os.path.join(args.out_dir, "t178_shadow_overlay.png"),
                    ir_polys, view_polys, K, R, t)
     json.dump({
-        "params": {"offset_m": off.tolist(), "grid_res_m": args.grid_res,
+        "params": {"offset_m": (ir_c - cam_c).round(4).tolist(),
+                   "grid_res_m": args.grid_res,
                    "rgb_cam_world_mm": (cam_c*1000).round(1).tolist(),
                    "ir_source_world_mm": (ir_c*1000).round(1).tolist(),
                    "table_x_mm": [TABLE_X[0]*1000, TABLE_X[1]*1000],

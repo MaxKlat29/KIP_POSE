@@ -62,8 +62,10 @@ def test_combo_to_gateway_covers_all_non_a_feasible():
     # T-155: ALLE NICHT-A feasible-Kombis proxyen (11 = 12 FEASIBLE_COMBOS minus
     # Pipeline A). Vorher nur die kuratierten 6 → 5 fehlten → InvalidCombo.
     non_a = {c["id"] for c in FEASIBLE_COMBOS if not c["is_pipeline_a"]}
-    assert set(g.COMBO_TO_GATEWAY) == non_a
-    assert len(g.COMBO_TO_GATEWAY) == 11, "alle 11 NICHT-A feasible-Kombis proxyen"
+    # T-178: 'moe' ist eine kuratierte Spezial-Pipeline AUSSERHALB der Matrix
+    # (eigener FE-Screen) — proxyt, aber bewusst keine feasible-Kombi.
+    assert set(g.COMBO_TO_GATEWAY) - {g.MOE_COMBO_ID} == non_a
+    assert len(g.COMBO_TO_GATEWAY) == 12, "11 NICHT-A feasible + 1 MoE-Spezial"
     assert "gdrnpp" not in g.COMBO_TO_GATEWAY, "Kombi 1 (Pipeline A) laeuft NICHT ueber das Gateway"
 
 
@@ -82,6 +84,8 @@ def test_pose_source_is_combo_id_suffix():
 def test_needs_depth_matches_feasible():
     by_id = {c["id"]: c for c in FEASIBLE_COMBOS}
     for cid, gw in g.COMBO_TO_GATEWAY.items():
+        if cid == g.MOE_COMBO_ID:
+            continue  # T-178: MoE ist keine Matrix-Kombi (needs_depth=True, eigener Vertrag)
         assert gw["needs_depth"] == bool(by_id[cid]["needs_depth"]), cid
 
 
@@ -260,6 +264,8 @@ def test_available_when_both_stages_up():
     by = {p["id"]: p for p in ps}
     # alle 6 NICHT-A available (alle Services up, kein Training).
     for cid in g.COMBO_TO_GATEWAY:
+        if cid == g.MOE_COMBO_ID:
+            continue  # T-178: MoE erscheint nicht in pipelines_status (Matrix-only)
         assert by[cid]["available"] is True, cid
         assert by[cid]["unavailable_reason"] is None
 

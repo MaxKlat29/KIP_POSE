@@ -155,6 +155,26 @@ GATEWAY_PREDICT_TIMEOUT = float(os.environ.get("KIP_GATEWAY_PREDICT_TIMEOUT", "9
 KIP_TRAINING_SEGS = {s.strip() for s in
                      os.environ.get("KIP_TRAINING_SEGS", "").split(",") if s.strip()}
 
+# ── MoE-Schatten-Zone (T-178) ─────────────────────────────────────────────────
+# SSOT = project/config/moe_shadow.json (Output der Raytracing-Sim
+# box_src/moe_shadow_sim.py: IR-Quelle 15cm links der RGB-Cam, Arm in Zivid-
+# Pose). Gecacht per mtime — neue Sim-Laeufe greifen ohne Server-Restart.
+MOE_SHADOW_PATH = pathlib.Path(
+    os.environ.get("KIP_MOE_SHADOW",
+                   str(pathlib.Path(__file__).resolve().parent / "config" / "moe_shadow.json")))
+_moe_shadow_cache: dict = {"mtime": None, "data": None}
+
+
+def _load_moe_shadow() -> Optional[dict]:
+    try:
+        mtime = MOE_SHADOW_PATH.stat().st_mtime
+    except OSError:
+        return None
+    if _moe_shadow_cache["mtime"] != mtime:
+        _moe_shadow_cache["data"] = json.loads(MOE_SHADOW_PATH.read_text())
+        _moe_shadow_cache["mtime"] = mtime
+    return _moe_shadow_cache["data"]
+
 try:
     from pipelines import gateway_proxy as _gwp
 except Exception:  # noqa: BLE001 — Proxy-Seam ist optional, darf den Server nie crashen
@@ -195,7 +215,8 @@ def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
                                cx: float, cy: float, iterations: int,
                                top_n: Optional[int], want_pointcloud: bool,
                                seg_prompts: Optional[str],
-                               depth_scale: float = 1.0) -> dict:
+                               depth_scale: float = 1.0,
+                               extra_form: Optional[dict] = None) -> dict:
     """Proxyt EINE der NICHT-A feasible-Kombis als multipart an gateway/predict und gibt die
     rohe Gateway-Antwort (instances[].T_cam_obj + timings) zurueck. httpx nur Box-venv."""
     import httpx
@@ -221,6 +242,10 @@ def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
         data["top_n"] = str(top_n)
     if seg_prompts:
         data["seg_prompts"] = seg_prompts
+    # MoE (T-178) u.ae.: zusaetzliche Gateway-Form-Felder (moe_zone/moe_w2c)
+    # vom Aufrufer — additiv, None = unveraendertes Verhalten.
+    if extra_form:
+        data.update(extra_form)
     with httpx.Client(timeout=GATEWAY_PREDICT_TIMEOUT) as client:
         r = client.post(GATEWAY_URL + "/predict", data=data, files=files)
         if r.status_code >= 400:
@@ -286,12 +311,25 @@ def _gateway_preds_for_frame(combo_id, *, rgb_path, depth_path, K, R_w2c, t_w2c,
         # klare 400 statt stiller Falschpose (Mia §5, image-only-Konsistenz).
         raise HTTPException(400, f"Kombi '{combo_id}' braucht ein Tiefenbild (needs_depth=true), "
                                  f"aber der Frame liefert keines.")
+    R_w2c_flat = [float(x) for x in np.asarray(R_w2c, float).reshape(9)]
+    t_w2c_flat = [float(x) for x in np.asarray(t_w2c, float).reshape(3)]
+    # MoE (T-178): IR-Schatten-Zone + Frame-Extrinsics als Routing-Parameter
+    # ans Gateway (Welt-mm; t_w2c kommt hier bereits in mm, scene_camera-Konvention).
+    extra_form = None
+    if combo_id == getattr(_gwp, "MOE_COMBO_ID", "moe"):
+        shadow = _load_moe_shadow()
+        if shadow is None:
+            raise HTTPException(503, "MoE-Zone fehlt (project/config/moe_shadow.json) — "
+                                     "Raytracing-Sim zuerst laufen lassen (T-178).")
+        extra_form = {
+            "moe_zone": json.dumps({"polys_mm": shadow["moe_rgb_zone_polys_mm"]}),
+            "moe_w2c": json.dumps({"R": R_w2c_flat, "t_mm": t_w2c_flat}),
+        }
     gateway_resp = _gateway_predict_multipart(
         combo_id, rgb_bytes=rgb_bytes, depth_bytes=depth_bytes,
         fx=fx, fy=fy, cx=cx, cy=cy, iterations=iterations, top_n=top_n,
-        want_pointcloud=False, seg_prompts=seg_prompts, depth_scale=depth_scale)
-    R_w2c_flat = [float(x) for x in np.asarray(R_w2c, float).reshape(9)]
-    t_w2c_flat = [float(x) for x in np.asarray(t_w2c, float).reshape(3)]
+        want_pointcloud=False, seg_prompts=seg_prompts, depth_scale=depth_scale,
+        extra_form=extra_form)
     preds = _gwp.gateway_instances_to_viewer_preds(
         gateway_resp, R_w2c=R_w2c_flat, t_w2c=t_w2c_flat, table_origin=table_origin,
         start_inst_id=start_inst_id, snap=True)
@@ -362,6 +400,17 @@ def metrics():
         out[slug] = entry
     return {"objects": out, "trained": sorted(_discover_trained()),
             "metric": "ar_ic_bin"}
+
+
+@app.get("/api/moe/shadow")
+def moe_shadow():
+    """IR-Schatten-Zone der MoE-Pipeline (T-178) fuers FE-Overlay (Kegel +
+    Umrandung) und fuer Debug. Quelle: project/config/moe_shadow.json."""
+    data = _load_moe_shadow()
+    if data is None:
+        raise HTTPException(404, "moe_shadow.json fehlt — box_src/moe_shadow_sim.py "
+                                 "laufen lassen und Output nach project/config/ legen.")
+    return data
 
 
 @app.get("/api/pipelines")
@@ -1682,6 +1731,10 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
                 combo_id, rgb_path=str(rgb_src), depth_path=str(depth_src),
                 K=K, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=table_origin,
                 seg_prompts=seg_prompts, depth_scale=0.1, start_inst_id=iid + 1)
+            # MoE (T-178): Routing-Zaehler (rgb_n/rgbd_n) ins Result-Meta —
+            # das FE zeigt "X Teile RGB (Schatten) / Y RGB-D".
+            if _gw_resp.get("moe"):
+                meta_used = {**meta_used, "moe": _gw_resp["moe"]}
             for pr in preds:
                 iid = max(iid, pr["instance_id"])
                 results.append(pr)

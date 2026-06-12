@@ -28,6 +28,7 @@
         <nav class="kip-tabs" role="tablist">
           <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
           <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
+          <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
           <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
         </nav>
         <!-- Pipeline-Auswahl: zwei gekoppelte Selects (Seg → Post) ergeben genau die
@@ -102,6 +103,33 @@
         </div>
       </section>
 
+
+      <!-- Ansicht: MoE-Pipeline (T-178) — IR-Schatten-Routing RGB/RGB-D -->
+      <section id="screen-moe" class="kip-screen" hidden>
+        <div class="kip-card">
+          <h2 class="kip-card__h">MoE-Pipeline: IR-Schatten-Routing</h2>
+          <p class="kip-card__sub">Der Arm blockt einen Teil der IR-Strahlen der seitlich
+            versetzten Tiefenkamera — im <strong>rot umrandeten Bereich</strong> auf dem
+            Tisch gibt es keine Tiefe (Raytracing-Sim). Teile dort werden per
+            <strong>RGB</strong> (GDRNPP) geschätzt, alle übrigen per
+            <strong>RGB-D</strong> (GigaPose-3D). Der rötliche Kegel zeigt den
+            IR-„Scheinwerfer" der Tiefenkamera.</p>
+          <div class="kip-row">
+            <label class="kip-chk"><input type="checkbox" id="moe-show-zone" checked />
+              Schattenbereich anzeigen</label>
+            <label class="kip-chk"><input type="checkbox" id="moe-show-cone" checked />
+              IR-Kegel anzeigen</label>
+          </div>
+          <div class="kip-row">
+            <button id="moe-infer" class="kip-btn kip-btn--primary">Neue Szene live generieren (MoE)</button>
+          </div>
+          <div id="moe-bar" class="kip-bar" hidden><div class="kip-bar__fill"></div><span class="kip-bar__txt"></span></div>
+          <p id="moe-inferred" class="kip-inferred" hidden>Inferiert mit:
+            <span id="moe-inferred-val" class="kip-inferred__val"></span></p>
+          <p id="moe-status" class="kip-status" aria-live="polite"></p>
+          <div id="moe-stats" class="kip-metrics"></div>
+        </div>
+      </section>
 
       <!-- Ansicht: Batch-Eval — Pipeline-Vergleich über 7 Configs × 20 Szenen (S-011) -->
       <section id="screen-batch" class="kip-screen kip-screen--wide" hidden>

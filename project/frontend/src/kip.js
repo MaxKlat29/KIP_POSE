@@ -10,11 +10,42 @@ import {
   inferredWithText,
 } from "./pipeline.js";
 import { createBatch } from "./batch.js";
+import { createMoeOverlay } from "./moe.js";
 
 const API = "./api";
 const canvas = document.getElementById("scene");
 const viewer = createViewer(canvas);
 window.__KIP_VIEWER__ = viewer;
+
+// MoE-Overlay (T-178): IR-Schatten-Zone + Scheinwerfer-Kegel im 3D-Viewer.
+// Daten lazy beim ersten Öffnen des MoE-Reiters (./api/moe/shadow).
+const moeOverlay = createMoeOverlay(viewer);
+let moeShadowLoaded = false;
+async function ensureMoeShadow() {
+  if (moeShadowLoaded) return true;
+  const moeStatEl = document.getElementById("moe-status");
+  try {
+    const r = await fetch(`${API}/moe/shadow`);
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const d = await r.json();
+    moeOverlay.build(d);
+    moeShadowLoaded = true;
+    const st = document.getElementById("moe-stats");
+    if (st && d.params) {
+      const ir = d.params.ir_source_world_mm || [];
+      const nPoly = (d.moe_rgb_zone_polys_mm || []).length;
+      st.textContent = `IR-Quelle: (${ir.map((v) => Math.round(v)).join(", ")}) mm · `
+        + `${nPoly} Schatten-Polygon(e) · Quelle: Raytracing-Sim (moe_shadow.json)`;
+    }
+    return true;
+  } catch (e) {
+    if (moeStatEl) {
+      moeStatEl.className = "kip-status kip-status--err";
+      moeStatEl.textContent = `Schatten-Zone nicht ladbar: ${e.message}`;
+    }
+    return false;
+  }
+}
 
 // Cell + Nullpunkt einmal laden. cell_sharp.glb (112.7 MB, 4.22 M tris, 2 Meshes,
 // T-107): Bulk-Budget hoch (schaerfer als das alte cell_hi 4.0 M) + die Decal-/Logo-
@@ -249,9 +280,11 @@ document.getElementById("reset-view").addEventListener("click", () => {
 // ── Tab-Switch (Real / Simulation / Batch-Eval) ──
 const tabReal = document.getElementById("tab-real");
 const tabSim  = document.getElementById("tab-sim");
+const tabMoe  = document.getElementById("tab-moe");
 const tabBatch = document.getElementById("tab-batch");
 const scrReal = document.getElementById("screen-real");
 const scrSim  = document.getElementById("screen-sim");
+const scrMoe  = document.getElementById("screen-moe");
 const scrBatch = document.getElementById("screen-batch");
 const legend  = document.getElementById("legend");
 let simInited = false;
@@ -261,14 +294,19 @@ const batch = createBatch({ bar, pollJob, healthRef: () => lastHealth });
 window.__KIP_BATCH__ = batch;          // QS/Smoke: erlaubt __renderLive/__hideLive ohne Lauf
 pollHealth(); setInterval(pollHealth, 30000);   // Start nach batch (Training-Guard-Sync)
 function showScreen(which) {
-  pipeMode = which;                     // Gating je Tab (Upload: Depth-Regeln)
+  // Gating je Tab (Upload: Depth-Regeln). MoE verhaelt sich gating-seitig wie
+  // Sim (feste Kombi, Dropdowns irrelevant) — pipeline.js kennt nur real/sim.
+  pipeMode = which === "moe" ? "sim" : which;
   tabReal.classList.toggle("kip-tab--active", which === "real");
   tabSim.classList.toggle("kip-tab--active", which === "sim");
+  tabMoe.classList.toggle("kip-tab--active", which === "moe");
   tabBatch.classList.toggle("kip-tab--active", which === "batch");
   scrReal.hidden = which !== "real";
   scrSim.hidden  = which !== "sim";
+  scrMoe.hidden  = which !== "moe";
   scrBatch.hidden = which !== "batch";
-  legend.hidden  = which !== "sim";     // blau/rot-Legende nur im Sim-Screen
+  // blau/rot-Legende im Sim- UND MoE-Screen (beide rendern GT vs Schaetzung)
+  legend.hidden  = which !== "sim" && which !== "moe";
   const pip = document.getElementById("pip");
   hideInferredWith("sim"); hideInferredWith("real");   // stale "Inferiert mit" beim Tab-Wechsel weg
   if (which === "real") {
@@ -277,16 +315,24 @@ function showScreen(which) {
   } else if (which === "sim") {
     loadMetrics();
     simInited = true;
+  } else if (which === "moe") {
+    viewer.setParts([]);
+    ensureMoeShadow().then((ok) => {
+      const zoneOn = document.getElementById("moe-show-zone")?.checked !== false;
+      if (ok) moeOverlay.show(zoneOn);
+    });
   } else if (which === "batch") {
     pip.hidden = true;                  // Batch ist Tabellen-Ansicht, kein 3D-Live
     viewer.setParts([]);
     batch.onShow();
   }
+  if (which !== "moe") moeOverlay.show(false);
   if (which !== "batch") batch.onHide();
   renderGating();                       // Depth-Drop + Auswahl ggf. neu gaten
 }
 tabReal.addEventListener("click", () => showScreen("real"));
 tabSim.addEventListener("click", () => showScreen("sim"));
+tabMoe.addEventListener("click", () => showScreen("moe"));
 tabBatch.addEventListener("click", () => showScreen("batch"));
 
 // ── PiP-Controls: Boxen-Toggle + Foto-View + Vergroesserung ──
@@ -528,6 +574,59 @@ async function inferLiveSim() {
 }
 
 simInferBtn.addEventListener("click", inferLiveSim);
+
+// ── MoE-Reiter (T-178): Live-Sim-Inferenz über den MoE-Router (pipeline=moe) ──
+// Gleiche Job-Mechanik wie inferLiveSim, aber feste Kombi 'moe' (yolo-obb-Seg →
+// Gateway-Router: RGB im IR-Schatten / RGB-D sonst). Status zeigt die Routing-
+// Zaehler aus meta.moe ("X im Schatten → RGB · Y → RGB-D").
+const moeInferBtn = document.getElementById("moe-infer");
+const moeStat = document.getElementById("moe-status");
+const moeBar = bar("moe-bar");
+let moeBusy = false;
+async function inferMoe() {
+  if (moeBusy) return;
+  moeBusy = true;
+  moeInferBtn.disabled = true;
+  const origLabel = moeInferBtn.textContent;
+  moeInferBtn.textContent = "Isaac rendert …";
+  moeStat.className = "kip-status"; moeStat.textContent = "";
+  document.getElementById("moe-inferred").hidden = true;
+  moeBar.set(5, "Isaac Sim startet");
+  try {
+    const r = await fetch(`${API}/sim/generate_async?pipeline=moe`);
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const { job } = await r.json();
+    const final = await pollJob(`${API}/sim/job/${job}`, moeBar, 700);
+    const m = await (await fetch(`${API}/${final.result_url}`)).json();
+    await renderSim(m);
+    setPip(`./api/sim/live_rgb/${job}`, `./api/sim/live_boxes/${job}`);
+    document.getElementById("moe-inferred-val").textContent =
+      m.meta?.used_pose || "MoE";
+    document.getElementById("moe-inferred").hidden = false;
+    moeBar.done("Live generiert");
+    const mm = m.meta?.moe;
+    moeStat.className = "kip-scene";
+    moeStat.innerHTML = mm
+      ? `<strong>${mm.rgb_n}</strong> Teil(e) im IR-Schatten → RGB (${mm.rgb_source})`
+        + ` · <strong>${mm.rgbd_n}</strong> → RGB-D (${mm.rgbd_source})`
+      : "Routing-Zaehler nicht verfuegbar";
+  } catch (e) {
+    moeBar.hide();
+    moeStat.className = "kip-status kip-status--err";
+    moeStat.textContent = `Fehler: ${e.message}`;
+  } finally {
+    moeBusy = false;
+    moeInferBtn.disabled = false;
+    moeInferBtn.textContent = origLabel;
+  }
+}
+moeInferBtn.addEventListener("click", inferMoe);
+document.getElementById("moe-show-zone").addEventListener("change", (e) => {
+  moeOverlay.show(e.target.checked);
+});
+document.getElementById("moe-show-cone").addEventListener("change", (e) => {
+  moeOverlay.setConeVisible(e.target.checked);
+});
 
 showScreen("real");
 

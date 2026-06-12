@@ -209,6 +209,74 @@ def _snap_T_to_plane(T, plane, max_shift_m=0.30):
     return T, True
 
 
+# ── MoE-Routing (T-178) ───────────────────────────────────────────────────────
+# Der LARA5-Arm blockt einen Teil der IR-Strahlen der (lateral versetzten)
+# Depth-Kamera -> auf dem Tisch entsteht eine Zone OHNE Tiefe, in der RGB-D-
+# Schaetzer blind sind, die RGB-Kamera aber noch hinsieht (Raytracing-Sim
+# box_src/moe_shadow_sim.py). pose_source='moe' routet deshalb pro Instanz:
+# Anker-Pixel -> Sehstrahl auf die Tischebene (z_w=0, via mitgelieferter w2c)
+# -> Punkt-im-Polygon gegen die Zone -> RGB-Zweig (gdrnpp, braucht obb ->
+# seg=yolo-obb) bzw. RGB-D-Zweig (default gigapose_rgbd). Tiefe wird fuer das
+# Routing NICHT gebraucht (Teile liegen auf dem Tisch) — genau der Witz.
+MOE_RGB_DEFAULT = "gdrnpp"
+MOE_RGBD_DEFAULT = "gigapose_rgbd"
+
+
+def _point_in_poly(x, y, poly):
+    """Ray-Casting Punkt-im-Polygon (poly = [[x,y], ...], gleiche Einheit)."""
+    inside = False
+    n = len(poly)
+    j = n - 1
+    for i in range(n):
+        xi, yi = poly[i]
+        xj, yj = poly[j]
+        if (yi > y) != (yj > y):
+            t = (y - yi) / (yj - yi)
+            if x < xi + t * (xj - xi):
+                inside = not inside
+        j = i
+    return inside
+
+
+def _moe_route_world_xy(u, v, K, R_w2c, t_w2c_mm):
+    """Pixel (u,v) -> Sehstrahl -> Schnitt mit Tischebene z_w=0 -> Welt-XY (mm).
+    w2c: X_c = R X_w + t  ->  X_w = R^T (X_c - t); Strahl X_c = s*d."""
+    d = np.linalg.inv(K) @ np.array([u, v, 1.0])
+    Rt_d = R_w2c.T @ d
+    Rt_t = R_w2c.T @ t_w2c_mm
+    if abs(Rt_d[2]) < 1e-9:
+        return None
+    s = Rt_t[2] / Rt_d[2]
+    Xw = Rt_d * s - Rt_t
+    return float(Xw[0]), float(Xw[1])
+
+
+def _moe_split(detections, zone_polys_mm, K, R_w2c, t_w2c_mm):
+    """Detections -> (rgb_dets, rgbd_dets, route_by_id). Anker-Pixel = obb-Zentrum
+    (yolo-obb) bzw. Mask-BBox-Zentrum (Fallback)."""
+    rgb, rgbd, route = [], [], {}
+    for d in detections:
+        if d.get("obb") is not None:
+            u, v = float(d["obb"][0]), float(d["obb"][1])
+        else:
+            bb = _mask_b64_bbox(d.get("mask_b64"))
+            if bb is None:
+                rgbd.append(d)
+                route[d["id"]] = "rgbd"
+                continue
+            u, v = bb[0] + bb[2] / 2.0, bb[1] + bb[3] / 2.0
+        xy = _moe_route_world_xy(u, v, K, R_w2c, t_w2c_mm)
+        in_zone = xy is not None and any(
+            _point_in_poly(xy[0], xy[1], poly) for poly in zone_polys_mm)
+        if in_zone:
+            rgb.append(d)
+            route[d["id"]] = "rgb"
+        else:
+            rgbd.append(d)
+            route[d["id"]] = "rgbd"
+    return rgb, rgbd, route
+
+
 async def _transfer_classes_from_yolo(detections, rgb_b64):
     """Relabel sam3 detections with yolo-obb classes (T-177).
 
@@ -626,6 +694,14 @@ async def predict(
     # snapped along its viewing ray onto this plane (see _snap_T_to_plane).
     # Meant for RGB-only coarse estimators (gigapose_rgb); the caller decides.
     table_plane: str | None = Form(None),
+    # MoE-Routing (T-178): pose_source='moe' routet pro Instanz RGB/RGB-D.
+    #   moe_zone: JSON {"polys_mm": [[[x,y],...], ...]} — IR-Schatten-Zone in
+    #             Welt-mm auf der Tischebene (aus box_src/moe_shadow_sim.py).
+    #   moe_w2c : JSON {"R":[9], "t_mm":[3]} — Welt->Cam-Extrinsics (Rig).
+    moe_zone: str | None = Form(None),
+    moe_w2c: str | None = Form(None),
+    moe_rgb_source: str = Form(MOE_RGB_DEFAULT),
+    moe_rgbd_source: str = Form(MOE_RGBD_DEFAULT),
     # uint16-depth -> millimetres factor (metres = png*depth_scale/1000). Default 1.0
     # = real mm sensors (the historical assumption); BOP/SDG depth PNGs carry a
     # depth_scale (0.1: png*0.1 = mm) in their scene_camera.json and MUST pass it,
@@ -633,7 +709,12 @@ async def predict(
     # 10x too far -> ~2.4m lateral X for every RGB-D combo).
     depth_scale: float = Form(1.0),
 ):
-    pose = POSE_SOURCES.get(pose_source)
+    if pose_source == "moe":
+        # Router, kein Service (T-178): RGB-D-Zweig braucht Depth; rgb_only False
+        # haelt den Depth-Pflicht-Pfad unten intakt.
+        pose = {"needs_depth": True, "rgb_only": False}
+    else:
+        pose = POSE_SOURCES.get(pose_source)
     if pose is None:
         raise HTTPException(status_code=400, detail=f"unknown pose_source '{pose_source}'")
 
@@ -654,7 +735,9 @@ async def predict(
     # And the inverse guard: yolo-obb's oriented boxes are only meaningful for gdrnpp;
     # any mask-consuming pose source would ignore the obb. Reject the off-whitelist mix
     # rather than silently produce a mask-based pose from an obb-only detector.
-    if seg_source == GDRNPP_COUPLED_SEG and pose_source != "gdrnpp":
+    # Ausnahme 'moe' (T-178): der Router BRAUCHT yolo-obb (obb fuer den gdrnpp-
+    # RGB-Zweig + rasterisierte Maske fuer den RGB-D-Zweig).
+    if seg_source == GDRNPP_COUPLED_SEG and pose_source not in ("gdrnpp", "moe"):
         raise HTTPException(
             status_code=400,
             detail=f"seg_source '{GDRNPP_COUPLED_SEG}' is only valid with "
@@ -729,7 +812,65 @@ async def predict(
 
     poses = []
     pose_ms = 0.0
-    if instances:
+    moe_meta = None
+    route_by_id = {}
+    if pose_source == "moe" and instances:
+        # ── MoE-Router (T-178): Instanzen nach IR-Schatten-Zone splitten und
+        #    pro Zweig den passenden Pose-Service rufen (RGB im Schatten /
+        #    RGB-D sonst). Sequenziell — die Services teilen sich die GPU.
+        try:
+            z = json.loads(moe_zone or "")
+            polys = z["polys_mm"] if isinstance(z, dict) else z
+            assert isinstance(polys, list) and polys
+            w = json.loads(moe_w2c or "")
+            R_w2c_m = np.asarray(w["R"], dtype=np.float64).reshape(3, 3)
+            t_w2c_m = np.asarray(w["t_mm"], dtype=np.float64).reshape(3)
+        except (ValueError, KeyError, AssertionError, TypeError):
+            raise HTTPException(
+                status_code=400,
+                detail='pose_source=moe braucht moe_zone {"polys_mm":[[[x,y],..],..]} '
+                       '(Welt-mm) und moe_w2c {"R":[9],"t_mm":[3]}')
+        rgb_src = POSE_SOURCES.get(moe_rgb_source)
+        rgbd_src = POSE_SOURCES.get(moe_rgbd_source)
+        if rgb_src is None or rgbd_src is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"moe sub-sources unbekannt: rgb='{moe_rgb_source}' "
+                       f"rgbd='{moe_rgbd_source}'")
+        K_arr = np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]])
+        rgb_dets, rgbd_dets, route_by_id = _moe_split(
+            detections, polys, K_arr, R_w2c_m, t_w2c_m)
+        inst_by_id = {i["id"]: i for i in instances}
+
+        async def _moe_pose(src, src_name, dets):
+            payload = {"rgb_b64": rgb_b64, "K": K, "iterations": iterations,
+                       "instances": [inst_by_id[d["id"]] for d in dets
+                                     if d["id"] in inst_by_id]}
+            if not payload["instances"]:
+                return []
+            if src["needs_depth"]:
+                payload["depth_b64"] = depth_b64
+                payload["depth_scale"] = depth_scale
+            if "pipeline" in src:
+                payload["pipeline"] = src["pipeline"]
+            if "hypotheses" in src:
+                payload["hypotheses"] = src["hypotheses"]
+            try:
+                async with httpx.AsyncClient(timeout=POSE_TIMEOUT) as client:
+                    r = await client.post(src["url"] + src["endpoint"], json=payload)
+                    r.raise_for_status()
+                    return r.json().get("poses", [])
+            except httpx.HTTPError as e:
+                raise HTTPException(status_code=502,
+                                    detail=f"moe/{src_name}-svc error: {e}")
+
+        t_pose0 = time.perf_counter()
+        poses = (await _moe_pose(rgb_src, moe_rgb_source, rgb_dets)
+                 + await _moe_pose(rgbd_src, moe_rgbd_source, rgbd_dets))
+        pose_ms = (time.perf_counter() - t_pose0) * 1000.0
+        moe_meta = {"rgb_n": len(rgb_dets), "rgbd_n": len(rgbd_dets),
+                    "rgb_source": moe_rgb_source, "rgbd_source": moe_rgbd_source}
+    elif instances:
         t_pose0 = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=POSE_TIMEOUT) as client:
@@ -774,6 +915,9 @@ async def predict(
             "conf": conf_by_id.get(p.get("id")),
             "T_cam_obj": p.get("T_cam_obj"),
             "mask_b64": mask_by_id.get(p.get("id")),
+            # MoE (T-178): welcher Zweig hat diese Instanz geschaetzt
+            # ("rgb" | "rgbd"); None ausserhalb von pose_source=moe.
+            "route": route_by_id.get(p.get("id")),
         }
         for p in poses
     ]
@@ -796,6 +940,9 @@ async def predict(
         "class_source": class_source,
         # number of poses snapped onto the caller-supplied table plane (T-177).
         "plane_snapped": n_snapped,
+        # MoE-Routing-Meta (T-178): {rgb_n, rgbd_n, rgb_source, rgbd_source};
+        # None ausserhalb von pose_source=moe.
+        "moe": moe_meta,
         "pose_source": pose_source,
         "num_detections": len(detections),
         "instances": out_instances,

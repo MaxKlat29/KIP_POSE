@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-10T11:53:25Z",
+  "updated": "2026-06-12T05:03:45Z",
   "columns": [
     {
       "id": "backlog",
@@ -11050,7 +11050,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-10T11:53:25Z",
+      "updated": "2026-06-12T05:03:45Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11060,6 +11060,12 @@
           "agent": "claude",
           "level": "info",
           "msg": "Raytracing-Sim v1 fertig (eigener vektorisierter Moeller-Trumbore, 279k Tris cell.glb mit Arm in Zivid-Pose, 6.5k Strahlen/Quelle): IR-Schatten 38.9% des Tischs, View-Schatten 39.3%, MoE-RGB-Zone (Depth tot, RGB ok) 305cm2 = 8.3%. Annahme: IR-Quelle = RGB-Cam +100mm in +x (Operator-rechts), gleiche Hoehe 1100mm. Outputs: recon/t178_shadow_topdown.png (Operator-Sicht, vorne=unten) + t178_shadow_overlay.png (echtes RGB-Frame) + t178_moe_shadow.json (Polygone Welt-mm). WARTE auf Max: Einzeichnen/Offset-Korrektur."
+        },
+        {
+          "ts": "2026-06-12T05:03:45Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Sim v2 mit echter Rig-Position (200,88,1100 = 20cm rechts vom Nullpunkt, Deckenhoehe 1100, 250mm links der RGB-Cam): MoE-RGB-Zone 723cm2 = 19.8% des Tischs, dominanter Streifen rechter Tischrand + Patches. View-Schatten 39.3% unveraendert. FE-Overlay-Modul moe.js gebaut (Kegel+SpotLight+Rays+Zone). WARTE auf Max-GO zur Zone, dann: Gateway-Routing pose=moe + Reiter-Wiring + Deploy."
         }
       ]
     }

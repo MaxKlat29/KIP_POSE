@@ -88,6 +88,23 @@ _NON_A_COMBOS = [
     for _c in FEASIBLE_COMBOS if not _c["is_pipeline_a"]
 ]
 
+# ── MoE (T-178): kuratierte Spezial-Pipeline, eigener FE-Screen ───────────────
+# BEWUSST NICHT Teil der Seg×Pose-Matrix (FEASIBLE_COMBOS bleibt 12; Dropdowns,
+# Eval und Invarianten-Tests unveraendert). seg=yolo-obb NATIV: der gdrnpp-RGB-
+# Zweig braucht die orientierte Box, der RGB-D-Zweig nutzt die rasterisierte
+# yolo-obb-Maske. pose='moe' = Gateway-Router: pro Instanz Anker-Pixel ->
+# Sehstrahl auf die Tischebene -> Punkt-im-IR-Schatten-Polygon (T-178-
+# Raytracing-Sim, project/config/moe_shadow.json) -> RGB- bzw. RGB-D-Zweig.
+# Adressierung NUR per `pipeline=moe` (id-Form); die 2-Achsen-Form bleibt
+# matrix-exklusiv (_NON_A_COMBOS unveraendert).
+MOE_COMBO_ID = "moe"
+COMBO_TO_GATEWAY[MOE_COMBO_ID] = {
+    "seg_source": "yolo-obb",
+    "pose_source": "moe",
+    "needs_depth": True,
+    "degraded": False,
+}
+
 
 # Die Pipeline-A-Identitaet (Live-Pfad). Sowohl die Kombi-id `gdrnpp` als auch das
 # explizite Achsen-Paar (seg=yolo-obb, pose=gdrnpp) zeigen darauf.
@@ -449,6 +466,12 @@ def combo_result_meta(combo_id: str) -> dict:
       * needs_depth, degraded : die Routing-Flags (Single-Source FEASIBLE_COMBOS).
 
     Wirft InvalidCombo wenn combo_id keine feasible-Kombi ist (Pipeline A inklusive)."""
+    if combo_id == MOE_COMBO_ID:
+        # MoE ist KEINE Matrix-Kombi (s.o.) — eigene Meta. modality benennt
+        # beide Zweige ehrlich (FE Input-Spalte / Inferiert-mit-Zeile).
+        return {"used_combo": MOE_COMBO_ID, "used_seg": "yolo-obb",
+                "used_pose": "MoE (RGB im IR-Schatten / GigaPose-3D)",
+                "modality": "RGB+RGBD", "needs_depth": True, "degraded": False}
     c = _COMBOS_BY_ID.get(combo_id)
     if c is None:
         raise InvalidCombo(
