@@ -250,6 +250,10 @@ def main():
 
     ir_polys = mask_to_polygons(moe_mask, xs, ys)
     view_polys = mask_to_polygons(view_mask, xs, ys)
+    # Volles IR-Schatten-Polygon (T-178b): fuer die Depth-Schatten-SIMULATION
+    # im Sim-Pfad (kip_server maskiert die gerenderte Tiefe ueberall dort, wo
+    # der Projektor blockiert ist — nicht nur in der MoE-RGB-Zone).
+    ir_full_polys = mask_to_polygons(ir_mask, xs, ys)
 
     render_topdown(os.path.join(args.out_dir, "t178_shadow_topdown.png"),
                    xs, ys, ir_mask, view_mask, foot_mask, cam_c, ir_c)
@@ -264,6 +268,7 @@ def main():
                    "table_y_mm": [TABLE_Y[0]*1000, TABLE_Y[1]*1000]},
         "moe_rgb_zone_polys_mm": ir_polys,
         "view_shadow_polys_mm": view_polys,
+        "ir_shadow_polys_mm": ir_full_polys,
     }, open(os.path.join(args.out_dir, "moe_shadow.json"), "w"), indent=1)
     print(f"[sim] -> {args.out_dir}/t178_shadow_topdown.png + _overlay.png + moe_shadow.json")
 

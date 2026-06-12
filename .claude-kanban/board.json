@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-12T05:03:45Z",
+  "updated": "2026-06-12T08:04:36Z",
   "columns": [
     {
       "id": "backlog",
@@ -11041,7 +11041,7 @@
       "id": "T-178",
       "title": "MoE-Pipeline: IR-Schatten-Raytracing-Sim + RGB/RGBD-Hybrid-Routing + Schatten-Reiter",
       "description": "Real-Problem: Depth-Cam (gleiche Hoehe wie RGB-Cam, leicht links versetzt/geneigt, von vorne rechts) wirft via Arm einen IR-Schatten auf den Tisch -> dort keine Depth -> RGBD-Erkennung faellt aus. Plan: (1) Raytracing-Sim des Schattens (IR-Emitter + Arm-Mesh + Tischebene, parametrisch), (2) Max zeigen + einzeichnen lassen, (3) Bereich fixieren, (4) MoE-Routing: Teile im Schatten=RGB-Pose, sonst RGBD-Pose, (5) neuer FE-Reiter mit Tisch + umrandetem Schattenbereich (MoE-Screen).",
-      "column": "in_progress",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -11050,7 +11050,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-12T05:03:45Z",
+      "updated": "2026-06-12T08:04:36Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11066,6 +11066,24 @@
           "agent": "claude",
           "level": "info",
           "msg": "Sim v2 mit echter Rig-Position (200,88,1100 = 20cm rechts vom Nullpunkt, Deckenhoehe 1100, 250mm links der RGB-Cam): MoE-RGB-Zone 723cm2 = 19.8% des Tischs, dominanter Streifen rechter Tischrand + Patches. View-Schatten 39.3% unveraendert. FE-Overlay-Modul moe.js gebaut (Kegel+SpotLight+Rays+Zone). WARTE auf Max-GO zur Zone, dann: Gateway-Routing pose=moe + Reiter-Wiring + Deploy."
+        },
+        {
+          "ts": "2026-06-12T07:57:21Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "FERTIG + LIVE: (1) Finale Zone mit bestaetigtem Rig (IR-Cam 15cm links der RGB-Cam): MoE-RGB 485cm2=13.3%, SSOT project/config/moe_shadow.json. (2) Gateway pose_source=moe: Routing OHNE Tiefe (Sehstrahl auf Tischebene + Punkt-im-Polygon) -> GDRNPP-RGB im Schatten / GigaPose-3D sonst, route je Instanz. (3) FE-Reiter 'MoE-Pipeline' mit Kegel/SpotLight/Rays/Zonen-Umrandung + Live-Inferenz. Verify: E2E moe rgb_n:0/rgbd_n:2 + Beweis beider Zweige rgb_n:1/rgbd_n:1 (Frame 000000/3), 281 Tests, Matrix bleibt 12, Pipeline A heilig. Commits 7a06968+150638a gepusht. Report recon/T178_moe_report.md. Offen: Max' visuelle Abnahme des Kegels im Browser + Real-Zivid-Validierung der Zone."
+        },
+        {
+          "ts": "2026-06-12T07:57:21Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-12T08:04:36Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Scope-Erweiterung (Max): IR-Schatten-WIRKUNG simulieren statt Real-Validierung — MoE-Sim-Pfad maskiert die gerenderte Depth im IR-Schatten (wie die echte Anlage), plus A/B-Zaehler RGB-D-only vs MoE auf demselben Frame. Sim exportiert dafuer zusaetzlich ir_shadow_polys_mm."
         }
       ]
     }

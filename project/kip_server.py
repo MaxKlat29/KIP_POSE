@@ -1727,14 +1727,69 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
         else:
             _job_set(job, phase=f"{meta_used['used_seg']} → {meta_used['used_pose']} "
                                 f"(Gateway)", pct=90)
+            # ── MoE Schatten-SIMULATION (T-178b, Max): die Sim rendert perfekte
+            # Tiefe — die echte Anlage hat im IR-Schatten KEINE. Vor der Pose-
+            # Stage wird die gerenderte Depth genau dort entfernt, damit die
+            # RGB-D-Zweige in der Sim dieselbe Blindheit erleben wie real.
+            depth_for_pose = str(depth_src)
+            shadow_cfg = None
+            shadow_sim_meta = None
+            if combo_id == getattr(_gwp, "MOE_COMBO_ID", "moe"):
+                shadow_cfg = _load_moe_shadow() or {}
+                ir_polys = (shadow_cfg.get("ir_shadow_polys_mm")
+                            or shadow_cfg.get("moe_rgb_zone_polys_mm"))
+                if ir_polys and depth_src.exists():
+                    from PIL import Image as _Img
+                    from pipelines.moe_shadow import mask_depth_in_ir_shadow
+                    dep_arr = np.asarray(_Img.open(depth_src))
+                    masked, n_masked = mask_depth_in_ir_shadow(
+                        dep_arr, K, R_w2c, t_w2c, ir_polys, depth_scale=0.1)
+                    sp = rawdir / "depth_shadowed.png"
+                    _Img.fromarray(masked).save(sp)
+                    depth_for_pose = str(sp)
+                    shadow_sim_meta = {"applied": True, "masked_px": n_masked}
             preds, _gw_resp = _gateway_preds_for_frame(
-                combo_id, rgb_path=str(rgb_src), depth_path=str(depth_src),
+                combo_id, rgb_path=str(rgb_src), depth_path=depth_for_pose,
                 K=K, R_w2c=R_w2c, t_w2c=t_w2c, table_origin=table_origin,
                 seg_prompts=seg_prompts, depth_scale=0.1, start_inst_id=iid + 1)
             # MoE (T-178): Routing-Zaehler (rgb_n/rgbd_n) ins Result-Meta —
             # das FE zeigt "X Teile RGB (Schatten) / Y RGB-D".
             if _gw_resp.get("moe"):
-                meta_used = {**meta_used, "moe": _gw_resp["moe"]}
+                moe_meta = dict(_gw_resp["moe"])
+                if shadow_sim_meta:
+                    moe_meta["shadow_sim"] = shadow_sim_meta
+                # ── A/B-Demo (T-178b): RGB-D-only auf DEMSELBEN maskierten
+                # Frame + Zonen-GT-Treffer (50mm, Welt-XY) — zeigt was OHNE
+                # MoE im Schatten verloren ginge. Fehler im Vergleichslauf
+                # brechen den Job nie (None = "RGB-D-only schlug fehl").
+                try:
+                    preds_b, _ = _gateway_preds_for_frame(
+                        "yolo_obb__gigapose_rgbd", rgb_path=str(rgb_src),
+                        depth_path=depth_for_pose, K=K, R_w2c=R_w2c, t_w2c=t_w2c,
+                        table_origin=table_origin, depth_scale=0.1,
+                        start_inst_id=500)
+                except Exception:  # noqa: BLE001 — Vergleich ist Demo, nie fatal
+                    preds_b = None
+                from pipelines.moe_shadow import count_gt_hits, points_in_any_poly
+                zone_polys = (shadow_cfg or {}).get("moe_rgb_zone_polys_mm") or []
+                # Treffer-Metrik in 3D (mm): der Depth-Ausfall bricht bei Top-
+                # Down primaer Z — XY-only waere dafuer blind (T-178b-Befund).
+                gt_pos = [tuple(v * 1000.0 for v in r["t_world"])
+                          for r in results if r["color"] == "gt"]
+                if zone_polys and gt_pos:
+                    gx = np.array([p[0] for p in gt_pos])
+                    gy = np.array([p[1] for p in gt_pos])
+                    inz = points_in_any_poly(gx, gy, zone_polys)
+                    gt_zone = [p for p, i in zip(gt_pos, inz) if i]
+                    moe_pos = [tuple(v * 1000.0 for v in p["t_world"])
+                               for p in preds]
+                    b_pos = ([tuple(v * 1000.0 for v in p["t_world"])
+                              for p in preds_b] if preds_b is not None else None)
+                    moe_meta["zone_gt_n"] = len(gt_zone)
+                    moe_meta["zone_hits_moe"] = count_gt_hits(moe_pos, gt_zone)
+                    moe_meta["zone_hits_rgbd_only"] = (
+                        count_gt_hits(b_pos, gt_zone) if b_pos is not None else None)
+                meta_used = {**meta_used, "moe": moe_meta}
             for pr in preds:
                 iid = max(iid, pr["instance_id"])
                 results.append(pr)

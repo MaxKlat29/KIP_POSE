@@ -113,7 +113,9 @@
             Tisch gibt es keine Tiefe (Raytracing-Sim). Teile dort werden per
             <strong>RGB</strong> (GDRNPP) geschätzt, alle übrigen per
             <strong>RGB-D</strong> (GigaPose-3D). Der rötliche Kegel zeigt den
-            IR-„Scheinwerfer" der Tiefenkamera.</p>
+            IR-„Scheinwerfer" der Tiefenkamera. Die Simulation entfernt die
+            gerenderte Tiefe im IR-Schatten (wie an der echten Anlage) und
+            vergleicht: <strong>MoE vs RGB-D-only</strong> auf derselben Szene.</p>
           <div class="kip-row">
             <label class="kip-chk"><input type="checkbox" id="moe-show-zone" checked />
               Schattenbereich anzeigen</label>

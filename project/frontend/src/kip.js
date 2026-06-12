@@ -606,10 +606,25 @@ async function inferMoe() {
     moeBar.done("Live generiert");
     const mm = m.meta?.moe;
     moeStat.className = "kip-scene";
-    moeStat.innerHTML = mm
-      ? `<strong>${mm.rgb_n}</strong> Teil(e) im IR-Schatten → RGB (${mm.rgb_source})`
-        + ` · <strong>${mm.rgbd_n}</strong> → RGB-D (${mm.rgbd_source})`
-      : "Routing-Zaehler nicht verfuegbar";
+    if (mm) {
+      let html = `<strong>${mm.rgb_n}</strong> Teil(e) im IR-Schatten → RGB (${mm.rgb_source})`
+        + ` · <strong>${mm.rgbd_n}</strong> → RGB-D (${mm.rgbd_source})`;
+      if (mm.shadow_sim?.applied) {
+        html += `<br>IR-Schatten simuliert: ${Math.round((mm.shadow_sim.masked_px || 0) / 1000)}k`
+          + ` Depth-Pixel entfernt (wie an der echten Anlage)`;
+      }
+      if (mm.zone_gt_n != null && mm.zone_gt_n > 0) {
+        const ab = mm.zone_hits_rgbd_only == null ? "fehlgeschlagen"
+          : `${mm.zone_hits_rgbd_only}/${mm.zone_gt_n}`;
+        html += `<br>Zonen-Teile getroffen (±50mm): <strong>MoE ${mm.zone_hits_moe}/${mm.zone_gt_n}</strong>`
+          + ` · RGB-D-only ${ab}`;
+      } else if (mm.zone_gt_n === 0) {
+        html += `<br>Diese Szene hat kein Teil in der Schatten-Zone (Zufalls-Spawn) — nochmal würfeln.`;
+      }
+      moeStat.innerHTML = html;
+    } else {
+      moeStat.textContent = "Routing-Zaehler nicht verfuegbar";
+    }
   } catch (e) {
     moeBar.hide();
     moeStat.className = "kip-status kip-status--err";

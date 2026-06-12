@@ -85,3 +85,28 @@ mtime-gecacht, neue Sim-Läufe greifen ohne Server-Restart).
   greift es ohne Restart.
 - Real-Zivid-Validierung der Zone (echter IR-Schatten vs. Sim) steht aus —
   gleiche Messung wie die offene Real-Depth-Validierung aus T-177.
+
+## 7. Nachtrag T-178b (2026-06-12): Schatten-Wirkung SIMULIERT + A/B-Beweis
+
+Max: „will das auch simuliert haben, nicht mit echten Bildern." Umgesetzt:
+
+- **Sim exportiert zusätzlich `ir_shadow_polys_mm`** (voller Projektor-Schatten,
+  42.9%) — `pipelines/moe_shadow.py` (fastapi-frei, 7 Unit-Tests).
+- **MoE-Sim-Pfad maskiert die gerenderte Depth im IR-Schatten** vor der
+  Pose-Stage (Backprojektion → Welt → Punkt-im-Polygon, z<250mm; ~76k px/Frame)
+  — die RGB-D-Zweige erleben in der Sim dieselbe Blindheit wie die echte Anlage.
+- **A/B auf demselben Frame**: zusätzlich RGB-D-only (gigapose_rgbd) auf der
+  maskierten Depth + Zonen-GT-Treffer (±50mm, **3D** — Lesson: XY-only war
+  blind, der Depth-Ausfall bricht bei Top-Down primär Z). FE-Status zeigt
+  Maske + Vergleich.
+
+**Deterministischer Beweis (val 000000/3, Depth maskiert):**
+
+| Teil | MoE | RGB-D-only |
+|---|---|---|
+| anker_kurz **(IN ZONE)** | route=rgb → **3.4 mm** | **424.6 mm** |
+| anker_lang (außerhalb) | route=rgbd → 16.2 mm | 9.4 mm |
+
+→ Das Routing rettet das Schatten-Teil (Faktor ~125); außerhalb der Zone
+bleibt RGB-D unangetastet. E2E-Sim-Läufe: Maske greift jedes Mal (~76k px),
+Routing-/Vergleichszähler im Result-Meta (`moe.shadow_sim`, `zone_hits_*`).
