@@ -3,6 +3,10 @@
 *.swp
 .idea/
 
+# ── SCFlow2 working clone (upstream repo + .venv + _deps + 719MB weights ≈ 7GB) ──
+# Our reproducible artifacts live in scflow2_integration/ (tracked); the clone does not.
+/scflow2/
+
 # ── Secrets / local config ────────────────────────────────────
 # .env holds host/IP/MAC/path config — NEVER commit it. Track only .env.example.
 .env
