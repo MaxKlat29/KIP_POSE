@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-25T12:40:23Z",
+  "updated": "2026-06-25T12:56:40Z",
   "columns": [
     {
       "id": "backlog",
@@ -11312,7 +11312,7 @@
       "id": "T-182",
       "title": "Arm-Foundation Spawn-Keepout (5cm) in SDG-Sim — verhindert Teil-Clipping in Arm-Sockel (normal+MoE)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P1",
@@ -11323,9 +11323,9 @@
       ],
       "session": "",
       "created": "2026-06-25T12:35:24Z",
-      "updated": "2026-06-25T12:40:23Z",
+      "updated": "2026-06-25T12:56:40Z",
       "started_at": "2026-06-25T12:35:27Z",
-      "completed_at": null,
+      "completed_at": "2026-06-25T12:56:40Z",
       "comments": [],
       "logs": [
         {
@@ -11345,6 +11345,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-25T12:56:40Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Committed e56ac1f + pushed origin/main (81874cf..6a34287). Deployed auf Box: gen_sdg_arm_visible.py + batch.js (shas verifiziert). kip_server :8077 health=ok, serviertes batch.js enthaelt neue Keys. Beide Sim-Typen live."
+        },
+        {
+          "ts": "2026-06-25T12:56:40Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
         }
       ]
     },
