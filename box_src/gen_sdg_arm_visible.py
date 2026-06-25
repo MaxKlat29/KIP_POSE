@@ -96,6 +96,14 @@ def parse_args():
     p.add_argument("--spawn-x", default="0.05732,0.78332", help="xmin,xmax (m) — full table")
     p.add_argument("--spawn-y", default="0.04157,0.53698", help="ymin,ymax (m) — full table")
     p.add_argument("--spawn-z", default="0.30,0.55", help="zmin,zmax drop height (m)")
+    # T-182: keep-out — no part spawns within --arm-clear (m, XY radius) of the arm
+    # foundation, so dropped parts can't clip into the static arm base. The center is
+    # auto-derived from the arm prim in the scene; --arm-base x,y overrides it.
+    # Default 0.13 = LARA5 pedestal (~0.08 m radius) + 0.05 m requested clearance.
+    p.add_argument("--arm-clear", type=float, default=0.13,
+                   help="XY keep-out radius (m) around the arm foundation; 0 disables")
+    p.add_argument("--arm-base", default="",
+                   help="override arm-foundation center 'x,y' (m); empty = derive from scene")
     # Smoke/debug only: force an explicit per-scene part-count sequence instead of
     # sampling [min,max]. e.g. "0,8,1,10,3" guarantees an empty scene + a full
     # one for the smoke proof. Empty when omitted (normal RNG sampling).
@@ -239,6 +247,28 @@ def main():
     log(f"ARM VISIBLE (occluder, NO collision, no obj_id): {arm_present or 'NONE FOUND — check scene!'}")
     if not arm_present:
         log("WARNING: no arm prim found — arm-visibility cannot be guaranteed!")
+
+    # ── Arm keep-out center (T-182): derive the foundation XY from the arm prim so
+    #    spawned parts never clip into the static base. Self-correcting if the scene
+    #    moves; --arm-base overrides. Shared by BOTH sim types — normal + MoE use
+    #    this same generator (MoE only adds IR-shadow masking AFTER spawn). ────────
+    arm_base_xy = None
+    if arm_present:
+        try:
+            _at = UsdGeom.Xformable(stage.GetPrimAtPath(arm_present[0])
+                  ).ComputeLocalToWorldTransform(Usd.TimeCode.Default()).ExtractTranslation()
+            arm_base_xy = (float(_at[0]), float(_at[1]))
+        except Exception as _e:
+            log(f"WARN: could not read arm transform ({_e}) — keep-out disabled")
+    if a.arm_base.strip():
+        _bx, _by = (float(v) for v in a.arm_base.split(","))
+        arm_base_xy = (_bx, _by)
+    ARM_CLEAR_R = float(a.arm_clear)
+    if arm_base_xy and ARM_CLEAR_R > 0:
+        log(f"arm keep-out: center=({arm_base_xy[0]:.4f},{arm_base_xy[1]:.4f}) "
+            f"radius={ARM_CLEAR_R:.3f} m")
+    else:
+        log("arm keep-out: DISABLED")
 
     # ── DR lights ────────────────────────────────────────────────────────────
     dome = UsdLux.DomeLight.Define(stage, "/World/_DRDome")
@@ -425,6 +455,13 @@ def main():
             attempt += 1
             x = rng.uniform(*dg.SPAWN_BOUNDS["x"]); y = rng.uniform(*dg.SPAWN_BOUNDS["y"])
             z = rng.uniform(*dg.SPAWN_BOUNDS["z"])
+            # T-182 arm keep-out (XY): reject drops within ARM_CLEAR_R of the arm
+            # foundation so parts can't clip into the static arm base. Both sim
+            # types (normal + MoE) share this spawner.
+            if arm_base_xy is not None and ARM_CLEAR_R > 0:
+                _dx = x - arm_base_xy[0]; _dy = y - arm_base_xy[1]
+                if _dx * _dx + _dy * _dy < ARM_CLEAR_R * ARM_CLEAR_R:
+                    continue
             half = dg.OBJECT_SIZE / 2.0 + 0.02
             nmin = (x - half, y - half, z - half); nmax = (x + half, y + half, z + half)
             overlap = False
