@@ -1,0 +1,136 @@
+% Literaturfile.bib -- Seminararbeit "Pose-Estimation in der Produktion"
+% Quellen verifiziert gegen arXiv / Quell-Repositories (project/docs/REFERENCES.md).
+% Lizenzen der Code-Abhaengigkeiten: THIRD_PARTY_LICENSES.md.
+
+% ------------------------------------------------------------------
+% Pose-Estimation-Methoden
+% ------------------------------------------------------------------
+
+@article{gdrnpp2025,
+  author  = {Liu, Xingyu and Zhang, Ruida and Zhang, Chenyangguang and Wang, Gu and Tang, Jiwen and Li, Zhigang and Ji, Xiangyang},
+  title   = {{GDRNPP}: A Geometry-guided and Fully Learning-based Object Pose Estimator},
+  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)},
+  year    = {2025},
+  note    = {arXiv:2102.12145},
+}
+
+@inproceedings{gdrnet2021,
+  author    = {Wang, Gu and Manhardt, Fabian and Tombari, Federico and Ji, Xiangyang},
+  title     = {{GDR-Net}: Geometry-Guided Direct Regression Network for Monocular 6D Object Pose Estimation},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2021},
+}
+
+@inproceedings{cnos2023,
+  author    = {Nguyen, Van Nguyen and Groueix, Thibault and Ponimatkin, Georgy and Lepetit, Vincent and Hoda{\v{n}}, Tom{\'a}{\v{s}}},
+  title     = {{CNOS}: A Strong Baseline for {CAD}-based Novel Object Segmentation},
+  booktitle = {IEEE/CVF International Conference on Computer Vision Workshops (ICCVW)},
+  year      = {2023},
+  note      = {arXiv:2307.11067},
+}
+
+@inproceedings{gigapose2024,
+  author    = {Nguyen, Van Nguyen and Groueix, Thibault and Salzmann, Mathieu and Lepetit, Vincent},
+  title     = {{GigaPose}: Fast and Robust Novel Object Pose Estimation via One Correspondence},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2024},
+  note      = {arXiv:2311.14155},
+}
+
+@inproceedings{megapose2022,
+  author    = {Labb{\'e}, Yann and Manuelli, Lucas and Mousavian, Arsalan and Tyree, Stephen and Birchfield, Stan and Tremblay, Jonathan and Carpentier, Justin and Aubry, Mathieu and Fox, Dieter and Sivic, Josef},
+  title     = {{MegaPose}: 6D Pose Estimation of Novel Objects via Render \& Compare},
+  booktitle = {Conference on Robot Learning (CoRL)},
+  year      = {2022},
+  note      = {arXiv:2212.06870},
+}
+
+@inproceedings{foundationpose2024,
+  author    = {Wen, Bowen and Yang, Wei and Kautz, Jan and Birchfield, Stan},
+  title     = {{FoundationPose}: Unified 6D Pose Estimation and Tracking of Novel Objects},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2024},
+  note      = {arXiv:2312.08344. NVIDIA Source Code License (non-commercial)},
+}
+
+% ------------------------------------------------------------------
+% Foundation-Modelle / Backbones
+% ------------------------------------------------------------------
+
+@inproceedings{sam2023,
+  author    = {Kirillov, Alexander and Mintun, Eric and Ravi, Nikhila and Mao, Hanzi and Rolland, Chloe and Gustafson, Laura and Xiao, Tete and Whitehead, Spencer and Berg, Alexander C. and Lo, Wan-Yen and Doll{\'a}r, Piotr and Girshick, Ross},
+  title     = {Segment Anything},
+  booktitle = {IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2023},
+  note      = {arXiv:2304.02643},
+}
+
+@article{dinov2_2023,
+  author  = {Oquab, Maxime and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and others},
+  title   = {{DINOv2}: Learning Robust Visual Features without Supervision},
+  journal = {Transactions on Machine Learning Research (TMLR)},
+  year    = {2023},
+  note    = {arXiv:2304.07193 (2023); TMLR 2024},
+}
+
+% ------------------------------------------------------------------
+% Benchmark, Format, Werkzeuge
+% ------------------------------------------------------------------
+
+@article{bop2024,
+  author  = {Nguyen, Van Nguyen and Tyree, Stephen and Guo, Andrew and Fourmy, M{\'e}d{\'e}ric and Gouda, Ahmad and Lee, Taeyeop and Moon, Sungphill and Son, Hyeontae and Ranftl, Lukas and Tremblay, Jonathan and Brachmann, Eric and Drost, Bertram and Lepetit, Vincent and Rother, Carsten and Birchfield, Stan and Matas, Ji{\v{r}}{\'i} and Labb{\'e}, Yann and Sundermeyer, Martin and Hoda{\v{n}}, Tom{\'a}{\v{s}}},
+  title   = {{BOP} Challenge 2024 on Model-Based and Model-Free 6D Object Pose Estimation},
+  journal = {arXiv preprint arXiv:2504.02812},
+  year    = {2025},
+}
+
+@misc{boptoolkit,
+  author       = {Hoda{\v{n}}, Tom{\'a}{\v{s}} and others},
+  title        = {{BOP} Toolkit},
+  howpublished = {\url{https://github.com/thodan/bop_toolkit}},
+  note         = {MIT-Lizenz},
+}
+
+% ------------------------------------------------------------------
+% Detektor
+% ------------------------------------------------------------------
+
+@misc{yolov8,
+  author       = {Jocher, Glenn and Chaurasia, Ayush and Qiu, Jing},
+  title        = {Ultralytics {YOLOv8}},
+  year         = {2023},
+  howpublished = {\url{https://github.com/ultralytics/ultralytics}},
+  note         = {AGPL-3.0},
+}
+
+% ------------------------------------------------------------------
+% Simulation / Synthetik-Daten
+% ------------------------------------------------------------------
+
+@misc{isaacsim,
+  author       = {{NVIDIA Corporation}},
+  title        = {{NVIDIA Isaac Sim}},
+  howpublished = {\url{https://developer.nvidia.com/isaac/sim}},
+  note         = {Omniverse Replicator (Synthetic Data Generation)},
+}
+
+@article{thalhammer2024,
+  author  = {Thalhammer, Stefan and Bauer, Dominik and Patten, Timothy and Vincze, Markus},
+  title   = {Synthetic Training Data for Texture-less Object Pose Estimation via Domain Randomization},
+  journal = {arXiv preprint arXiv:2402.04878},
+  year    = {2024},
+}
+
+% ------------------------------------------------------------------
+% Geometrie / Raytracing (MoE-Schattensimulation)
+% ------------------------------------------------------------------
+
+@article{mollertrumbore1997,
+  author  = {M{\"o}ller, Tomas and Trumbore, Ben},
+  title   = {Fast, Minimum Storage Ray-Triangle Intersection},
+  journal = {Journal of Graphics Tools},
+  volume  = {2},
+  number  = {1},
+  pages   = {21--28},
+  year    = {1997},
+}

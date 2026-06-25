@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-12T19:06:15Z",
+  "updated": "2026-06-25T12:40:23Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 180,
+  "next_id": 184,
   "tickets": [
     {
       "id": "T-001",
@@ -8885,7 +8885,7 @@
       ],
       "session": "2026-06-07-multi-pipeline-pose",
       "created": "2026-06-08T07:13:46Z",
-      "updated": "2026-06-08T12:14:49Z",
+      "updated": "2026-06-18T14:04:24Z",
       "started_at": "2026-06-08T08:27:07Z",
       "completed_at": null,
       "comments": [],
@@ -9087,6 +9087,12 @@
           "agent": "kai-ml",
           "level": "success",
           "msg": "Re-Run#2 done @run-20260608T113628Z: Pipeline A 0.915 (=Theos Vorhersage bit-genau, AR-Fix bestaetigt). Sieger yolo-obb+GDRNPP. RGB-D gesund (0.66) aber fuehrt nicht. sam3 unbrauchbar (40% cov, Anker_Lang=0). EVAL.md @run-20260608T113628Z."
+        },
+        {
+          "ts": "2026-06-18T14:04:24Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Versehentlich gestarteter Batch-Eval (run-20260618T135956Z, 2/12) abgebrochen: kip-server restart (PID 1144->3584, NRestarts=0), partiellen Ordner entfernt. /api/eval/runs zeigt nur noch die 2 vollstaendigen Laeufe (Jun10 12/12, Jun8 12/12)."
         }
       ]
     },
@@ -11109,7 +11115,7 @@
       ],
       "session": "",
       "created": "2026-06-10T10:33:50Z",
-      "updated": "2026-06-12T19:06:15Z",
+      "updated": "2026-06-12T19:15:40Z",
       "started_at": "2026-06-10T10:33:50Z",
       "completed_at": null,
       "comments": [],
@@ -11191,6 +11197,12 @@
           "agent": "claude",
           "level": "info",
           "msg": "T-178g UI-Finale (2bd5ed5): Header = KIT-Logo + wbk-Marke + Titel (oben frei), Modellauswahl ueber den Mappen im Bottom-Stack, Reset-Button + Bereit-Badge raus. Nebenbei T-088/T-104/T-148/T-149 geschlossen (Suite 289/289). Offen bewusst gelassen: T-179 (GigaPose-Zahnrad-Templates, niedrig — FP deckt ab), T-133 (VRAM-Manager, invasiv), T-150 (Max-Entscheid Auth), T-141/142 (formale QS-Gates), Zahnrad-Retrain (nur auf Zuruf)."
+        },
+        {
+          "ts": "2026-06-12T19:15:40Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Offizielles wbk-Logo (von Max geliefert) im Header eingebaut, Platzhalter-Wortmarke ersetzt. Live + gepusht."
         }
       ]
     },
@@ -11208,6 +11220,150 @@
       "session": "",
       "created": "2026-06-12T08:39:45Z",
       "updated": "2026-06-12T08:39:45Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-180",
+      "title": "FE-Kombi-Erreichbarkeit + Verdrahtungs-Audit (12-Kombi-Matrix: FE-Gating ↔ combos.py ↔ /api/predict ↔ gateway_proxy ↔ live)",
+      "description": "",
+      "column": "in_review",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "frontend,wiring,combos,audit"
+      ],
+      "session": "",
+      "created": "2026-06-18T14:06:30Z",
+      "updated": "2026-06-18T14:14:59Z",
+      "started_at": "2026-06-18T14:06:36Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-18T14:06:36Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-18T14:14:58Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Audit durch (4 Schichten, deterministische Harnesses + Live-Box): 12-Kombi-Matrix konsistent. FE WHITELIST == combos.FEASIBLE_COMBOS (0 Divergenzen, alle Flags). 10/12 FE-waehlbar, 2 (yolo_seg__gdrnpp, sam3__gdrnpp) bewusst degraded-disabled (T-147/T-158), aber backend-routbar + live available. COMBO_TO_GATEWAY deckt alle 11 Non-A (kein InvalidCombo). Live /api/pipelines=12 all avail, Gateway 6/6 ok. EIN minor Fix: batch.js POST_L fehlten id-Keys gdrnpp/foundationpose -> Live-Scoreboard zeigte kleingeschrieben (Final-Tabelle war ok). Gefixt."
+        },
+        {
+          "ts": "2026-06-18T14:14:59Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-181",
+      "title": "Seminararbeit LaTeX: Methodik + MoE-Systemarchitektur (Pose-Estimation)",
+      "description": "",
+      "column": "in_review",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "paper",
+        "docs"
+      ],
+      "session": "",
+      "created": "2026-06-21T08:14:58Z",
+      "updated": "2026-06-21T08:54:49Z",
+      "started_at": "2026-06-21T08:14:58Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-21T08:23:02Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "paper.tex + Literaturfile.bib geschrieben; Struktur-Check grün (Umgebungen/Klammern/cite/ref/Bilder ok). Faktencheck-Workflow gestartet (4 Prüfer: Eval-Zahlen, MoE-Geometrie, Zitate, Vollständigkeit)."
+        },
+        {
+          "ts": "2026-06-21T08:31:56Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Faktencheck (4 Prüfer, 386k tok): ALLE Kernzahlen gegen Quellen bestätigt (AR 0.886/0.968/0.838/0.636, Plattform 0.49->0.85, MoE A/B 3.4 vs 424.6mm, Rig-Koords, Zonen, Rotationen, Zitate+Lizenzen). 6 Präzisierungen eingearbeitet (Methodik-Zusammenfassung ergänzt, Komplementaritäts-Bloat gestrafft, ~5°-Generalisierung+FP-|t|-Rundung gefixt, ~20AR/BOP-Spitze belegt/entschärft, DINOv2-Jahr, Caption). wbk.cls/bst/Logos nach project/ kopiert -> selbst-kompilierbar. Lokal kein LaTeX -> Max kompiliert."
+        },
+        {
+          "ts": "2026-06-21T08:31:56Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-21T08:54:49Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Überarbeitung: (1) Fragezeichen-Ursache = deutsche Anführungszeichen „ \" (U+201E/201C) -> mit inputenc-utf8+lmodern als ? gerendert -> auf \\glqq/\\grqq umgestellt, jetzt 0 problematische Sonderzeichen. (2) Alle 5 TikZ-Diagramme auf einen gemeinsamen \\tikzset-Stil vereinheitlicht; Schatten-Diagramm als klare Seitenansicht neu gezeichnet. (3) Struktur: neues Kapitel Problemstellung zwischen Stand der Forschung und Methodik; Auswertung in Methodik+Lösung eingefaltet -> Körper = nur Methodik + Lösung. (4) Fließtext: 0 Pfeile, Halbsätze zu Sätzen, für Maschinenbauer lesbar (Fachbegriffe erklärt). Alle verifizierten Kernzahlen erhalten. Validierung grün."
+        }
+      ]
+    },
+    {
+      "id": "T-182",
+      "title": "Arm-Foundation Spawn-Keepout (5cm) in SDG-Sim — verhindert Teil-Clipping in Arm-Sockel (normal+MoE)",
+      "description": "",
+      "column": "in_review",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "pose",
+        "sim",
+        "spawn"
+      ],
+      "session": "",
+      "created": "2026-06-25T12:35:24Z",
+      "updated": "2026-06-25T12:40:23Z",
+      "started_at": "2026-06-25T12:35:27Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-25T12:35:27Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-25T12:40:16Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Keep-Out implementiert in spawn_weighted (gen_sdg_arm_visible.py): XY-Radius um Arm-Foundation, center aus Szene abgeleitet (0.4048,0.2406), default 0.13m (Sockel ~8cm + 5cm). Deployed auf Box. Smoke-Run 8 Teile: INSIDE_COUNT 0/8, naechstes 13.8cm. Beide Sim-Typen (normal+MoE) teilen denselben Spawner -> ein Fix deckt beide."
+        },
+        {
+          "ts": "2026-06-25T12:40:23Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-183",
+      "title": "FU: Live-Sim Slow — jeder /sim/generate_async cold-bootet SimulationApp (~25-35s/Request). Persistenter Isaac-Worker (warm halten) statt subprocess.Popen pro Klick",
+      "description": "",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "pose",
+        "sim",
+        "perf"
+      ],
+      "session": "",
+      "created": "2026-06-25T12:40:16Z",
+      "updated": "2026-06-25T12:40:16Z",
       "started_at": null,
       "completed_at": null,
       "comments": [],
