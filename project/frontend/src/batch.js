@@ -27,6 +27,9 @@ const LIVE_POLL_MS = 2500;      // ~2-3 s Live-Poll (Max schaut zu, kein Flacker
 const SEG_L  = { "yolo-obb": "yolo-obb", "yolo-seg": "yolo-seg", "sam3": "sam3" };
 const POST_L = { "GDRNPP": "GDRNPP", "FoundationPose": "FoundationPose",
                  "GigaPose-2D": "GigaPose 2D", "GigaPose-3D": "GigaPose 3D",
+                 // Live-Standings streamt pose = pose_source-id (batch_eval.py) → id-Keys
+                 // nötig, sonst rendern gdrnpp/foundationpose-Zeilen kleingeschrieben.
+                 "gdrnpp": "GDRNPP", "foundationpose": "FoundationPose",
                  "gigapose_rgb": "GigaPose 2D", "gigapose_rgbd": "GigaPose 3D" };
 
 const fmtPct = (v) => v == null ? "—" : `${Math.round((v > 1 ? v : v * 100))} %`;
