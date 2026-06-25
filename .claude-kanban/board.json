@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-25T12:56:40Z",
+  "updated": "2026-06-25T13:33:11Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 184,
+  "next_id": 185,
   "tickets": [
     {
       "id": "T-001",
@@ -11380,6 +11380,52 @@
       "completed_at": null,
       "comments": [],
       "logs": []
+    },
+    {
+      "id": "T-184",
+      "title": "BUG: MoE RGB-D-Zweig 500 — fp-svc:8002/pose Internal Server Error (Gateway 502 bei Live-MoE-Szene)",
+      "description": "",
+      "column": "done",
+      "assignee": "theo-debug",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "moe",
+        "bug",
+        "pose"
+      ],
+      "session": "",
+      "created": "2026-06-25T13:13:48Z",
+      "updated": "2026-06-25T13:33:11Z",
+      "started_at": "2026-06-25T13:14:21Z",
+      "completed_at": "2026-06-25T13:33:11Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-06-25T13:14:21Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-06-25T13:33:11Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "ROOT-CAUSE: kein Logik-Bug — FoundationPose register() warpt den Hypothesen-Batch in voller 1280x720-Aufloesung -> Peak ~12.5GiB, OOM auf geteilter 24GiB-Karte (6 Mesh-Services co-resident). Zusatz: fp-svc gab nach OOM den Speicher nicht frei (haengt bei 12.5GiB). FIX (fp-svc/app.py): FP_MAX_SIDE=640 Downscale (rgb=AREA, depth/mask=NEAREST, K mitskaliert -> Pose bleibt metrisch) -> Peak faellt auf ~2.7GiB; + torch.cuda.empty_cache() im finally (Release auch bei Fehler). expandable_segments war schon im Dockerfile (half nicht, da echter Working-Set). VERIFIZIERT E2E: MoE-Live-Szene 'Fertig', moe-routing rgbd_n=4 -> foundationpose, 4 Posen, 0 Fehler. Rebuild fp-svc, .bak gesichert. HINWEIS: ~/kip_mesh ist Box-Infra, NICHT im KIP_POSE-Repo."
+        },
+        {
+          "ts": "2026-06-25T13:33:11Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-06-25T13:33:11Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
+        }
+      ]
     }
   ]
 }
