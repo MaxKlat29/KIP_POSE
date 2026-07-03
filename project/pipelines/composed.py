@@ -81,7 +81,13 @@ def tcamobj_to_world_entry(*, cls: str, T_cam_obj, R_w2c, t_w2c, table_origin,
     if snap:
         verts = _mesh_verts_for(obj_id, warn or (lambda *a, **k: None))
         if verts is not None:
-            t_world, _dz = planar_z_snap(R_world, t_world, verts, table_z=0.0)
+            # Gleiche Tischebenen-Konvention wie der Pipeline-A-Pfad (kip_server):
+            # Tisch liegt im pose-frame bei z = -table_origin.z, NICHT bei 0.0 —
+            # sonst schweben alle Gateway-Kombis exakt eine Tischhoehe (+8 cm)
+            # ueber GT/Pipeline A (Audit T-185). max_snap_m wie Pipeline A.
+            table_z = -float(np.asarray(table_origin, float).reshape(3)[2])
+            t_world, _dz = planar_z_snap(R_world, t_world, verts,
+                                         table_z=table_z, max_snap_m=0.10)
 
     R_world = canonicalize_rotation(R_world, part)      # §6: Yaw-Flackern vermeiden
 

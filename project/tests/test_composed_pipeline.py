@@ -334,5 +334,27 @@ def test_mask_b64_to_bbox():
     assert _mask_b64_to_bbox(empty) == [0, 0, 0, 0]
 
 
+def test_snap_uses_table_origin_plane(monkeypatch):
+    """Regression T-185: Boden-Snap muss auf z=-table_origin.z snappen (Pipeline-A-
+    Konvention), nicht auf 0.0 — sonst schweben alle Gateway-Kombis +8 cm ueber GT."""
+    from pipelines import composed as M
+
+    # Fake-Wuerfel 2 cm hoch, Ursprung mittig → tiefster Punkt bei t_z - 0.01.
+    verts = np.array([[x, y, z] for x in (-.01, .01) for y in (-.01, .01)
+                      for z in (-.01, .01)])
+    monkeypatch.setattr(M, "_mesh_verts_for", lambda obj_id, warn: verts)
+
+    T = np.eye(4)
+    # t_world.z = 0.05 - table_origin.z = -0.03 → contact -0.04, dz=-0.04
+    # (innerhalb max_snap_m=0.10; Alt-Code haette auf 0.0 gehoben → t_z=+0.01).
+    T[:3, 3] = [0.0, 0.0, 0.05]
+    entry = M.tcamobj_to_world_entry(
+        cls="anker_kurz", T_cam_obj=T, R_w2c=np.eye(3), t_w2c=np.zeros(3),
+        table_origin=[0.0, 0.0, 0.08], confidence=0.9, bbox_2d=[0, 0, 1, 1],
+        instance_id=0, snap=True)
+    # Tiefster Mesh-Punkt liegt auf der Tischebene -0.08 → t_z = -0.08 + 0.01.
+    assert entry["t_world"][2] == pytest.approx(-0.07, abs=1e-6)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
