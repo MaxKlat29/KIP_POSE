@@ -1628,6 +1628,7 @@ def sim_infer_async(scene: int = 0, im: int = -1):
 
 
 # ── Live-Isaac-Generation Configuration ─────────────────────────────────────
+ISAAC_TIMEOUT_S = 600   # T-185: harte Obergrenze je Isaac-Render (normal 60-300s, T-183)
 _ISAAC_VENV   = "/mnt/data/isaacsim-venv/bin/python"
 _BOP_VENV     = "/mnt/data/bop/gdrnpp-venv/bin/python"
 _GEN_SCRIPT   = "/mnt/data/kip_pose/box_src/gen_sdg_arm_visible.py"
@@ -1685,16 +1686,30 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
              "--force-each-focus",
              "--seed", str(seed)],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        # parse stdout for progress markers
+        # parse stdout for progress markers.
+        # T-185: `for line in gen.stdout` blockiert bis Prozess-Ende — ein
+        # gen.wait(timeout=...) DANACH ist wirkungslos gegen haengende Isaac-
+        # Prozesse (live belegt: 28+ min bei pct=40, leerer Output, Swap-
+        # Thrashing). Watchdog killt hart nach ISAAC_TIMEOUT_S; der bestehende
+        # TimeoutExpired-Handler liefert dann den sauberen Job-Fehler.
+        timed_out = threading.Event()
+        watchdog = threading.Timer(
+            ISAAC_TIMEOUT_S, lambda: (timed_out.set(), gen.kill()))
+        watchdog.start()
         last_phase_pct = 10
-        for line in gen.stdout:
-            if "scene loaded" in line:
-                _job_set(job, phase="Isaac Sim rendert Frame", pct=40)
-                last_phase_pct = 40
-            elif "DONE 1 scenes" in line:
-                _job_set(job, phase="Isaac fertig — BOP-Konvertierung", pct=70)
-                last_phase_pct = 70
-        gen.wait(timeout=180)
+        try:
+            for line in gen.stdout:
+                if "scene loaded" in line:
+                    _job_set(job, phase="Isaac Sim rendert Frame", pct=40)
+                    last_phase_pct = 40
+                elif "DONE 1 scenes" in line:
+                    _job_set(job, phase="Isaac fertig — BOP-Konvertierung", pct=70)
+                    last_phase_pct = 70
+            gen.wait(timeout=30)
+        finally:
+            watchdog.cancel()
+        if timed_out.is_set():
+            raise subprocess.TimeoutExpired(_GEN_SCRIPT, ISAAC_TIMEOUT_S)
         if gen.returncode != 0:
             raise RuntimeError(f"Isaac-Render fehlgeschlagen (exit {gen.returncode})")
         if not (rawdir / "rgb_0000.png").exists():
@@ -1884,7 +1899,8 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
                  scene=99, im=0, n_gt=n_gt, n_pred=n_pred, source="isaac-live",
                  seed=seed, n_obj=n_obj, **meta_used)
     except subprocess.TimeoutExpired:
-        _job_set(job, phase="Isaac-Timeout (>3 min)", pct=-1, error="timeout")
+        _job_set(job, phase=f"Isaac-Timeout (>{ISAAC_TIMEOUT_S // 60} min)",
+                 pct=-1, error="timeout")
     except Exception as e:
         import traceback; traceback.print_exc()
         _job_set(job, phase=f"Fehler: {e}", pct=-1, error=str(e))
