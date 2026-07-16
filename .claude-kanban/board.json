@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-06-25T13:33:11Z",
+  "updated": "2026-07-16T10:40:32Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 185,
+  "next_id": 189,
   "tickets": [
     {
       "id": "T-001",
@@ -7859,7 +7859,7 @@
       ],
       "session": "2026-06-07-multi-pipeline-pose",
       "created": "2026-06-07T15:08:46Z",
-      "updated": "2026-06-08T06:48:52Z",
+      "updated": "2026-07-03T06:46:30Z",
       "started_at": "2026-06-07T16:58:30Z",
       "completed_at": null,
       "comments": [],
@@ -7911,6 +7911,12 @@
           "agent": "queen",
           "level": "info",
           "msg": "Modell konvergiert (box/mask mAP50 0.99, mAP50-95 box 0.954/mask 0.789). best.pt @ _runs/seg/weights/best.pt (06:23, plateau). Greife konvergierten Checkpoint, stoppe Training fuer Final-Push."
+        },
+        {
+          "ts": "2026-07-03T06:46:30Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "T-185-Audit-Randbefund: aktuelles yolo-seg (v25) findet auf val scene 0 nur 1/2 trainierte Objekte (Zahnrad fehlt in allen 4 yolo-basierten Kombis; sam3 + Pipeline-A-Detektor finden 2/2) — Datenpunkt für v26-Eval."
         }
       ]
     },
@@ -11375,11 +11381,18 @@
       ],
       "session": "",
       "created": "2026-06-25T12:40:16Z",
-      "updated": "2026-06-25T12:40:16Z",
+      "updated": "2026-07-03T06:46:30Z",
       "started_at": null,
       "completed_at": null,
       "comments": [],
-      "logs": []
+      "logs": [
+        {
+          "ts": "2026-07-03T06:46:30Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "T-185-Audit-Evidenz: /sim/generate_async nicht nur slow sondern pathologisch — Job 1a02bbe1 28min@pct=40, Output leer, Box 11Gi Swap-Thrashing (Isaac 4.5GB RSS auf 15Gi-Box mit vollem Stack); Folge-Repro exit -11 (SIGSEGV). Watchdog (commit 2e41a3b) begrenzt Hänger jetzt auf 600s + sauberen Job-Fehler. Echter Fix braucht RAM-Headroom/Queueing/Pre-Warm."
+        }
+      ]
     },
     {
       "id": "T-184",
@@ -11424,6 +11437,161 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_review → done"
+        }
+      ]
+    },
+    {
+      "id": "T-185",
+      "title": "Prod-Check nach WoL: Stack hochfahren, Fundamental-Fehler-Audit (Ausführung/Logik) + Fixes, Server anlassen für Kollegen",
+      "description": "",
+      "column": "in_review",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "ops",
+        "prod-audit"
+      ],
+      "session": "",
+      "created": "2026-07-03T05:52:06Z",
+      "updated": "2026-07-03T06:46:30Z",
+      "started_at": "2026-07-03T05:52:15Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-07-03T05:52:15Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-07-03T05:52:15Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "WoL Magic Packet über Pi gesendet (24:4b:fe:4b:79:e0), warte auf SSH max@100.85.216.95"
+        },
+        {
+          "ts": "2026-07-03T05:55:04Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Box up (WoL ok). kip-server+worker systemd active, 6 Mesh-Container auto-restart (neu seit Konsolidierung), gdrnpp-svc :8012 nativ nachgestartet (PID 3066, PYTHONPATH=/mnt/data/kip_pose/box_src). Warte auf Health-Verify."
+        },
+        {
+          "ts": "2026-07-03T05:56:22Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Korrektur: gdrnpp-svc läuft inzwischen als systemd-Unit kip-gdrnpp-svc.service (auto-start) — manueller Start kollidierte sauber (EADDRINUSE) und starb. Ganzer Stack ist reboot-fest autostart. Warte auf Modell-Load, dann Audit."
+        },
+        {
+          "ts": "2026-07-03T06:01:18Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Stack komplett grün: :8078 ready [1,2,6], :8012 ready, Gateway 6/6, /api/pipelines 12 Kombis, Edge max-utils.com/KIP 200. Deploy-Sync verifiziert (kip_server.py + fp-svc app.py md5-identisch, FP_MAX_SIDE im Container, batch.js am Edge byte-identisch). Audit-Workflow gestartet (6 Finder + adversariale Verify, Run wf_8cb7fe66-a81)."
+        },
+        {
+          "ts": "2026-07-03T06:46:30Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Audit fertig (15 Agents, 1.1M tok): 3 Major bestätigt (je 3/3 Verdikte), 0 widerlegt, 4 Minor. FIXES DEPLOYED + VERIFIZIERT: (1) F-1 z-Snap-Konvention — alle 11 Gateway-Kombis snappten auf table_z=0.0 statt -table_origin.z → +8cm-Schwebe vs GT/Pipeline A; Fix composed.py + Regressionstest, commit cc80a9a. Verify auf Prod: yolo_seg__foundationpose z=-0.0676 (vorher +0.012), gigapose_rgbd z=-0.0674, Pipeline A unverändert (-0.0684). (2) FE-002 toter 180s-Isaac-Timeout — Leseschleife blockierte unbegrenzt; Watchdog ISAAC_TIMEOUT_S=600 killt hart, commit 2e41a3b. (3) FE-001 Live-Sim-Hang (28min@40%, Swap-Thrashing, danach exit -11) — durch Watchdog auf 10min + sauberen Fehler begrenzt, Root-Cause (Isaac-RAM auf 15Gi-Box mit vollem Stack) → T-183. 290/290 Tests. Deploy: scp + systemctl restart kip-server (Backups *.bak-T185)."
+        },
+        {
+          "ts": "2026-07-03T06:46:30Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Minors (unverifiziert, dokumentiert): HEAD auf /api/* → 404 (StaticFiles-Catchall schluckt non-GET, Monitor-Falle); /api/live/status 503 (Jetson/VPN nach Boot down — Max-Entscheid ob gebraucht); GDRNPP-Logs UTC+8 (upstream time_utils hours_offset=8); yolo-seg findet 1/2 Obj auf val scene 0 (Zahnrad-Recall → T-134-Training). Server läuft, 12/12 Kombis, Edge 200 — bereit für Kollegen."
+        },
+        {
+          "ts": "2026-07-03T06:46:30Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-186",
+      "title": "FU T-185: HEAD auf /api/*-Routen liefert 404 (StaticFiles-Catchall schluckt non-GET) — HEAD-Support oder dokumentieren dass Monitore GET nutzen",
+      "description": "",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P3",
+      "tags": [
+        "pose",
+        "followup"
+      ],
+      "session": "",
+      "created": "2026-07-03T06:46:30Z",
+      "updated": "2026-07-03T06:46:30Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-187",
+      "title": "Jetson-Live nach Box-Reboot down (/api/live/status 503) — kit_vpn_scoped_connect + live_server auf Jetson starten? Braucht Max-Entscheid ob Live-Tab für Kollegen gebraucht wird",
+      "description": "",
+      "column": "backlog",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P2",
+      "tags": [
+        "pose",
+        "max-pending"
+      ],
+      "session": "",
+      "created": "2026-07-03T06:46:30Z",
+      "updated": "2026-07-03T06:46:30Z",
+      "started_at": null,
+      "completed_at": null,
+      "comments": [],
+      "logs": []
+    },
+    {
+      "id": "T-188",
+      "title": "BUG: Real-Upload 2448x2048 (Zivid full-res) -> Worker SizeMismatchError, gemeldet als 'Worker nicht erreichbar (8078)'",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "pose",
+        "bug",
+        "upload"
+      ],
+      "session": "",
+      "created": "2026-07-16T10:35:03Z",
+      "updated": "2026-07-16T10:40:32Z",
+      "started_at": "2026-07-16T10:35:13Z",
+      "completed_at": "2026-07-16T10:40:32Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-07-16T10:35:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-07-16T10:35:14Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Root Cause: Marc lud 2448x2048 (Zivid full-res) hoch; Pipeline-Kontrakt ist 1280x720 (SDG-Template-K aus val/000000). Worker wirft detectron2 SizeMismatchError -> 500 -> _worker_infer_upload schluckt alles zu None -> irrefuehrend 'Worker nicht erreichbar (Port 8078?)'. Worker/Server auf Box laufen und sind gesund."
+        },
+        {
+          "ts": "2026-07-16T10:40:32Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Fix deployed + E2E gruen: Marcs Originalbild (2448x2048) via max-utils.com -> Fertig pct=100 (1x Anker_Lang); Regression 1280x720-Val-Bild -> Fertig (2 Teile). 19/19 pytest. Commit 77e2fe9, Box-Deploy scp+restart kip-server."
+        },
+        {
+          "ts": "2026-07-16T10:40:32Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
         }
       ]
     }
