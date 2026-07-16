@@ -100,6 +100,39 @@ def _check_upload_image(name: str, data: bytes):
         raise HTTPException(413, f"{name}: {w}x{h} ueberschreitet das Pixel-Limit "
                                  f"({KIP_MAX_PIXELS} px, T-148).")
 
+def _to_pipeline_format(data: bytes, is_depth: bool = False) -> bytes:
+    """Upload aufs Pipeline-Format 1280x720 bringen (T-188).
+
+    Der gesamte Real-Pfad rechnet mit der festen Template-Kamera (K aus
+    val/000000, 1280x720). Zivid-Vollaufloesung (z.B. 2448x2048) crasht sonst
+    im GDRNPP-Loader (SizeMismatchError). Abweichende Aspect-Ratio wird per
+    Center-Crop auf 16:9 gebracht (kein Verzerren — Verzerren wuerde die Posen
+    still ruinieren), dann downscaled. 1280x720-Uploads bleiben byte-identisch.
+    Depth: NEAREST (nie ueber Tiefenkanten interpolieren, T-184-Precedent)."""
+    import io
+    from PIL import Image as _Img
+    TW, TH = 1280, 720
+    with _Img.open(io.BytesIO(data)) as im:
+        im.load()
+        w, h = im.size
+        if (w, h) == (TW, TH):
+            return data
+        # ponytail: fixe-Kamera-Annahme — Crop passt nur, solange die Sim-K den
+        # horizontalen FoV der echten Zivid trifft; echte Full-Res-K waere T-Followup.
+        if w * TH > h * TW:      # zu breit -> links/rechts croppen
+            cw = (h * TW) // TH
+            im = im.crop(((w - cw) // 2, 0, (w - cw) // 2 + cw, h))
+        elif w * TH < h * TW:    # zu hoch -> oben/unten croppen
+            ch = (w * TH) // TW
+            im = im.crop((0, (h - ch) // 2, w, (h - ch) // 2 + ch))
+        if not is_depth and im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        im = im.resize((TW, TH), _Img.NEAREST if is_depth else _Img.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, "PNG")
+        return buf.getvalue()
+
+
 def _job_get(job):
     with _JOBS_LOCK:
         return dict(_JOBS.get(job, {}))
@@ -768,7 +801,7 @@ async def real_infer(image: UploadFile = File(...),
     (updir / "000000" / "rgb").mkdir(parents=True, exist_ok=True)
     src = updir / "000000" / "rgb" / "000000.png"
     with open(src, "wb") as f:
-        shutil.copyfileobj(image.file, f)
+        f.write(_to_pipeline_format(image.file.read()))  # T-188
     # temp-Dataset: scene_camera (feste Zivid) + dummy gt/info (maskenfrei)
     cam = _zivid_cam()
     json.dump({"0": cam}, open(updir / "000000" / "scene_camera.json", "w"))
@@ -824,13 +857,21 @@ async def real_infer(image: UploadFile = File(...),
 
 
 def _worker_infer_upload(updir, det_json):
+    import urllib.request, urllib.parse, urllib.error
+    qs = urllib.parse.urlencode({"dir": updir, "det": det_json})
     try:
-        import urllib.request, urllib.parse
-        qs = urllib.parse.urlencode({"dir": updir, "det": det_json})
         with urllib.request.urlopen(f"http://127.0.0.1:8078/infer_upload?{qs}", timeout=60) as r:
             return json.loads(r.read().decode()).get("preds")
+    except urllib.error.HTTPError as e:
+        # T-188: Worker LEBT, hat aber einen Fehler geworfen -> echten Grund
+        # durchreichen statt irrefuehrend "nicht erreichbar" zu melden.
+        try:
+            msg = json.loads(e.read().decode()).get("error") or f"HTTP {e.code}"
+        except Exception:
+            msg = f"HTTP {e.code}"
+        raise RuntimeError(f"Worker-Fehler: {str(msg)[:300]}")
     except Exception:
-        return None
+        return None  # wirklich nicht erreichbar (down/Timeout/Connection refused)
 
 
 @app.get("/api/real/result/{job}")
@@ -866,12 +907,13 @@ def _real_infer_job(job, img_bytes, fname, combo_id="gdrnpp", depth_bytes=None,
         updir = UPLOADS / f"real_{job}"
         (updir / "000000" / "rgb").mkdir(parents=True, exist_ok=True)
         src = updir / "000000" / "rgb" / "000000.png"
-        with open(src, "wb") as f: f.write(img_bytes)
+        with open(src, "wb") as f: f.write(_to_pipeline_format(img_bytes))  # T-188
         depth_src = None
         if depth_bytes:
             (updir / "000000" / "depth").mkdir(exist_ok=True)
             depth_src = updir / "000000" / "depth" / "000000.png"
-            with open(depth_src, "wb") as f: f.write(depth_bytes)
+            with open(depth_src, "wb") as f:
+                f.write(_to_pipeline_format(depth_bytes, is_depth=True))  # T-188
         cam = _zivid_cam()
         json.dump({"0": cam}, open(updir / "000000" / "scene_camera.json", "w"))
         trained_oids = sorted(_trained_oids()) or [1]
