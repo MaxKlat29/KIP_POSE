@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-07-16T10:40:32Z",
+  "updated": "2026-07-24T09:40:39Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 189,
+  "next_id": 190,
   "tickets": [
     {
       "id": "T-001",
@@ -11370,7 +11370,7 @@
       "id": "T-183",
       "title": "FU: Live-Sim Slow — jeder /sim/generate_async cold-bootet SimulationApp (~25-35s/Request). Persistenter Isaac-Worker (warm halten) statt subprocess.Popen pro Klick",
       "description": "",
-      "column": "backlog",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P2",
@@ -11381,8 +11381,8 @@
       ],
       "session": "",
       "created": "2026-06-25T12:40:16Z",
-      "updated": "2026-07-03T06:46:30Z",
-      "started_at": null,
+      "updated": "2026-07-24T09:40:39Z",
+      "started_at": "2026-07-24T09:25:16Z",
       "completed_at": null,
       "comments": [],
       "logs": [
@@ -11391,6 +11391,30 @@
           "agent": "claude",
           "level": "info",
           "msg": "T-185-Audit-Evidenz: /sim/generate_async nicht nur slow sondern pathologisch — Job 1a02bbe1 28min@pct=40, Output leer, Box 11Gi Swap-Thrashing (Isaac 4.5GB RSS auf 15Gi-Box mit vollem Stack); Folge-Repro exit -11 (SIGSEGV). Watchdog (commit 2e41a3b) begrenzt Hänger jetzt auf 600s + sauberen Job-Fehler. Echter Fix braucht RAM-Headroom/Queueing/Pre-Warm."
+        },
+        {
+          "ts": "2026-07-24T09:25:16Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-07-24T09:25:17Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Recon done: pro Sim-Klick frischer subprocess.Popen von gen_sdg -> SimulationApp Cold-Boot ~25s. VRAM 12.4/24 frei. Baue persistenten warmen Worker additiv mit Fallback."
+        },
+        {
+          "ts": "2026-07-24T09:40:39Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Warm Isaac-Worker LIVE: gen_sdg --serve (systemd kip-isaac-worker, enabled=boot, OOMScoreAdjust=800 → first-to-die, StartLimitBurst=5). kip_server versucht warm zuerst (POST :8091/render), faellt bei Connection-refused auf alten Cold-Popen zurueck. E2E: /api/sim/generate_async ~15s statt ~60-80s, kein Cold-Boot mehr (pct startet bei 40). Fallback-Detection verifiziert. Box-RAM 4.2Gi frei mit warmem Isaac."
+        },
+        {
+          "ts": "2026-07-24T09:40:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
         }
       ]
     },
@@ -11564,7 +11588,7 @@
       ],
       "session": "",
       "created": "2026-07-16T10:35:03Z",
-      "updated": "2026-07-16T10:40:32Z",
+      "updated": "2026-07-16T10:44:55Z",
       "started_at": "2026-07-16T10:35:13Z",
       "completed_at": "2026-07-16T10:40:32Z",
       "comments": [],
@@ -11589,6 +11613,50 @@
         },
         {
           "ts": "2026-07-16T10:40:32Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → done"
+        },
+        {
+          "ts": "2026-07-16T10:44:55Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "GUI-Verify (Playwright, headed): max-utils.com/KIP -> Marcs 2448x2048-Foto via Dropzone -> Inferieren -> Fertig, 1x Anker_Lang im 3D-Viewer platziert. GUI nutzt denselben /api/real/infer_async-Pfad."
+        }
+      ]
+    },
+    {
+      "id": "T-189",
+      "title": "Demo-Vorbereitung: POSE-Server hochfahren (WoL Box + Stack + Edge grün)",
+      "description": "",
+      "column": "done",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "demo,ops"
+      ],
+      "session": "",
+      "created": "2026-07-24T07:58:14Z",
+      "updated": "2026-07-24T07:59:29Z",
+      "started_at": "2026-07-24T07:59:29Z",
+      "completed_at": "2026-07-24T07:59:29Z",
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-07-24T07:59:29Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-07-24T07:59:29Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Box war bereits geweckt (uptime 2min). kip-server+worker active, alle 6 Mesh-Services up, gdrnpp-svc active, Gateway 6/6 healthy (yolo/fp/gigapose/sam3/yolo-obb/gdrnpp, cuda). Edge max-utils.com/KIP = 200, /api/health = 200. Erste 502 war nur Boot-Ready-Fenster."
+        },
+        {
+          "ts": "2026-07-24T07:59:29Z",
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → done"

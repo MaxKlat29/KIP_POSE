@@ -1683,6 +1683,42 @@ _LIVE_ROOT    = pathlib.Path(os.environ.get(
     "KIP_LIVE_ROOT", "/mnt/data/kip_pose/project/temp/kip_live"))
 _LIVE_ROOT.mkdir(parents=True, exist_ok=True)
 
+# T-183: persistenter warmer Isaac-Worker (systemd: kip-isaac-worker). Statt pro
+# Sim-Klick SimulationApp cold zu booten (~25s, Swap-Thrash-Quelle) rendert der
+# schon gebootete Worker je HTTP-POST in ~2-5s. Faellt der Worker aus (Port zu),
+# nimmt _sim_generate_job automatisch den alten Popen-Cold-Pfad (unveraendert).
+_ISAAC_WORKER_URL = os.environ.get("KIP_ISAAC_WORKER", "http://127.0.0.1:8091")
+
+
+def _isaac_warm_render(job, rawdir, n_obj, seed):
+    """T-183: render EIN Frame ueber den warmen Isaac-Worker nach rawdir.
+    Rueckgabe True = fertig (rgb_0000.png liegt vor). Rueckgabe False NUR wenn der
+    Worker gar nicht laeuft (Connection refused) → Caller macht Cold-Boot-Fallback.
+    Ist der Worker DA, stirbt aber beim Render, wird der echte Fehler geworfen
+    (kein stiller Cold-Boot, der die Box zusaetzlich ins Thrashing treibt)."""
+    import urllib.request, urllib.error
+    payload = json.dumps({"output": str(rawdir), "n_obj": int(n_obj),
+                          "seed": int(seed)}).encode()
+    req = urllib.request.Request(
+        _ISAAC_WORKER_URL + "/render", data=payload,
+        headers={"Content-Type": "application/json"})
+    _job_set(job, phase="Isaac (warm) rendert Frame", pct=40)
+    try:
+        with urllib.request.urlopen(req, timeout=ISAAC_TIMEOUT_S) as r:
+            res = json.loads(r.read() or b"{}")
+    except urllib.error.URLError as e:
+        # Nur "kein Worker da" → Cold-Boot-Fallback; sonst echten Fehler durchreichen.
+        if isinstance(getattr(e, "reason", None), ConnectionRefusedError):
+            _job_set(job, phase="Isaac Sim startet (booting)", pct=10)
+            return False
+        raise RuntimeError(f"Warm-Isaac-Render fehlgeschlagen: {e}")
+    if not res.get("ok"):
+        raise RuntimeError(f"Warm-Isaac: {res.get('error', 'unbekannt')}")
+    if not (rawdir / "rgb_0000.png").exists():
+        raise RuntimeError("Warm-Isaac produzierte kein rgb_0000.png")
+    _job_set(job, phase="Isaac fertig — BOP-Konvertierung", pct=70)
+    return True
+
 
 def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
     """Live-Isaac-Pipeline: Isaac rendert frisches Frame → BOP-Konvertierung →
@@ -1717,45 +1753,47 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
         # der 3 Typen pro Szene (sonst kann die Zufalls-Auswahl einen Typ auf 0
         # ziehen — Demo-Killer).
         n_obj = _r.randint(7, 10)
-        gen = subprocess.Popen(
-            [_ISAAC_VENV, _GEN_SCRIPT,
-             "--scene", _SCENE_USD,
-             "--usd-dir", _USD_DIR,
-             "--output", str(rawdir),
-             "--num-scenes", "1",
-             "--force-counts", str(n_obj),
-             "--focus-frac", "1.0",
-             "--force-each-focus",
-             "--seed", str(seed)],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        # parse stdout for progress markers.
-        # T-185: `for line in gen.stdout` blockiert bis Prozess-Ende — ein
-        # gen.wait(timeout=...) DANACH ist wirkungslos gegen haengende Isaac-
-        # Prozesse (live belegt: 28+ min bei pct=40, leerer Output, Swap-
-        # Thrashing). Watchdog killt hart nach ISAAC_TIMEOUT_S; der bestehende
-        # TimeoutExpired-Handler liefert dann den sauberen Job-Fehler.
-        timed_out = threading.Event()
-        watchdog = threading.Timer(
-            ISAAC_TIMEOUT_S, lambda: (timed_out.set(), gen.kill()))
-        watchdog.start()
-        last_phase_pct = 10
-        try:
-            for line in gen.stdout:
-                if "scene loaded" in line:
-                    _job_set(job, phase="Isaac Sim rendert Frame", pct=40)
-                    last_phase_pct = 40
-                elif "DONE 1 scenes" in line:
-                    _job_set(job, phase="Isaac fertig — BOP-Konvertierung", pct=70)
-                    last_phase_pct = 70
-            gen.wait(timeout=30)
-        finally:
-            watchdog.cancel()
-        if timed_out.is_set():
-            raise subprocess.TimeoutExpired(_GEN_SCRIPT, ISAAC_TIMEOUT_S)
-        if gen.returncode != 0:
-            raise RuntimeError(f"Isaac-Render fehlgeschlagen (exit {gen.returncode})")
-        if not (rawdir / "rgb_0000.png").exists():
-            raise RuntimeError("Isaac produzierte kein rgb_0000.png")
+        # T-183: warmen Worker zuerst; nur wenn er gar nicht laeuft → Cold-Boot-Popen.
+        if not _isaac_warm_render(job, rawdir, n_obj, seed):
+            gen = subprocess.Popen(
+                [_ISAAC_VENV, _GEN_SCRIPT,
+                 "--scene", _SCENE_USD,
+                 "--usd-dir", _USD_DIR,
+                 "--output", str(rawdir),
+                 "--num-scenes", "1",
+                 "--force-counts", str(n_obj),
+                 "--focus-frac", "1.0",
+                 "--force-each-focus",
+                 "--seed", str(seed)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            # parse stdout for progress markers.
+            # T-185: `for line in gen.stdout` blockiert bis Prozess-Ende — ein
+            # gen.wait(timeout=...) DANACH ist wirkungslos gegen haengende Isaac-
+            # Prozesse (live belegt: 28+ min bei pct=40, leerer Output, Swap-
+            # Thrashing). Watchdog killt hart nach ISAAC_TIMEOUT_S; der bestehende
+            # TimeoutExpired-Handler liefert dann den sauberen Job-Fehler.
+            timed_out = threading.Event()
+            watchdog = threading.Timer(
+                ISAAC_TIMEOUT_S, lambda: (timed_out.set(), gen.kill()))
+            watchdog.start()
+            last_phase_pct = 10
+            try:
+                for line in gen.stdout:
+                    if "scene loaded" in line:
+                        _job_set(job, phase="Isaac Sim rendert Frame", pct=40)
+                        last_phase_pct = 40
+                    elif "DONE 1 scenes" in line:
+                        _job_set(job, phase="Isaac fertig — BOP-Konvertierung", pct=70)
+                        last_phase_pct = 70
+                gen.wait(timeout=30)
+            finally:
+                watchdog.cancel()
+            if timed_out.is_set():
+                raise subprocess.TimeoutExpired(_GEN_SCRIPT, ISAAC_TIMEOUT_S)
+            if gen.returncode != 0:
+                raise RuntimeError(f"Isaac-Render fehlgeschlagen (exit {gen.returncode})")
+            if not (rawdir / "rgb_0000.png").exists():
+                raise RuntimeError("Isaac produzierte kein rgb_0000.png")
 
         # BOP-Konvertierung in temp scene-id 0 (Worker erwartet 000000 als Scene-Dir).
         bopdir = rawdir / "bop"; bopdir.mkdir(exist_ok=True)

@@ -1,0 +1,34 @@
+[Unit]
+# T-183: persistenter WARMER Isaac-SDG-Worker. Bootet SimulationApp EINMAL beim
+# Box-Start und rendert danach je HTTP-POST /render (~10s) statt pro Sim-Klick
+# cold zu booten (~25-35s, Swap-Thrash-Quelle auf der 15Gi-Box). kip_server
+# (kip-isaac-worker DOWN → Popen-Cold-Fallback) haengt NICHT hart an diesem Dienst.
+Description=KIP warm Isaac SDG worker (HTTP /render on 127.0.0.1:8091, T-183)
+After=network-online.target
+Wants=network-online.target
+# Wird der Worker wiederholt OOM-gekillt, nicht in eine enge Neustart-Schleife
+# laufen (die die Box weiter thrasht): nach 5 Fehlstarts in 5min aufgeben —
+# kip_server nimmt dann automatisch den Cold-Boot-Fallback.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=max
+WorkingDirectory=/mnt/data/kip_pose/project
+Environment=OMNI_KIT_ACCEPT_EULA=YES
+ExecStart=/mnt/data/isaacsim-venv/bin/python /mnt/data/kip_pose/box_src/gen_sdg_arm_visible.py \
+  --scene /mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files/GST_Scene.usd \
+  --usd-dir /mnt/data/kip_pose/data/SDG/IsaacSim/USD-Files \
+  --output /mnt/data/kip_pose/project/temp/kip_live/_warmup \
+  --serve --serve-port 8091 --focus-frac 1.0 --force-each-focus
+# Unter RAM-Druck opfert der Kernel IMMER zuerst diesen wegwerfbaren Worker (800),
+# NIE eine Pose-Service (default 0). So kann warm-Isaac den Demo-Stack nicht OOMen.
+OOMScoreAdjust=800
+Restart=on-failure
+RestartSec=15
+StandardOutput=append:/mnt/data/kip_pose/isaac_worker.log
+StandardError=append:/mnt/data/kip_pose/isaac_worker.log
+
+[Install]
+WantedBy=multi-user.target

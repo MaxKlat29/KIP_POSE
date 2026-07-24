@@ -113,6 +113,12 @@ def parse_args():
                    help="T-119: garantiere >=1 gespawntes Objekt JEDER Fokus-Klasse "
                         "(Anker_Kurz/Anker_Lang/Zahnrad), sofern Platz (n_focus>=3). "
                         "Vom Live-Website-Sim genutzt; aus fuer Dataset-/Eval-Gen.")
+    # T-183: persistenter warmer Worker. Statt pro Sim-Klick SimulationApp neu zu
+    # booten (~25s cold-start, Swap-Thrash-Quelle auf der 15Gi-Box) bootet der
+    # Prozess EINMAL und rendert danach je HTTP-POST /render eine Szene (~2-5s).
+    p.add_argument("--serve", action="store_true",
+                   help="T-183: warm-worker — Isaac einmal booten, dann HTTP /render bedienen")
+    p.add_argument("--serve-port", type=int, default=8091)  # 8090 = mesh-gateway!
     return p.parse_args()
 
 
@@ -488,7 +494,12 @@ def main():
             spawned += 1
         return path2label
 
-    for sidx in range(a.start, a.num_scenes):
+    def render_one(sidx, out_dir, forced_n, rng):
+        """Render EINE Szene nach out_dir (Dateien *_{sidx:04d}.*). forced_n=None →
+        n_obj aus [min,max] sampeln (Batch); sonst exakt forced_n Teile (Live/Smoke).
+        rng wird als Parameter uebergeben, damit der Batch-Pfad seinen geteilten,
+        seed-reproduzierbaren rng behaelt und der Serve-Pfad je Request frisch seedet.
+        Rueckgabe: (n_parts, n_boxes)."""
         # DR: light intensity / colour / direction. dr_strong widens every range +
         # randomizes the dome colour fully (not just warm) for harder lighting.
         if a.dr_strong:
@@ -508,8 +519,8 @@ def main():
         # Die Kamera bleibt frame-für-frame an ihrer USD-position. Alle DR jetzt
         # in lighting + materials + spawn (Anker fallen physikbasiert per scene).
 
-        if force_counts:
-            n_obj = force_counts[(sidx - a.start) % len(force_counts)]
+        if forced_n is not None:
+            n_obj = forced_n
         else:
             # inclusive [min,max]; min=0 => empty scenes appear (bare cell, 0 GT)
             n_obj = int(rng.integers(a.min_obj, a.max_obj + 1))
@@ -585,18 +596,18 @@ def main():
 
         # ── save raw isaac bundle ────────────────────────────────────────────
         from PIL import Image
-        Image.fromarray(data["rgb"]).save(os.path.join(a.output, f"rgb_{sidx:04d}.png"))
+        Image.fromarray(data["rgb"]).save(os.path.join(out_dir, f"rgb_{sidx:04d}.png"))
         dd = data.get("depth"); arr = dd["data"] if isinstance(dd, dict) else dd
         if arr is not None:
-            np.save(os.path.join(a.output, f"depth_{sidx:04d}.npy"), np.asarray(arr, np.float32))
+            np.save(os.path.join(out_dir, f"depth_{sidx:04d}.npy"), np.asarray(arr, np.float32))
         for key, fn in (("instance_seg", "instance"), ("semantic_seg", "semantic")):
             d = data[key]
             if isinstance(d, dict):
                 # keep full id resolution (uint16) — many instances + the arm
-                np.save(os.path.join(a.output, f"{fn}_{sidx:04d}.npy"),
+                np.save(os.path.join(out_dir, f"{fn}_{sidx:04d}.npy"),
                         np.asarray(d["data"]).astype(np.uint32))
                 json.dump(dg.convert_numpy(d.get("info", {})),
-                          open(os.path.join(a.output, f"{fn}_labels_{sidx:04d}.json"), "w"), indent=2)
+                          open(os.path.join(out_dir, f"{fn}_labels_{sidx:04d}.json"), "w"), indent=2)
 
         # ── bbox_3d: AABB pro Instanz im Camera-Frame (für 3D-Detector / Volume-IoU)
         bb3 = data.get("bbox_3d")
@@ -618,7 +629,7 @@ def main():
                         except Exception: pass
                     entries.append(rec)
             json.dump({"boxes": entries, "info": dg.convert_numpy(info)},
-                      open(os.path.join(a.output, f"bbox_3d_{sidx:04d}.json"), "w"), indent=2)
+                      open(os.path.join(out_dir, f"bbox_3d_{sidx:04d}.json"), "w"), indent=2)
 
 
         # ── GT: camera intrinsics + cam c2w + per-instance world transform ───
@@ -643,7 +654,7 @@ def main():
                 "T_obj2world": T,                 # 4x4 row-major, scene-metres
             })
         json.dump(dg.convert_numpy(gt_raw),
-                  open(os.path.join(a.output, f"gt_raw_{sidx:04d}.json"), "w"), indent=2)
+                  open(os.path.join(out_dir, f"gt_raw_{sidx:04d}.json"), "w"), indent=2)
 
         # ── oriented 2D boxes (debug / detector reuse) ───────────────────────
         inst = data["instance_seg"]; seg = data["semantic_seg"]
@@ -651,13 +662,73 @@ def main():
                                       seg["data"] if isinstance(seg, dict) else None,
                                       seg["info"].get("idToLabels", {}) if isinstance(seg, dict) else {},
                                       all_labels, bbox_data=data.get("bbox_2d"))
-        json.dump({"boxes": obbs}, open(os.path.join(a.output, f"obb_2d_{sidx:04d}.json"), "w"), indent=2)
+        json.dump({"boxes": obbs}, open(os.path.join(out_dir, f"obb_2d_{sidx:04d}.json"), "w"), indent=2)
 
+        return len(path2label), len(obbs)
+
+    # ── T-183 SERVE: Isaac bleibt gebootet, rendert je HTTP-POST /render eine Szene.
+    # HTTPServer bedient Requests auf dem Serving-(Main-)Thread → Isaac bleibt
+    # single-threaded, Renders sind by-construction serialisiert (kein Lock noetig).
+    if a.serve:
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        _scene = [0]
+
+        class _H(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                if self.path == "/healthz":
+                    self.send_response(200); self.end_headers(); self.wfile.write(b"ok")
+                else:
+                    self.send_response(404); self.end_headers()
+
+            def do_POST(self):
+                if self.path != "/render":
+                    self.send_response(404); self.end_headers(); return
+                try:
+                    ln = int(self.headers.get("Content-Length", 0))
+                    req = json.loads(self.rfile.read(ln) or b"{}")
+                    out_dir = req["output"]; n_obj = int(req.get("n_obj", 8))
+                    seed = int(req.get("seed", 0))
+                    os.makedirs(out_dir, exist_ok=True)
+                    t = time.time()
+                    # sidx IMMER 0: jeder Request rendert EINE Szene in sein eigenes
+                    # frisches out_dir → Dateien heissen *_0000.* (Konverter erwartet
+                    # rgb_0000.png). _scene ist nur ein Log-Zaehler.
+                    n_parts, n_boxes = render_one(
+                        0, out_dir, n_obj, np.random.default_rng(seed))
+                    _scene[0] += 1
+                    log(f"served #{_scene[0]} -> {out_dir}: {n_parts} parts, "
+                        f"{n_boxes} boxes | {time.time()-t:.1f}s")
+                    body = json.dumps(
+                        {"ok": True, "n_parts": n_parts, "n_boxes": n_boxes}).encode()
+                    self.send_response(200)
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    body = json.dumps({"ok": False, "error": str(e)}).encode()
+                    self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers(); self.wfile.write(body)
+
+        srv = HTTPServer(("127.0.0.1", a.serve_port), _H)
+        log(f"SERVE ready 127.0.0.1:{a.serve_port} — warm Isaac worker (DONE booting)")
+        try:
+            srv.serve_forever()
+        finally:
+            app.close()
+        return
+
+    for sidx in range(a.start, a.num_scenes):
+        forced_n = (force_counts[(sidx - a.start) % len(force_counts)]
+                    if force_counts else None)
+        n_parts, n_boxes = render_one(sidx, a.output, forced_n, rng)
         done += 1
-        if len(path2label) == 0 or done % 5 == 0 or done <= 3:
+        if n_parts == 0 or done % 5 == 0 or done <= 3:
             r = done / max(1e-6, time.time() - t0)
-            tag = " [EMPTY 0-GT]" if len(path2label) == 0 else ""
-            log(f"scene {sidx}: {len(path2label)} parts, {len(obbs)} boxes{tag} | "
+            tag = " [EMPTY 0-GT]" if n_parts == 0 else ""
+            log(f"scene {sidx}: {n_parts} parts, {n_boxes} boxes{tag} | "
                 f"{r:.2f}/s | ETA {(a.num_scenes - sidx - 1)/max(1e-6, r)/60:.1f}min")
 
     tl.stop()
