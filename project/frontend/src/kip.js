@@ -324,7 +324,9 @@ const DECK = [
   { id: "rgb-idee",       group: "rgb",        label: "Idee" },
   { id: "rgb-umsetzung",  group: "rgb",        label: "Umsetzung" },
   { id: "rgb-ergebnis",   group: "rgb",        label: "Ergebnis" },
-  { id: "rgb-demo",       group: "rgb",        label: "Live-Demo", demo: "sim",
+  { id: "rgb-demo",       group: "rgb",        label: "Live-Sim", demo: "sim",
+    combo: { seg: "yolo-obb", pose: "GDRNPP" } },
+  { id: "rgb-foto",       group: "rgb",        label: "Echtes Foto", demo: "real",
     combo: { seg: "yolo-obb", pose: "GDRNPP" } },
   { id: "rgbd-idee",      group: "rgbd",       label: "Idee" },
   { id: "rgbd-umsetzung", group: "rgbd",       label: "Umsetzung" },
@@ -344,14 +346,9 @@ const DECK = [
   { id: "disk-zahlen",    group: "diskussion", label: "Zahlen" },
 ];
 
-// Die vier Bedien-Screens bleiben zusätzlich frei anwählbar (Foto-Upload und
-// freies Arbeiten ausserhalb des Vortrags). IDs unverändert: tab-real/sim/moe/batch.
-const TOOLS = [
-  { id: "real",  label: "Foto" },
-  { id: "sim",   label: "Simulation" },
-  { id: "moe",   label: "MoE" },
-  { id: "batch", label: "Batch-Eval" },
-];
+// Keine separate Werkzeugleiste mehr (Max, T-190): jeder Bedien-Screen ist ein
+// Live-Schritt in seinem Thema. Die Screen-IDs bleiben real/sim/moe/batch.
+const TOOLS = [];
 
 const PAGE_BY_ID = new Map(DECK.map((p) => [p.id, p]));
 const TOOL_IDS = new Set(TOOLS.map((t) => t.id));
@@ -375,16 +372,6 @@ GROUPS.forEach((g, i) => {
     onClick: () => { const f = DECK.find((p) => p.group === g.id); if (f) showPage(f.id); },
   }));
 });
-const gapEl = document.createElement("span");
-gapEl.className = "kip-sheetbar__gap"; gapEl.setAttribute("aria-hidden", "true");
-sheetbarEl.appendChild(gapEl);
-for (const t of TOOLS) {
-  sheetbarEl.appendChild(mkTab({
-    id: `tab-${t.id}`, cls: "kip-tab kip-tab--demo", label: t.label,
-    controls: `screen-${t.id}`, title: "Werkzeug, ausserhalb des Vortragswegs",
-    onClick: () => showPage(t.id),
-  }));
-}
 for (const p of DECK) {
   const scr = document.getElementById(`screen-${p.id}`);
   if (scr) scr.setAttribute("role", "tabpanel");
@@ -485,12 +472,6 @@ function showPage(id) {
     const b = document.getElementById(`grp-${g.id}`);
     b.classList.toggle("kip-tab--active", g.id === groupId);
     b.setAttribute("aria-selected", String(g.id === groupId));
-  }
-  for (const t of TOOLS) {
-    const b = document.getElementById(`tab-${t.id}`);
-    const on = !page && t.id === id;
-    b.classList.toggle("kip-tab--active", on);
-    b.setAttribute("aria-selected", String(on));
   }
   if (page) renderSubbar(groupId, id);
   else { subbarEl.innerHTML = ""; subbarEl.hidden = true; }

@@ -124,7 +124,7 @@ def main():
             page.wait_for_function("() => window.__KIP_READY__ === true", timeout=15000)
 
             # Auf den Batch-Reiter wechseln (Tabellen-Ansicht, kein 3D).
-            page.click("#tab-batch")
+            page.click("#sub-vgl-demo")
             page.wait_for_selector("#screen-batch:not([hidden])", timeout=5000)
 
             # ── FINALE TABELLE ──────────────────────────────────────────────

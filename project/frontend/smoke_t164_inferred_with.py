@@ -198,7 +198,7 @@ def main():
             page.wait_for_function("() => window.__KIP_READY__ === true", timeout=15000)
 
             # Auf Simulation wechseln.
-            page.click("#tab-sim")
+            page.click("#sub-rgb-demo")
             page.wait_for_selector("#screen-sim:not([hidden])", timeout=5000)
 
             # ── FALL 1: Nicht-A-Kombi, volles meta (used_seg/used_pose/modality) ──

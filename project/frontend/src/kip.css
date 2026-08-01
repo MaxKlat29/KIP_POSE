@@ -531,9 +531,10 @@
 }
 .kip-sub:hover { background: rgba(52, 62, 78, 0.95); color: #fff; }
 .kip-sub--active {
-  background: rgba(52, 211, 153, 0.22); color: rgb(150, 235, 180);
-  border-color: rgba(52, 211, 153, 0.5); font-weight: 600;
+  background: #34d399; color: #08221a; border-color: #34d399; font-weight: 700;
+  box-shadow: 0 2px 10px rgba(52, 211, 153, 0.35);
 }
+.kip-sub--active:hover { background: #4ee4ac; color: #08221a; }
 .kip-sub--demo { border-style: dashed; }
 .kip-sub--demo.kip-sub--active { border-style: solid; }
 .kip-sheetbar__gap { width: 24px; }
@@ -554,4 +555,106 @@ body.pres-mode #cell-loader, body.pres-mode #status { display: none !important; 
 @media (max-width: 900px) {
   .kip-slide__body--2col, .kip-qa { grid-template-columns: 1fr; columns: 1; }
   .kip-slide { padding: 20px 20px 24px; }
+}
+
+/* ── Bildstreifen: echte Ergebnisbilder aus den Läufen ────────────────────────
+   Drei Fälle nebeneinander (gut / typisch / Ausreißer) oder ein Einzelbild in
+   einer Spalte. Farbcode in der Bildunterschrift folgt der Zahl, nicht dem Bild. */
+.kip-shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 22px 0 18px; }
+.kip-shot { margin: 0; }
+.kip-shot img {
+  width: 100%; display: block; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: #0c0f14;
+}
+.kip-shot figcaption {
+  margin-top: 8px; font-size: 0.6em; line-height: 1.4; color: var(--text-dim);
+}
+.kip-shot__good { color: rgb(140, 230, 170); font-family: var(--mono); }
+.kip-shot__warn { color: var(--accent); font-family: var(--mono); }
+.kip-shot__bad  { color: #fca5a5; font-family: var(--mono); }
+.kip-shot--single { margin: 0; }
+.kip-shot--single img { max-height: 42vh; object-fit: contain; }
+
+/* Kachel-Varianten: Tiefenweg blau, Warnwert amber, Hero mit Verlauf. */
+.kip-fig--hero {
+  background: linear-gradient(140deg, rgba(52,211,153,0.16), rgba(52,211,153,0.06));
+  border-color: rgba(52,211,153,0.34);
+}
+.kip-fig--depth { border-color: rgba(37,99,235,0.4); }
+.kip-fig--depth.kip-fig--hero {
+  background: linear-gradient(140deg, rgba(37,99,235,0.2), rgba(37,99,235,0.07));
+  border-color: rgba(37,99,235,0.45);
+}
+.kip-fig--depth .kip-fig__val { color: #a9c4ff; }
+.kip-fig--warn { border-color: rgba(245,185,66,0.36); background: rgba(245,185,66,0.07); }
+.kip-fig--warn .kip-fig__val { color: #f7cf8e; }
+.kip-fig--good .kip-fig__val { color: rgb(140, 230, 170); }
+
+@media (max-width: 900px) {
+  .kip-shots { grid-template-columns: 1fr; }
+}
+
+/* ── Karten-Raster: ersetzt reine Textlisten dort, wo Struktur sichtbar sein soll ── */
+.kip-cards { display: grid; gap: 12px; margin: 0 0 20px; }
+.kip-cards--2 { grid-template-columns: repeat(2, 1fr); }
+.kip-cards--3 { grid-template-columns: repeat(3, 1fr); }
+.kip-cards--4 { grid-template-columns: repeat(4, 1fr); }
+.kip-card2 {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 14px 16px; border-radius: 11px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.13);
+  border-top: 2px solid rgba(255,255,255,0.22);
+}
+.kip-card2__h { font-size: 0.78em; font-weight: 700; color: var(--text); line-height: 1.25; }
+.kip-card2__t { font-size: 0.62em; line-height: 1.4; color: var(--text-dim); }
+.kip-card2--rgb   { border-top-color: rgba(34,197,94,0.75); }
+.kip-card2--depth { border-top-color: rgba(96,150,255,0.8); }
+.kip-card2--warn  { border-top-color: rgba(245,185,66,0.8); }
+.kip-card2--gap   { border-top-color: rgba(252,165,165,0.8); }
+.kip-card2--muted { opacity: 0.55; }
+.kip-card2--pick {
+  background: linear-gradient(150deg, rgba(255,255,255,0.11), rgba(255,255,255,0.045));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);
+}
+.kip-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.kip-badge {
+  font-family: var(--mono); font-size: 0.52em; font-style: normal; letter-spacing: .04em;
+  padding: 3px 8px; border-radius: 999px;
+  background: rgba(255,255,255,0.08); color: #cfd6e0; border: 1px solid rgba(255,255,255,0.16);
+}
+.kip-badge--rgb   { background: rgba(34,197,94,0.18); color: #8ce9b0; border-color: rgba(34,197,94,0.42); }
+.kip-badge--depth { background: rgba(37,99,235,0.24); color: #a9c4ff; border-color: rgba(96,150,255,0.5); }
+.kip-badge--free  { background: rgba(245,185,66,0.14); color: #f7cf8e; border-color: rgba(245,185,66,0.4); }
+.kip-legend-inline { margin: 4px 0 0; font-size: 0.6em; color: var(--text-dim); }
+.kip-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px;
+  vertical-align: baseline; background: rgba(255,255,255,0.3);
+}
+.kip-dot--rgb   { background: rgba(34,197,94,0.85); }
+.kip-dot--depth { background: rgba(96,150,255,0.9); }
+.kip-dot--pick  { background: #fff; }
+
+/* ── Gegenüberstellung der beiden Wege ── */
+.kip-vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: stretch; margin: 0 0 18px; }
+.kip-vs__side {
+  padding: 16px 18px; border-radius: 12px;
+  background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.12);
+}
+.kip-vs__side--rgb   { border-left: 3px solid rgba(34,197,94,0.8); }
+.kip-vs__side--depth { border-left: 3px solid rgba(96,150,255,0.85); }
+.kip-vs__h {
+  display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
+  font-size: 0.85em; font-weight: 700; color: var(--text);
+}
+.kip-vs__mid {
+  align-self: center; font-family: var(--mono); font-size: 0.62em;
+  color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  .kip-cards--4 { grid-template-columns: repeat(2, 1fr); }
+  .kip-cards--3 { grid-template-columns: 1fr; }
+  .kip-vs { grid-template-columns: 1fr; }
+  .kip-vs__mid { display: none; }
 }
