@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-07-24T09:40:39Z",
+  "updated": "2026-08-01T19:33:43Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 190,
+  "next_id": 191,
   "tickets": [
     {
       "id": "T-001",
@@ -11381,7 +11381,7 @@
       ],
       "session": "",
       "created": "2026-06-25T12:40:16Z",
-      "updated": "2026-07-24T09:40:39Z",
+      "updated": "2026-07-24T09:41:13Z",
       "started_at": "2026-07-24T09:25:16Z",
       "completed_at": null,
       "comments": [],
@@ -11415,6 +11415,12 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-07-24T09:41:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "committed f2e0d63 (deployed auf Box: gen_sdg + kip_server + systemd kip-isaac-worker enabled)"
         }
       ]
     },
@@ -11660,6 +11666,46 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → done"
+        }
+      ]
+    },
+    {
+      "id": "T-190",
+      "title": "Seminar-Präsentation: Website als Präsi umbauen (Story-Tabs + Paper-Inhalte + Live-Demos)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "seminar",
+        "frontend",
+        "praesentation"
+      ],
+      "session": "",
+      "created": "2026-08-01T19:20:38Z",
+      "updated": "2026-08-01T19:33:43Z",
+      "started_at": "2026-08-01T19:33:43Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-08-01T19:33:43Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-08-01T19:33:43Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "8 Vortragsblaetter (Intro/Motivation/RGB/RGB-D/Vergleich/MoE/Fazit/Ausblick) in kip.html, Inhalte+Zahlen aus dem Paper; Sheetbar 2-gruppig (Story | Demos), Pfeiltasten-Nav, #hash-Deeplinks, Live-Demo-Sprungknoepfe. Headless-Chrome-Verifikation aller 8 Blaetter + Demo-Screen gruen."
+        },
+        {
+          "ts": "2026-08-01T19:33:43Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Offen: assets/intro_pickplace.mp4 fehlt (June schickt Video per Mail); Inhaltswuensche von Marc/June noch nicht eingearbeitet; Deploy auf /KIP steht aus."
         }
       ]
     }

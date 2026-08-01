@@ -37,8 +37,351 @@
         </span>
       </header>
 
+      <!-- ══ Präsentations-Blätter (T-190) ═══════════════════════════════════
+           Die Website IST die Präsentation: unten links die Mappen 1–8 in
+           Vortragsreihenfolge, danach die vier Live-Demos. Zahlen stammen
+           aus der Seminararbeit (Kap. 3/4), nicht aus dem laufenden Stack —
+           die Demos daneben zeigen den Stack live. ← / → blättert. -->
+      <section id="screen-intro" class="kip-screen kip-screen--slide" hidden>
+        <article class="kip-slide kip-slide--title">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">01</span>
+            <h2 class="kip-slide__h">Pose-Estimation in der Produktion</h2>
+            <span class="kip-slide__who">Marc</span>
+          </header>
+          <div class="kip-slide__body">
+            <p class="kip-slide__lead">Aus einer einzigen Aufnahme von oben bestimmen, welches
+              Bauteil wo und in welcher Drehlage auf dem Montagetisch liegt — damit der Roboter
+              es greifen kann.</p>
+            <figure class="kip-video">
+              <video id="intro-video" controls preload="metadata">
+                <source src="./assets/intro_pickplace.mp4" type="video/mp4" />
+              </video>
+              <figcaption class="kip-video__cap">Pick-and-Place in der Lernfabrik —
+                <span class="kip-video__todo">Datei noch einlegen als
+                <code>assets/intro_pickplace.mp4</code></span></figcaption>
+            </figure>
+            <p class="kip-slide__meta">Seminar „KI in der Produktion“ · wbk Institut für
+              Produktionstechnik, KIT · Yannic Duan, Marc Rodig, Jerun Beyer, Maximilian Klattig</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-motivation" class="kip-screen kip-screen--slide" hidden>
+        <article class="kip-slide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">02</span>
+            <h2 class="kip-slide__h">Problemstellung und Motivation</h2>
+            <span class="kip-slide__who">Marc</span>
+          </header>
+          <div class="kip-slide__body kip-slide__body--2col">
+            <div>
+              <h3 class="kip-slide__h3">Die Zelle</h3>
+              <ul class="kip-list">
+                <li>Zivid&nbsp;L110+ von oben — Farbbild <em>und</em> Tiefenbild</li>
+                <li>Neura&nbsp;Lara5 mit Schunk-Greifer</li>
+                <li>CAD aller Bauteile vorhanden</li>
+                <li>Was fehlte: die Verbindung zwischen CAD und Kamerabild</li>
+              </ul>
+              <h3 class="kip-slide__h3">Aufgabe</h3>
+              <p class="kip-slide__p">Je Teil drei Koordinaten und drei Drehwinkel — die
+                sechsdimensionale Lage, genau genug zum Greifen.</p>
+            </div>
+            <div>
+              <h3 class="kip-slide__h3">Vier Randbedingungen</h3>
+              <ul class="kip-list kip-list--tick">
+                <li><strong>Glänzend und texturlos</strong> — kaum wiedererkennbare Bildmerkmale</li>
+                <li><strong>Drehsymmetrie</strong> — mehrere Lagen passen gleich gut zum Bild</li>
+                <li><strong>Der Arm steht im Bild</strong> — verdeckt optisch und im Tiefenbild</li>
+                <li><strong>Reale Tiefe rauscht</strong> auf Metall — der Nutzen ist nicht gesetzt</li>
+              </ul>
+              <h3 class="kip-slide__h3">Maßstab und Daten</h3>
+              <p class="kip-slide__p">Bewertet wird nach dem <strong>BOP-Standard</strong>
+                (Average Recall, symmetriebewusst, IC-BIN-Protokoll). Sämtliche Trainings- und
+                Testdaten entstehen <strong>vollständig synthetisch</strong> in Isaac Sim — mit
+                exakt bekannter Referenzlage.</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-rgb" class="kip-screen kip-screen--slide" hidden>
+        <article class="kip-slide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">03</span>
+            <h2 class="kip-slide__h">Farbweg (RGB) — Pipeline A</h2>
+            <span class="kip-slide__who">Maximilian</span>
+          </header>
+          <div class="kip-slide__body">
+            <ol class="kip-flow">
+              <li>Farbbild von oben</li>
+              <li>Erkennung <span>YOLOv8-OBB</span></li>
+              <li>Lage je Bauteil <span>GDRNPP</span></li>
+              <li>Weltlage + Aufsetzen auf die Tischebene</li>
+              <li>3D-Betrachter</li>
+            </ol>
+            <div class="kip-figs">
+              <div class="kip-fig kip-fig--hero">
+                <span class="kip-fig__val">0,886</span>
+                <span class="kip-fig__lbl">AR auf den Ankerklassen</span>
+              </div>
+              <div class="kip-fig">
+                <span class="kip-fig__val">≈ 4 mm</span>
+                <span class="kip-fig__lbl">mittlerer Lagefehler</span>
+              </div>
+              <div class="kip-fig">
+                <span class="kip-fig__val">7,2°</span>
+                <span class="kip-fig__lbl">Drehfehler, symmetriebereinigt</span>
+              </div>
+            </div>
+            <div class="kip-slide__body--2col">
+              <div>
+                <h3 class="kip-slide__h3">Je Bauteil</h3>
+                <table class="kip-mini">
+                  <tbody>
+                    <tr><td>Anker kurz</td><td>0,870</td></tr>
+                    <tr><td>Anker lang</td><td>0,907</td></tr>
+                    <tr><td>Zahnrad</td><td>0,838</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h3 class="kip-slide__h3">Warum das trägt</h3>
+                <p class="kip-slide__p">Entscheidend ist das <strong>bauteilspezifische
+                  Training</strong>. Dazu kommt die Geometrie: Die Teile ruhen auf einer bekannten
+                  Ebene, damit schrumpft die sechsdimensionale Aufgabe näherungsweise auf die Lage
+                  in dieser Ebene.</p>
+                <p class="kip-slide__p kip-slide__p--warn">Preis: Jedes neue Bauteil braucht ein
+                  eigenes Training.</p>
+              </div>
+            </div>
+            <p class="kip-slide__cta">
+              <button class="kip-btn kip-btn--primary kip-goto" data-goto="real">Live-Demo: reales Foto</button>
+              <button class="kip-btn kip-goto" data-goto="sim">Live-Demo: Simulation</button>
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-rgbd" class="kip-screen kip-screen--slide" hidden>
+        <article class="kip-slide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">04</span>
+            <h2 class="kip-slide__h">Tiefenweg (RGB-D)</h2>
+            <span class="kip-slide__who">Yannic</span>
+          </header>
+          <div class="kip-slide__body">
+            <p class="kip-slide__lead">Das Tiefenbild liefert die metrische Größe direkt — genau
+              das, was der Farbweg erst erschließen muss. Beide Verfahren arbeiten
+              <strong>ohne bauteilspezifisches Training</strong>.</p>
+            <div class="kip-figs">
+              <div class="kip-fig kip-fig--hero">
+                <span class="kip-fig__val">0,968</span>
+                <span class="kip-fig__lbl">FoundationPose — höchster Wert überhaupt<br>
+                  ≈ 8 s je Bild, nicht kommerziell</span>
+              </div>
+              <div class="kip-fig">
+                <span class="kip-fig__val">0,838</span>
+                <span class="kip-fig__lbl">GigaPose-3D — die lizenzfrei einsetzbare Variante</span>
+              </div>
+            </div>
+            <div class="kip-slide__body--2col">
+              <div>
+                <h3 class="kip-slide__h3">Der Fund: es lag an den Daten</h3>
+                <p class="kip-slide__p">Über mehrere Schritte sah der Tiefenweg systematisch
+                  schlechter aus. Ursache war kein Verfahrensnachteil, sondern die
+                  <strong>Tiefenkonvention</strong>: Abstand entlang des Sehstrahls wurde als
+                  senkrechter Abstand zur Bildebene gelesen — ein zum Bildrand wachsender Fehler.</p>
+                <p class="kip-slide__p kip-slide__p--good">38&nbsp;mm → 6&nbsp;mm nach der
+                  Korrektur. Erst danach war der Vergleich fair — und das Ergebnis kehrte sich um.</p>
+              </div>
+              <div>
+                <h3 class="kip-slide__h3">Charakter des Restfehlers</h3>
+                <p class="kip-slide__p">Die Drehung ist <em>nicht</em> die Schwäche: 5,0°
+                  (FoundationPose) und 15,2° (GigaPose-3D) gegen 7,2° beim trainierten Farbweg.
+                  Einen festen Versatz gibt es auch nicht.</p>
+                <p class="kip-slide__p">Übrig bleibt ein <strong>zufälliges Schwanken von 30 bis
+                  48&nbsp;mm</strong> — über der 11-mm-Schwelle des 3D-Maßes. Deshalb bricht MSSD
+                  ein, während das Projektionsmaß bei rund 0,97 bleibt.</p>
+              </div>
+            </div>
+            <p class="kip-slide__note">Geprüft und verworfen: weniger Verfeinerungsschritte
+              (−2&nbsp;Prozentpunkte je Schritt), größere Bildausschnitte für GDRNPP
+              (0,885 → 0,856).</p>
+            <p class="kip-slide__cta">
+              <button class="kip-btn kip-btn--primary kip-goto" data-goto="sim">Live-Demo: Simulation</button>
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-vergleich" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">05</span>
+            <h2 class="kip-slide__h">Vergleich RGB gegen RGB-D</h2>
+            <span class="kip-slide__who">Yannic</span>
+          </header>
+          <div class="kip-slide__body">
+            <table class="kip-cmp">
+              <thead>
+                <tr><th scope="col">Kombination</th><th scope="col">Modalität</th>
+                    <th scope="col" class="kip-cmp__num">AR</th><th scope="col">Einordnung</th></tr>
+              </thead>
+              <tbody>
+                <tr class="kip-cmp--depth"><td>YOLO-OBB + FoundationPose</td><td>RGB-D</td>
+                    <td class="kip-cmp__num">0,968</td><td>absolute Spitze, nicht kommerziell, ≈ 8 s je Bild</td></tr>
+                <tr class="kip-cmp--rgb"><td>YOLO-OBB + GDRNPP (Pipeline A)</td><td>RGB</td>
+                    <td class="kip-cmp__num">0,886</td><td>genaueste einsetzbare Variante</td></tr>
+                <tr class="kip-cmp--depth"><td>YOLO-OBB + GigaPose-3D</td><td>RGB-D</td>
+                    <td class="kip-cmp__num">0,838</td><td>beste lizenzfreie Tiefenvariante</td></tr>
+                <tr class="kip-cmp--rgb"><td>YOLO-OBB + GigaPose-2D</td><td>RGB</td>
+                    <td class="kip-cmp__num">0,636</td><td>Farbe grob, mit Tischebenenbedingung</td></tr>
+              </tbody>
+            </table>
+            <p class="kip-slide__note">Je 100 Szenen auf den Ankerklassen, Absturzrate null.
+              Über alle untersuchten Kombinationen stieg der mittlere AR nach den Datenkorrekturen
+              von <strong>0,49 auf 0,85</strong>.</p>
+            <div class="kip-claim">
+              <p class="kip-claim__h">Beide Wege funktionieren — aber nicht unter denselben Bedingungen.</p>
+              <p>Der Tiefenweg ist genauer, <em>wo verlässliche Tiefe vorliegt</em>. Genau dort
+                versagt er im realen Betrieb: Die Tiefenkamera projiziert ein Infrarot-Muster, der
+                Roboterarm wirft einen Infrarot-Schatten auf den Tisch. In diesem Schatten gibt es
+                keine Tiefe — der Farbweg arbeitet unbeeindruckt weiter.</p>
+              <p class="kip-claim__punch">Wer überall den Tiefenweg wählt, ist im Schatten blind.
+                Wer überall den Farbweg wählt, verschenkt außerhalb die genauere Tiefe.</p>
+            </div>
+            <p class="kip-slide__cta">
+              <button class="kip-btn kip-btn--primary kip-goto" data-goto="batch">Live-Demo: Batch-Eval über alle Kombinationen</button>
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-moe-exkurs" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">06</span>
+            <h2 class="kip-slide__h">Exkurs: modulares System mit Expertenauswahl</h2>
+            <span class="kip-slide__who">Maximilian</span>
+          </header>
+          <div class="kip-slide__body">
+            <p class="kip-slide__lead">Nicht ein Weg für alles, sondern <strong>je Bauteil der
+              passende Experte</strong> — entschieden über eine vorab berechnete Schattenkarte.</p>
+            <div class="kip-slide__body--2col">
+              <div>
+                <h3 class="kip-slide__h3">Schattenkarte, rein geometrisch</h3>
+                <p class="kip-slide__p">Strahlen von den Lichtquellen auf das Raster der Tischfläche,
+                  Schnitt gegen das Zellenmodell (Möller&nbsp;&amp;&nbsp;Trumbore). Entscheidend ist
+                  die Schnittmenge: dort fehlt die Tiefe, die Farbkamera sieht aber noch hin.</p>
+                <table class="kip-mini">
+                  <tbody>
+                    <tr><td>Infrarot-Schatten</td><td>1569 cm²</td><td>42,9 %</td></tr>
+                    <tr><td>Sichtschatten</td><td>1435 cm²</td><td>39,3 %</td></tr>
+                    <tr class="kip-mini--hi"><td>Auswahlbereich Farbweg</td><td>485 cm²</td><td>13,3 %</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h3 class="kip-slide__h3">Auswahl ohne Tiefe</h3>
+                <p class="kip-slide__p">Der Clou: Im Schatten ist die Tiefe gerade nicht verfügbar,
+                  die Entscheidung muss also ohne sie fallen. Aus der Bildposition wird der Sehstrahl
+                  mit der bekannten Tischebene geschnitten — das ergibt die vermutete Aufstandsstelle,
+                  rein geometrisch.</p>
+                <ol class="kip-flow kip-flow--dec">
+                  <li>Bildposition</li>
+                  <li>Schnitt mit der Tischebene</li>
+                  <li>im Auswahlbereich?</li>
+                  <li><span class="kip-tag kip-tag--rgb">ja → Farbweg</span>
+                      <span class="kip-tag kip-tag--depth">nein → Tiefenweg</span></li>
+                </ol>
+                <p class="kip-slide__p">Dazu fähigkeitsbasiert: Klassen ohne Tiefenvorlagen — etwa
+                  das Zahnrad — laufen immer über den Farbweg.</p>
+              </div>
+            </div>
+            <div class="kip-figs">
+              <div class="kip-fig kip-fig--hero kip-fig--good">
+                <span class="kip-fig__val">424,6 mm → 3,4 mm</span>
+                <span class="kip-fig__lbl">Teil <strong>im</strong> Schatten, mit Auswahl</span>
+              </div>
+              <div class="kip-fig">
+                <span class="kip-fig__val">16,2 vs. 9,4 mm</span>
+                <span class="kip-fig__lbl">Teil <strong>außerhalb</strong> — Auswahl greift nicht ein,
+                  der Tiefenweg bleibt</span>
+              </div>
+            </div>
+            <p class="kip-slide__note">Belegt statt behauptet: In der Simulation wird die Tiefe
+              innerhalb des Schattens vor der Lageschätzung ausgeblendet — rund 76.000 Bildpunkte je
+              Bild. Der Tiefenweg erlebt dieselbe Blindheit wie an der realen Anlage.
+              Das System selbst ist ein Verbund lose gekoppelter Dienste: jede Erkennung bedient
+              <code>/segment</code>, jede Lageschätzung <code>/pose</code> — rund zwölf sinnvolle
+              Kombinationen, die Expertenauswahl greift an einer einzigen Stelle ein.</p>
+            <p class="kip-slide__cta">
+              <button class="kip-btn kip-btn--primary kip-goto" data-goto="moe">Live-Demo: MoE-Pipeline mit Schattenbereich</button>
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-fazit" class="kip-screen kip-screen--slide" hidden>
+        <article class="kip-slide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">07</span>
+            <h2 class="kip-slide__h">Fazit</h2>
+            <span class="kip-slide__who">June</span>
+          </header>
+          <div class="kip-slide__body">
+            <ol class="kip-take">
+              <li><strong>Farbbild und Tiefenbild sind keine Konkurrenten</strong>, sondern örtlich
+                ergänzende Experten.</li>
+              <li><strong>Die Datengrundlage vor dem Verfahren prüfen.</strong> Ein gleichartiger
+                Fehler einer ganzen Verfahrensgruppe war eine Konvention, keine Grenze — die
+                Korrektur drehte das Ergebnis um.</li>
+              <li><strong>Eine geometrisch gesteuerte Auswahl</strong> nutzt beide Wege dort, wo sie
+                jeweils stark sind — und rettet das Teil im Schatten von 424,6 auf 3,4&nbsp;mm.</li>
+            </ol>
+            <h3 class="kip-slide__h3">Grenzen, offen gesagt</h3>
+            <ul class="kip-list kip-list--warn">
+              <li>Bewertet auf der nahezu idealen Tiefe aus der Simulation — die Prüfung an realer,
+                verrauschter Tiefe steht aus und ist die wichtigste offene Frage.</li>
+              <li>Das genaueste Tiefenverfahren ist nur nicht-kommerziell nutzbar und dient allein
+                als Vergleichsmaßstab; einsetzbar bleibt GigaPose im Tiefenmodus.</li>
+              <li>Die Schattenfläche gilt für eine konkrete Stellung von Kamera und Arm; der Abgleich
+                mit der realen Schattenfläche fehlt noch.</li>
+              <li>Bei teilweiser Sicht bleiben echte Mehrdeutigkeiten der Drehlage — die löst kein
+                Weg allein auf.</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-ausblick" class="kip-screen kip-screen--slide" hidden>
+        <article class="kip-slide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">08</span>
+            <h2 class="kip-slide__h">Ausblick</h2>
+            <span class="kip-slide__who">June</span>
+          </header>
+          <div class="kip-slide__body">
+            <ol class="kip-take kip-take--next">
+              <li><strong>Prüfung an realen Daten.</strong> Ein kleiner Datensatz mit echter Tiefe,
+                durch beide Wege gemessen, dazu der Abgleich der berechneten mit der realen
+                Schattenfläche. Erst das beziffert den Vorteil des Tiefenwegs unter echtem Rauschen.</li>
+              <li><strong>Tiefenweg vervollständigen.</strong> Tiefenvorlagen für das Zahnrad, damit
+                auch diese Klasse außerhalb des Schattens über den Tiefenweg läuft.</li>
+              <li><strong>Übertragbarkeit.</strong> Der modulare Aufbau nimmt neue Bauteile und neue
+                Verfahren ohne strukturelle Änderung auf — mit den trainingsfreien Verfahren ist die
+                Erweiterung auf beliebige Konstruktionsteile der natürliche nächste Schritt.</li>
+            </ol>
+            <p class="kip-slide__lead kip-slide__lead--end">Farbbild und Tiefenbild sind keine
+              Konkurrenten, sondern örtlich ergänzende Experten — und eine geometrisch gesteuerte
+              Auswahl nutzt beide dort, wo sie jeweils stark sind.</p>
+          </div>
+        </article>
+      </section>
+
       <!-- Ansicht: Reales Foto hochladen, inferieren, im 3D-Modell anzeigen -->
-      <section id="screen-real" class="kip-screen">
+      <section id="screen-real" class="kip-screen" hidden>
         <div class="kip-card">
           <h2 class="kip-card__h">Reales Foto inferieren</h2>
           <label class="kip-drop" id="real-drop">
@@ -219,11 +562,22 @@
               <select id="post-sel" class="kip-sel" aria-label="Lageschätzung"></select>
             </label>
           </div>
+          <!-- Zwei Gruppen: links die Vortragsblätter in Reihenfolge (T-190),
+               rechts abgesetzt die vier Live-Demos. ← / → blättert durch alles. -->
           <nav class="kip-sheetbar" role="tablist" aria-label="Ansichten">
-            <button id="tab-real" class="kip-tab kip-tab--active" role="tab">Reales Foto</button>
-            <button id="tab-sim"  class="kip-tab" role="tab">Simulation</button>
-            <button id="tab-moe" class="kip-tab" role="tab">MoE-Pipeline</button>
-            <button id="tab-batch" class="kip-tab" role="tab">Batch-Eval</button>
+            <button id="tab-intro" class="kip-tab kip-tab--pres kip-tab--active" role="tab">1 Intro</button>
+            <button id="tab-motivation" class="kip-tab kip-tab--pres" role="tab">2 Motivation</button>
+            <button id="tab-rgb" class="kip-tab kip-tab--pres" role="tab">3 RGB</button>
+            <button id="tab-rgbd" class="kip-tab kip-tab--pres" role="tab">4 RGB-D</button>
+            <button id="tab-vergleich" class="kip-tab kip-tab--pres" role="tab">5 Vergleich</button>
+            <button id="tab-moe-exkurs" class="kip-tab kip-tab--pres" role="tab">6 MoE</button>
+            <button id="tab-fazit" class="kip-tab kip-tab--pres" role="tab">7 Fazit</button>
+            <button id="tab-ausblick" class="kip-tab kip-tab--pres" role="tab">8 Ausblick</button>
+            <span class="kip-sheetbar__gap" aria-hidden="true"></span>
+            <button id="tab-real" class="kip-tab kip-tab--demo" role="tab">Foto</button>
+            <button id="tab-sim"  class="kip-tab kip-tab--demo" role="tab">Simulation</button>
+            <button id="tab-moe" class="kip-tab kip-tab--demo" role="tab">MoE live</button>
+            <button id="tab-batch" class="kip-tab kip-tab--demo" role="tab">Batch-Eval</button>
           </nav>
         </div>
         <aside id="legend" class="legend" aria-label="Legende" hidden>

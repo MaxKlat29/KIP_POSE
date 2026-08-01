@@ -295,22 +295,46 @@ let simInited = false;
 const batch = createBatch({ bar, pollJob, healthRef: () => lastHealth });
 window.__KIP_BATCH__ = batch;          // QS/Smoke: erlaubt __renderLive/__hideLive ohne Lauf
 pollHealth(); setInterval(pollHealth, 30000);   // Start nach batch (Training-Guard-Sync)
+// Vortragsblätter (T-190): Story-Reihenfolge 1–8, danach die vier Live-Demos.
+// Ein einziges Array haelt Tab-Optik, Pfeiltasten-Navigation und #hash zusammen.
+const PRES  = ["intro", "motivation", "rgb", "rgbd", "vergleich", "moe-exkurs", "fazit", "ausblick"];
+const DEMOS = ["real", "sim", "moe", "batch"];
+const TABS  = [...PRES, ...DEMOS];
+
 function showScreen(which) {
+  const isPres = PRES.includes(which);
+  for (const k of TABS) {
+    document.getElementById(`tab-${k}`)?.classList.toggle("kip-tab--active", k === which);
+  }
+  for (const k of PRES) {
+    const s = document.getElementById(`screen-${k}`);
+    if (s) s.hidden = k !== which;
+  }
+  history.replaceState?.(null, "", `#${which}`);   // Deep-Link fuer den Vortrag
+  const pipeGroup = document.getElementById("pipe-group");
+  const pipeCtx = document.getElementById("pipe-ctx");
+  const pipEl = document.getElementById("pip");
+  if (isPres) {
+    // Vortragsblatt: Demo-Karten, Legende, Pipeline-Auswahl und Vorschau raus.
+    // Die 3D-Zelle bleibt als ruhiger Hintergrund stehen.
+    scrReal.hidden = scrSim.hidden = scrMoe.hidden = scrBatch.hidden = true;
+    legend.hidden = true;
+    if (pipeGroup) pipeGroup.hidden = true;
+    if (pipeCtx) pipeCtx.hidden = true;
+    pipEl.hidden = true;
+    moeOverlay.show(false);
+    batch.onHide();
+    return;
+  }
   // Gating je Tab (Upload: Depth-Regeln). MoE verhaelt sich gating-seitig wie
   // Sim (feste Kombi, Dropdowns irrelevant) — pipeline.js kennt nur real/sim.
   pipeMode = which === "moe" ? "sim" : which;
-  tabReal.classList.toggle("kip-tab--active", which === "real");
-  tabSim.classList.toggle("kip-tab--active", which === "sim");
-  tabMoe.classList.toggle("kip-tab--active", which === "moe");
-  tabBatch.classList.toggle("kip-tab--active", which === "batch");
   scrReal.hidden = which !== "real";
   scrSim.hidden  = which !== "sim";
   scrMoe.hidden  = which !== "moe";
   scrBatch.hidden = which !== "batch";
   // Pipeline-Dropdowns auf dem MoE-Screen ausblenden (T-178d, Max): die MoE
   // ist eine feste Spezial-Pipeline — oben darf nichts umschaltbar sein.
-  const pipeGroup = document.getElementById("pipe-group");
-  const pipeCtx = document.getElementById("pipe-ctx");
   if (pipeGroup) pipeGroup.hidden = which === "moe";
   if (pipeCtx) pipeCtx.hidden = which === "moe";
   // Legende pro Screen: Sim = GT blau / inferiert rot; MoE = GT grau +
@@ -349,10 +373,26 @@ function showScreen(which) {
   if (which !== "batch") batch.onHide();
   renderGating();                       // Depth-Drop + Auswahl ggf. neu gaten
 }
-tabReal.addEventListener("click", () => showScreen("real"));
-tabSim.addEventListener("click", () => showScreen("sim"));
-tabMoe.addEventListener("click", () => showScreen("moe"));
-tabBatch.addEventListener("click", () => showScreen("batch"));
+for (const k of TABS) {
+  document.getElementById(`tab-${k}`)?.addEventListener("click", () => showScreen(k));
+}
+// "Live-Demo"-Knoepfe auf den Vortragsblaettern springen in die passende Demo.
+for (const b of document.querySelectorAll(".kip-goto")) {
+  b.addEventListener("click", () => showScreen(b.dataset.goto));
+}
+// Blaettern per Pfeiltaste — im Vortrag der schnellste Weg. Nicht, solange der
+// Fokus in einem Bedienelement steht (Dropdowns, Datei-Auswahl, Video).
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = document.activeElement?.tagName || "";
+  if (/^(INPUT|SELECT|TEXTAREA|VIDEO|BUTTON)$/.test(tag)) return;
+  const cur = TABS.findIndex((k) =>
+    document.getElementById(`tab-${k}`)?.classList.contains("kip-tab--active"));
+  const next = cur + (e.key === "ArrowRight" ? 1 : -1);
+  if (cur < 0 || next < 0 || next >= TABS.length) return;
+  showScreen(TABS[next]);
+});
 
 // ── PiP-Controls: Boxen-Toggle + Foto-View + Vergroesserung ──
 let lastCamPose = null;   // {cam_pos, look_at, up, fov_y} der zuletzt geladenen Szene
@@ -691,7 +731,8 @@ document.getElementById("moe-show-cone").addEventListener("change", (e) => {
   moeOverlay.setConeVisible(e.target.checked);
 });
 
-showScreen("real");
+// Einstieg: Vortragsblatt 1, oder direkt das per #hash verlinkte Blatt.
+showScreen(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "intro");
 
 // QS/Smoke-Hooks (T-164): erlauben das "Inferiert mit" + den Pipeline-Query ohne
 // echten ~60-80s-Infer-Lauf zu prüfen (Pattern wie __KIP_BATCH__/__KIP_VIEWER__).
