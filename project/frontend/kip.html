@@ -63,6 +63,11 @@
             <p class="kip-slot" data-owner="Jerun">Intro-Video: Datei als
               <code>assets/intro_pickplace.mp4</code> ablegen, dann das <code>hidden</code>
               an <code>#slot-intro-video</code> entfernen.</p>
+            <!-- Blickfang, solange das Intro-Video fehlt. Kommt die Datei, wird
+                 #slot-intro-video sichtbar und dieses Bild kann weg. -->
+            <figure class="kip-shot kip-shot--title" id="slot-intro-still">
+              <img src="./assets/img/detect.jpg" alt="Bauteile und Roboterarm in der Zelle" loading="lazy" />
+            </figure>
             <p class="kip-slide__meta">Seminar „KI in der Produktion“ · wbk, KIT ·
               Yannic Duan, Marc Rodig, Jerun Beyer, Maximilian Klattig</p>
           </div>
@@ -145,7 +150,7 @@
             </div>
             <div>
               <figure class="kip-shot kip-shot--single">
-                <img src="./assets/img/detect.jpg" alt="Roboterarm zwischen den erkannten Bauteilen" loading="lazy" />
+                <img src="./assets/img/detect_arm.jpg" alt="Roboterarm verdeckt einen Teil der Tischfläche" loading="lazy" />
                 <figcaption>Der Arm steht mitten im Bild: er verdeckt Teile und nimmt der
                   Tiefenkamera die Sicht</figcaption>
               </figure>
@@ -176,17 +181,17 @@
               </div>
               <div class="kip-card2 kip-card2--rgb">
                 <span class="kip-card2__h">YOLO-Seg</span>
-                <span class="kip-card2__t">Erkennung, pixelgenaue Masken</span>
+                <span class="kip-card2__t">Erkennung, Masken</span>
                 <span class="kip-badges"><i class="kip-badge kip-badge--rgb">RGB</i><i class="kip-badge">trainiert</i></span>
               </div>
               <div class="kip-card2 kip-card2--rgb">
                 <span class="kip-card2__h">SAM 3</span>
-                <span class="kip-card2__t">Erkennung über Konzept-Prompts</span>
+                <span class="kip-card2__t">Erkennung, Text-Prompt</span>
                 <span class="kip-badges"><i class="kip-badge kip-badge--rgb">RGB</i><i class="kip-badge kip-badge--free">trainingsfrei</i></span>
               </div>
               <div class="kip-card2 kip-card2--rgb kip-card2--pick">
                 <span class="kip-card2__h">GDRNPP</span>
-                <span class="kip-card2__t">Lage direkt aus dem Farbbild</span>
+                <span class="kip-card2__t">Lage aus dem Farbbild</span>
                 <span class="kip-badges"><i class="kip-badge kip-badge--rgb">RGB</i><i class="kip-badge">je Bauteil</i></span>
               </div>
               <div class="kip-card2 kip-card2--depth kip-card2--pick">
@@ -196,17 +201,17 @@
               </div>
               <div class="kip-card2 kip-card2--depth kip-card2--pick">
                 <span class="kip-card2__h">GigaPose</span>
-                <span class="kip-card2__t">Lage über Vorlagen, mit und ohne Tiefe</span>
+                <span class="kip-card2__t">Lage über Vorlagen</span>
                 <span class="kip-badges"><i class="kip-badge kip-badge--depth">RGB-D</i><i class="kip-badge kip-badge--free">trainingsfrei</i></span>
               </div>
               <div class="kip-card2 kip-card2--muted">
                 <span class="kip-card2__h">MegaPose</span>
-                <span class="kip-card2__t">Verfeinerung, als Option geprüft</span>
+                <span class="kip-card2__t">Verfeinerung, verworfen</span>
                 <span class="kip-badges"><i class="kip-badge">geprüft</i></span>
               </div>
               <div class="kip-card2 kip-card2--muted">
                 <span class="kip-card2__h">CNOS</span>
-                <span class="kip-card2__t">Erkennung, als Option geprüft</span>
+                <span class="kip-card2__t">Erkennung, verworfen</span>
                 <span class="kip-badges"><i class="kip-badge">geprüft</i></span>
               </div>
             </div>
@@ -274,21 +279,17 @@
             <div class="kip-cards kip-cards--3">
               <div class="kip-card2 kip-card2--pick">
                 <span class="kip-card2__h">BOP-Standard</span>
-                <span class="kip-card2__t">Etablierter Vergleichsmaßstab für Lageschätzung.
-                  Hauptkennzahl ist der Average Recall, gemittelt über mehrere Fehlermaße</span>
+                <span class="kip-card2__t">Average Recall über mehrere Fehlermaße</span>
                 <span class="kip-badges"><i class="kip-badge">AR</i><i class="kip-badge">IC-BIN-Protokoll</i></span>
               </div>
               <div class="kip-card2">
                 <span class="kip-card2__h">Symmetriebewusst</span>
-                <span class="kip-card2__t">Der Fehler wird über alle erlaubten Symmetrielagen
-                  minimiert. Eine korrekte Lage gilt nicht als Fehler, nur weil das Teil
-                  gedreht erscheint</span>
+                <span class="kip-card2__t">Fehler über alle erlaubten Drehlagen minimiert</span>
                 <span class="kip-badges"><i class="kip-badge">MSSD</i><i class="kip-badge">MSPD</i><i class="kip-badge">VSD</i></span>
               </div>
               <div class="kip-card2">
                 <span class="kip-card2__h">Daten aus der Simulation</span>
-                <span class="kip-card2__t">Alle Trainings- und Testszenen entstehen in Isaac Sim
-                  mit exakt bekannter Referenzlage, danach Umwandlung ins BOP-Format</span>
+                <span class="kip-card2__t">Isaac Sim, Referenzlage exakt bekannt</span>
                 <span class="kip-badges"><i class="kip-badge kip-badge--free">100 % synthetisch</i></span>
               </div>
             </div>
@@ -378,7 +379,8 @@
               <div>
                 <figure class="kip-shot kip-shot--single">
                   <img src="./assets/img/detect.jpg" alt="Detektion mit Klassen und Konfidenzen" loading="lazy" />
-                  <figcaption>Schritt 1 im Bild: Klasse, Box und Konfidenz je Teil</figcaption>
+                  <figcaption>Schritt 1 im Bild: erkannte Teile mit Klasse. Die Darstellung zeigt
+                    umschließende Rechtecke, gerechnet wird mit der orientierten Box</figcaption>
                 </figure>
               </div>
             </div>
@@ -550,15 +552,15 @@
               </div>
             </div>
             <figure class="kip-shots">
-              <div class="kip-shot">
+              <div class="kip-shot kip-shot--croptop">
                 <img src="./assets/img/t175_3_good_4mm.jpg" alt="Schätzung deckt die Referenz, 3,7 mm Fehler" loading="lazy" />
                 <figcaption><strong class="kip-shot__good">3,7 mm</strong> gut, Boxen liegen übereinander</figcaption>
               </div>
-              <div class="kip-shot">
+              <div class="kip-shot kip-shot--croptop">
                 <img src="./assets/img/t175_1_typical_40mm.jpg" alt="Typischer Fehlerfall, 40 mm" loading="lazy" />
                 <figcaption><strong class="kip-shot__warn">40,2 mm</strong> typisch, sichtbarer Versatz</figcaption>
               </div>
-              <div class="kip-shot">
+              <div class="kip-shot kip-shot--croptop">
                 <img src="./assets/img/t175_2_highflip_525mm.jpg" alt="Starker Fehlerfall, 525 mm" loading="lazy" />
                 <figcaption><strong class="kip-shot__bad">524,9 mm</strong> Ausreißer, Box weit daneben</figcaption>
               </div>
@@ -568,6 +570,8 @@
               <li class="kip-bul__hi">Die Drehung stimmt, es schwankt die Lage: deshalb bricht das
                 3D-Maß ein, während das Projektionsmaß bei 0,97 bleibt</li>
               <li>Kein fester Versatz im Modell, die Streuung ist richtungslos</li>
+              <li class="kip-bul__warn">Damit liegt der Lagefehler über der Schwelle von 11 mm:
+                das Teil wäre erkannt und richtig gedreht, aber nicht sicher greifbar</li>
             </ul>
           </div>
         </article>
@@ -665,7 +669,7 @@
               </p>
             </div>
             <div>
-              <figure class="kip-shot kip-shot--single">
+              <figure class="kip-shot kip-shot--single kip-shot--croptop">
                 <img src="./assets/img/t178_shadow_overlay.jpg" alt="Zelle mit markierter Schattenzone" loading="lazy" />
                 <figcaption><strong class="kip-shot__bad">rot</strong> keine Tiefe, Farbkamera sieht hin ·
                   <strong>grau</strong> Sichtschatten</figcaption>
@@ -710,7 +714,7 @@
               </ul>
             </div>
             <div>
-              <figure class="kip-shot kip-shot--single">
+              <figure class="kip-shot kip-shot--single kip-shot--cropbottom">
                 <img src="./assets/img/t178_shadow_topdown.jpg" alt="Schattenkarte der Tischfläche von oben" loading="lazy" />
                 <figcaption>Tischfläche von oben, 57 bis 777 mm in x, 42 bis 537 mm in y</figcaption>
               </figure>
@@ -763,8 +767,8 @@
             <ol class="kip-take">
               <li>Farbbild und Tiefenbild sind keine Konkurrenten, sondern örtlich
                 ergänzende Experten</li>
-              <li>Der Tiefenweg ist genauer, wo Tiefe vorliegt, der Farbweg ist überall
-                verfügbar</li>
+              <li>Der Tiefenweg trifft die Drehlage am besten und kommt ohne Training aus,
+                der trainierte Farbweg sitzt in der Position genauer</li>
               <li>Die geometrische Auswahl rettet das Teil im Schatten von 424,6 auf 3,4 mm</li>
             </ol>
             <h3 class="kip-slide__h3">Grenzen</h3>
@@ -851,15 +855,15 @@
               <h3 class="kip-slide__h3">Fehler auf den Ankern</h3>
               <table class="kip-cmp">
                 <thead>
-                  <tr><th scope="col">Verfahren</th><th scope="col" class="kip-cmp__num">roh</th>
-                      <th scope="col" class="kip-cmp__num">bereinigt</th><th scope="col">Lage</th></tr>
+                  <tr><th scope="col">Verfahren</th><th scope="col" class="kip-cmp__num">AR</th>
+                      <th scope="col" class="kip-cmp__num">Drehung</th><th scope="col">Lage</th></tr>
                 </thead>
                 <tbody>
-                  <tr><td>FoundationPose</td><td class="kip-cmp__num">76,7°</td>
+                  <tr><td>FoundationPose</td><td class="kip-cmp__num">0,968</td>
                       <td class="kip-cmp__num">5,0°</td><td>36 mm</td></tr>
-                  <tr><td>GigaPose 3D</td><td class="kip-cmp__num">65,8°</td>
+                  <tr><td>GigaPose 3D</td><td class="kip-cmp__num">0,838</td>
                       <td class="kip-cmp__num">15,2°</td><td>30 mm</td></tr>
-                  <tr><td>GDRNPP</td><td class="kip-cmp__num">83,3°</td>
+                  <tr><td>GDRNPP</td><td class="kip-cmp__num">0,886</td>
                       <td class="kip-cmp__num">7,2°</td><td>4 mm</td></tr>
                 </tbody>
               </table>

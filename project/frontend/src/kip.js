@@ -839,6 +839,8 @@ document.getElementById("moe-show-cone").addEventListener("change", (e) => {
   moeOverlay.setConeVisible(e.target.checked);
 });
 
+// Offen-Notizen nur auf ausdrueckliche Anforderung (?slots), nie im Vortrag.
+if (location.search.includes("slots")) document.body.classList.add("slots-sichtbar");
 // Einstieg: Titelblatt, oder direkt die per #hash verlinkte Seite.
 showPage(location.hash.slice(1) || DECK[0].id);
 

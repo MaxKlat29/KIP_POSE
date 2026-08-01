@@ -704,3 +704,47 @@ body.pres-mode #cell-loader, body.pres-mode #status { display: none !important; 
 .pip { bottom: 104px; }
 .pip.pip--big { bottom: 104px; }
 .kip-cell-loader { bottom: 104px; }
+
+/* ══ Nach dem adversarialen Optik-Review (T-190) ══════════════════════════════
+   Sechs bestaetigte Befunde, umgesetzt in einem Block. */
+
+/* P0: Interne Offen-Notizen gehoeren nicht auf die Wand. Sie tragen Dateipfade
+   und Selektoren; im Vortrag sind sie unsichtbar. Mit ?slots in der URL kommen
+   sie zurueck, damit das Team sieht, wo noch etwas fehlt. */
+.kip-slot { display: none; }
+body.slots-sichtbar .kip-slot { display: block; }
+
+/* P1: Die Karte nutzte 58 % der Bildhoehe, alles war am Beamer unnoetig klein.
+   Jetzt fuellt sie die Flaeche, und der Grundschriftgrad steigt entsprechend. */
+.kip-screen--slide { top: 56px; bottom: 94px; align-items: stretch; padding: 4px 2px 8px; }
+.kip-slide {
+  margin: 0 auto; min-height: 0; height: 100%;
+  font-size: clamp(19px, 1.42vw, 26px);
+  padding: 30px 40px 34px;
+  overflow-y: auto;
+}
+.kip-slide__h { font-size: clamp(27px, 2.15vw, 40px); }
+
+/* P3: Eine einzige Kartenbreite statt zweier, sonst springt das Blatt beim
+   Durchklicken um 180 px hin und her. */
+.kip-slide, .kip-slide--wide { width: min(1640px, 100%); }
+
+/* P3: Hover-Styles im Vortrag neutralisieren — ein liegengebliebener Mauszeiger
+   sah aus wie eine gewollte Betonung. */
+body.pres-mode .kip-card2:hover, body.pres-mode .kip-fig:hover { filter: none; }
+.kip-card2, .kip-fig { transition: none; }
+
+/* P0: Eingebrannte Entwickler-Overlays (Ticket-IDs, interne Kombinationsnamen)
+   aus den Ergebnisbildern schneiden. Oben abschneiden, unten behalten. */
+.kip-shot--croptop img { aspect-ratio: 1100 / 505; object-fit: cover; object-position: 50% 100%; }
+.kip-shot--cropbottom img { aspect-ratio: 1100 / 700; object-fit: cover; object-position: 50% 0%; }
+.kip-shot figcaption { font-size: 0.58em; }
+
+/* Titelblatt: Inhalt vertikal zentriert, Standbild als Blickfang bis das Video da ist. */
+.kip-slide--title .kip-slide__body {
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  height: 100%; gap: 4px;
+}
+.kip-shot--title { width: min(760px, 70%); margin: 12px 0 6px; }
+.kip-shot--title img { border-radius: 12px; }
+body.has-intro-video #slot-intro-still { display: none; }
