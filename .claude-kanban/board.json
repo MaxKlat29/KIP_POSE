@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-01T19:34:29Z",
+  "updated": "2026-08-01T19:47:03Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-01T19:34:29Z",
+      "updated": "2026-08-01T19:47:03Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11718,6 +11718,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "committed 1213487"
+        },
+        {
+          "ts": "2026-08-01T19:47:03Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Deployed: Box per WoL geweckt, kip-server + kip-isaac-worker active, Edge 200. Frontend (kip.html/kip.js/kip.css) nach /mnt/data/kip_pose/project/frontend kopiert (Backups .bak-pre-T190), live verifiziert. Kein CF-Cache (no-store) -> kein Cache-Bust noetig."
+        },
+        {
+          "ts": "2026-08-01T19:47:03Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Vorbau + UI-Pass committed b6bd615: Blatt 9 Diskussion (6 Q&A), Blatt A Anhang (Backup-Zahlen), Slots fuer Marc/June + Crash-Video, clamp()-Typo fuer Beamer, Fokusringe, aria-selected/tabpanel, pres-mode blendet Lade-/Statusmeldungen aus."
         }
       ]
     }
