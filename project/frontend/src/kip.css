@@ -515,3 +515,68 @@
   .kip-slide__body { font-size: 15px; }
   .kip-fig__val { font-size: 22px; }
 }
+
+/* ── Politur-Pass (T-190, ui-ux-pro-max) ──────────────────────────────────────
+   Vier Befunde umgesetzt: (1) Schrift skaliert mit der Projektionsfläche statt
+   fester px — auf 1920er Beamern war 16 px zu klein; (2) Fließtext auf ~72
+   Zeichen begrenzt (Lesbarkeitsregel 60–75), die Karte selbst darf breit
+   bleiben; (3) sichtbare Fokusringe, weil jetzt per Tastatur geblättert wird;
+   (4) Zahlen tabellarisch, damit Spalten nicht springen. */
+.kip-slide { font-size: clamp(15px, 1.05vw, 19px); }
+.kip-slide__body { font-size: 1em; }
+.kip-slide__h { font-size: clamp(22px, 1.85vw, 34px); }
+.kip-slide__lead { font-size: 1.18em; }
+.kip-slide__h3 { font-size: 0.76em; }
+.kip-slide__note, .kip-video__cap { font-size: 0.84em; }
+.kip-fig__val { font-size: clamp(21px, 1.7vw, 31px); }
+.kip-fig__lbl { font-size: 0.78em; }
+.kip-cmp, .kip-mini { font-size: 0.92em; }
+.kip-slide__cta .kip-btn { font-size: 0.88em; }
+
+.kip-slide__lead, .kip-slide__p, .kip-slide__note, .kip-take li, .kip-list li,
+.kip-claim p, .kip-qa dd { max-width: 72ch; }
+
+.kip-cmp__num, .kip-mini td:not(:first-child), .kip-fig__val {
+  font-variant-numeric: tabular-nums;
+}
+
+.kip-tab:focus-visible, .kip-btn:focus-visible, .kip-sel:focus-visible,
+.kip-drop:focus-within {
+  outline: 2px solid #6ee7b7; outline-offset: 2px; border-radius: 8px;
+}
+
+/* Vortragsmodus: Lade- und Statusmeldungen gehoeren nicht auf die Wand. */
+body.pres-mode #cell-loader,
+body.pres-mode #status { display: none !important; }
+
+/* Offene Inhalts-Slots fuer Marc und June — bewusst sichtbar, damit im Team
+   klar ist, wo etwas hingehoert. Beim Befuellen den <p class="kip-slot"> ersetzen. */
+.kip-slot {
+  margin: 18px 0 0; padding: 11px 14px; font-size: 0.84em; line-height: 1.45;
+  color: #c8b78a; background: rgba(245,185,66,0.07);
+  border: 1px dashed rgba(245,185,66,0.42); border-radius: 9px;
+}
+.kip-slot::before {
+  content: "Offen · " attr(data-owner); display: block;
+  font-family: var(--mono); font-size: 0.85em; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
+}
+.kip-slot code { font-family: var(--mono); color: #e6d3a5; }
+
+/* Diskussionsblatt: Frage fett, Antwort eingerueckt darunter, zweispaltig */
+.kip-qa { margin: 0; columns: 2; column-gap: 42px; }
+.kip-qa dt {
+  font-weight: 700; color: var(--text); break-after: avoid;
+  margin-bottom: 5px;
+}
+.kip-qa dd {
+  margin: 0 0 16px; padding-left: 13px; color: #cdd5e0;
+  border-left: 2px solid rgba(52,211,153,0.4); break-inside: avoid;
+}
+.kip-video--inline { margin: 18px 0 0; }
+.kip-video--inline video { max-height: 34vh; }
+.kip-tab--backup { font-family: var(--mono); }
+
+@media (max-width: 900px) {
+  .kip-qa { columns: 1; }
+}

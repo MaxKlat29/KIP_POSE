@@ -102,6 +102,8 @@
                 exakt bekannter Referenzlage.</p>
             </div>
           </div>
+          <p class="kip-slot" data-owner="Marc">Platz für Marcs Ergänzungen zur Motivation —
+            Foto der Zelle, Zahlen zur Taktzeit oder was aus dem Redeskript auf die Wand soll.</p>
         </article>
       </section>
 
@@ -351,6 +353,7 @@
               <li>Bei teilweiser Sicht bleiben echte Mehrdeutigkeiten der Drehlage — die löst kein
                 Weg allein auf.</li>
             </ul>
+            <p class="kip-slot" data-owner="June">Platz für Junes eigene Fazit-Punkte.</p>
           </div>
         </article>
       </section>
@@ -373,9 +376,125 @@
                 Verfahren ohne strukturelle Änderung auf — mit den trainingsfreien Verfahren ist die
                 Erweiterung auf beliebige Konstruktionsteile der natürliche nächste Schritt.</li>
             </ol>
+            <!-- Slot: Crash-Video (June hat eins, in dem der Roboter eine falsche Lage
+                 anfährt). Datei ablegen, dann hidden am <figure> entfernen. -->
+            <figure class="kip-video kip-video--inline" id="slot-crash-video" hidden>
+              <video controls preload="metadata">
+                <source src="./assets/crash_falsche_pose.mp4" type="video/mp4" />
+              </video>
+              <figcaption class="kip-video__cap">Was ohne genaue Lage passiert: der Roboter
+                fährt eine falsche Pose an.</figcaption>
+            </figure>
+            <p class="kip-slot" data-owner="June">Platz für das Crash-Video — Datei als
+              <code>assets/crash_falsche_pose.mp4</code> ablegen und im Quelltext das
+              <code>hidden</code> an <code>#slot-crash-video</code> entfernen.</p>
             <p class="kip-slide__lead kip-slide__lead--end">Farbbild und Tiefenbild sind keine
               Konkurrenten, sondern örtlich ergänzende Experten — und eine geometrisch gesteuerte
               Auswahl nutzt beide dort, wo sie jeweils stark sind.</p>
+          </div>
+        </article>
+      </section>
+
+      <!-- Blatt 9: Diskussion (June). Vorbereitete Rückfragen mit Kurzantworten —
+           im Vortrag als Landeplatz nach dem Ausblick, in der Fragerunde als Spickzettel. -->
+      <section id="screen-diskussion" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">09</span>
+            <h2 class="kip-slide__h">Diskussion</h2>
+            <span class="kip-slide__who">June</span>
+          </header>
+          <div class="kip-slide__body">
+            <dl class="kip-qa">
+              <dt>Warum nicht einfach immer FoundationPose, es ist doch das genaueste?</dt>
+              <dd>Lizenz (nicht kommerziell), ≈ 8 s je Bild — und im Infrarot-Schatten des Arms
+                hat es keine Tiefe, auf der es arbeiten könnte. Als Maßstab wertvoll, als
+                Produktivweg nicht.</dd>
+
+              <dt>Die Bewertung läuft auf simulierter Tiefe — ist das nicht geschönt?</dt>
+              <dd>Ja, das ist die wichtigste Einschränkung. Die simulierte Tiefe ist nahezu ideal,
+                reale Tiefe auf glänzendem Metall rauscht. Deshalb steht die Prüfung an einem
+                kleinen realen Datensatz an erster Stelle im Ausblick.</dd>
+
+              <dt>Warum überhaupt synthetische Daten statt echter Aufnahmen?</dt>
+              <dd>Reale Aufnahmen mit exakter Referenzlage sind kaum in ausreichender Menge zu
+                bekommen. Der BOP-Standard selbst stellt über zwei Millionen synthetische Bilder
+                bereit, und die Spitzenverfahren der Bestenliste trainieren ausschließlich
+                synthetisch.</dd>
+
+              <dt>Wie verlässlich ist die berechnete Schattenkarte?</dt>
+              <dd>Sie ist rein geometrisch aus Kamera-, Arm- und Tischposition berechnet und gilt
+                für genau diese Stellung — ändert sich die Anlage, wird sie neu bestimmt. Der
+                Abgleich mit der real gemessenen Schattenfläche steht noch aus.</dd>
+
+              <dt>Was passiert bei einem neuen Bauteil?</dt>
+              <dd>Der Tiefenweg braucht nur das CAD-Modell, der Farbweg ein eigenes Training.
+                Deshalb ist der modulare Aufbau der Punkt: neue Teile und neue Verfahren kommen
+                ohne strukturelle Änderung dazu.</dd>
+
+              <dt>Warum ist der Drehfehler in der Rohzahl so groß?</dt>
+              <dd>Die Anker sind um ihre Längsachse drehsymmetrisch — aus einem Bild sind mehrere
+                Drehlagen gleich richtig. Symmetriebereinigt bleiben 5,0° bis 15,2°; der rohe Wert
+                misst eine Mehrdeutigkeit, keinen Fehler.</dd>
+            </dl>
+            <p class="kip-slot" data-owner="June">Platz für weitere Punkte, die in der Diskussion
+              gesetzt werden sollen.</p>
+          </div>
+        </article>
+      </section>
+
+      <!-- Backup-Blatt: Detailzahlen für Rückfragen. Nicht Teil des Vortragsflusses. -->
+      <section id="screen-anhang" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <span class="kip-slide__no">A</span>
+            <h2 class="kip-slide__h">Anhang — Zahlen für Rückfragen</h2>
+            <span class="kip-slide__who">Backup</span>
+          </header>
+          <div class="kip-slide__body kip-slide__body--2col">
+            <div>
+              <h3 class="kip-slide__h3">Tiefenfehler auf den Ankern</h3>
+              <table class="kip-cmp">
+                <thead>
+                  <tr><th scope="col">Verfahren</th><th scope="col" class="kip-cmp__num">Drehung roh</th>
+                      <th scope="col" class="kip-cmp__num">bereinigt</th><th scope="col">Lagefehler</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>FoundationPose</td><td class="kip-cmp__num">76,7°</td>
+                      <td class="kip-cmp__num">5,0°</td><td>≈ 36 mm, zufällig</td></tr>
+                  <tr><td>GigaPose-3D</td><td class="kip-cmp__num">65,8°</td>
+                      <td class="kip-cmp__num">15,2°</td><td>≈ 30 mm, zufällig</td></tr>
+                  <tr><td>GDRNPP (Farbe)</td><td class="kip-cmp__num">83,3°</td>
+                      <td class="kip-cmp__num">7,2°</td><td>≈ 4 mm</td></tr>
+                </tbody>
+              </table>
+              <h3 class="kip-slide__h3">Geprüft und verworfen</h3>
+              <ul class="kip-list">
+                <li>Weniger Verfeinerungsschritte: −2 Prozentpunkte je Schritt</li>
+                <li>Größere Bildausschnitte für GDRNPP: 0,885 → 0,856</li>
+              </ul>
+            </div>
+            <div>
+              <h3 class="kip-slide__h3">Dienste des Systems</h3>
+              <table class="kip-cmp">
+                <thead>
+                  <tr><th scope="col">Dienst</th><th scope="col">Stufe</th>
+                      <th scope="col">Modalität</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>YOLOv8-OBB</td><td>Erkennung</td><td>RGB</td></tr>
+                  <tr><td>YOLO-seg</td><td>Erkennung</td><td>RGB</td></tr>
+                  <tr><td>SAM3</td><td>Erkennung</td><td>RGB</td></tr>
+                  <tr><td>GDRNPP</td><td>Lage</td><td>RGB</td></tr>
+                  <tr><td>FoundationPose</td><td>Lage</td><td>RGB-D</td></tr>
+                  <tr><td>GigaPose</td><td>Lage</td><td>RGB / RGB-D</td></tr>
+                </tbody>
+              </table>
+              <p class="kip-slide__note">Alle Erkennungsdienste bedienen <code>/segment</code>,
+                alle Lagedienste <code>/pose</code> — daraus ergeben sich rund zwölf sinnvolle
+                Kombinationen. Bewertung: BOP IC-BIN-Protokoll, Schwelle des 3D-Maßes bei einem
+                Zehntel des Objektdurchmessers, also etwa 11 mm.</p>
+            </div>
           </div>
         </article>
       </section>
@@ -573,6 +692,9 @@
             <button id="tab-moe-exkurs" class="kip-tab kip-tab--pres" role="tab">6 MoE</button>
             <button id="tab-fazit" class="kip-tab kip-tab--pres" role="tab">7 Fazit</button>
             <button id="tab-ausblick" class="kip-tab kip-tab--pres" role="tab">8 Ausblick</button>
+            <button id="tab-diskussion" class="kip-tab kip-tab--pres" role="tab">9 Diskussion</button>
+            <button id="tab-anhang" class="kip-tab kip-tab--pres kip-tab--backup" role="tab"
+                    title="Backup-Zahlen für Rückfragen">A</button>
             <span class="kip-sheetbar__gap" aria-hidden="true"></span>
             <button id="tab-real" class="kip-tab kip-tab--demo" role="tab">Foto</button>
             <button id="tab-sim"  class="kip-tab kip-tab--demo" role="tab">Simulation</button>

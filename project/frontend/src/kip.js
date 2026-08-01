@@ -297,20 +297,37 @@ window.__KIP_BATCH__ = batch;          // QS/Smoke: erlaubt __renderLive/__hideL
 pollHealth(); setInterval(pollHealth, 30000);   // Start nach batch (Training-Guard-Sync)
 // Vortragsblätter (T-190): Story-Reihenfolge 1–8, danach die vier Live-Demos.
 // Ein einziges Array haelt Tab-Optik, Pfeiltasten-Navigation und #hash zusammen.
-const PRES  = ["intro", "motivation", "rgb", "rgbd", "vergleich", "moe-exkurs", "fazit", "ausblick"];
+const PRES  = ["intro", "motivation", "rgb", "rgbd", "vergleich", "moe-exkurs", "fazit",
+               "ausblick", "diskussion", "anhang"];
 const DEMOS = ["real", "sim", "moe", "batch"];
 const TABS  = [...PRES, ...DEMOS];
+
+// ARIA-Verdrahtung einmal aus dem TABS-Array statt zwoelf Mal im Markup.
+for (const k of TABS) {
+  const tab = document.getElementById(`tab-${k}`);
+  const scr = document.getElementById(`screen-${k}`);
+  if (!tab || !scr) continue;
+  tab.setAttribute("aria-controls", `screen-${k}`);
+  scr.setAttribute("role", "tabpanel");
+  scr.setAttribute("aria-labelledby", `tab-${k}`);
+}
 
 function showScreen(which) {
   const isPres = PRES.includes(which);
   for (const k of TABS) {
-    document.getElementById(`tab-${k}`)?.classList.toggle("kip-tab--active", k === which);
+    const tab = document.getElementById(`tab-${k}`);
+    if (!tab) continue;
+    tab.classList.toggle("kip-tab--active", k === which);
+    tab.setAttribute("aria-selected", String(k === which));
   }
   for (const k of PRES) {
     const s = document.getElementById(`screen-${k}`);
     if (s) s.hidden = k !== which;
   }
   history.replaceState?.(null, "", `#${which}`);   // Deep-Link fuer den Vortrag
+  // Vortragsmodus per Body-Klasse: blendet Lade- und Statusmeldungen aus, ohne
+  // deren Logik anzufassen (scene.js togglet #cell-loader weiterhin frei).
+  document.body.classList.toggle("pres-mode", isPres);
   const pipeGroup = document.getElementById("pipe-group");
   const pipeCtx = document.getElementById("pipe-ctx");
   const pipEl = document.getElementById("pip");
