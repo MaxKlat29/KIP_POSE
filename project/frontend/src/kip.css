@@ -352,231 +352,206 @@
   .kip-live__row, .kip-live__minibar > span { transition: none !important; }
 }
 
-/* ══ Vortragsblätter (T-190) ══════════════════════════════════════════════════
-   Die Website ist die Präsentation. Blätter 1–8 liegen als lesbare Karte über
-   der 3D-Zelle: groessere Typo als die Bedien-Karten (Beamer, ~5 m Abstand),
-   Farbsemantik wie in der MoE-Legende — gruen = Farbweg (RGB), blau = Tiefen-
-   weg (RGB-D). Steht nach .kip-screen--wide, damit die Breiten-Regel greift. */
+/* ══ Präsentations-Deck (T-190) ═══════════════════════════════════════════════
+   Die Website ist die Präsentation. Zwei Leisten unten links: Sub-Leiste (die
+   Schritte des Themas) über dem Register (die Themen). Ein Blatt ist eine
+   lesbare Karte über der 3D-Zelle. Regeln: Bullets statt Fließtext, Schrift
+   skaliert mit der Projektionsfläche, Farbsemantik wie in der MoE-Legende
+   (grün = Farbweg RGB, blau = Tiefenweg RGB-D). */
+
+/* ── Blattfläche ── */
 .kip-screen--slide {
-  top: 60px; left: 16px; right: 16px; bottom: 68px;
+  top: 60px; left: 16px; right: 16px; bottom: 104px;
   display: flex; justify-content: center; align-items: flex-start;
-  overflow-y: auto; overscroll-behavior: contain;
-  padding: 8px 4px 12px; pointer-events: auto;
+  overflow-y: auto; overscroll-behavior: contain; padding: 8px 4px 12px;
 }
 .kip-slide {
-  /* margin:auto statt align-items:center — zentriert vertikal, schneidet aber
-     lange Blätter beim Scrollen nicht oben ab. */
-  margin: auto; width: min(1020px, 100%);
-  padding: 26px 34px 30px;
+  margin: auto; width: min(1060px, 100%);
+  padding: 28px 38px 32px;
+  font-size: clamp(16px, 1.15vw, 21px);
   background: rgba(18, 23, 32, 0.9);
   border: 1px solid var(--panel-border); border-radius: var(--radius);
   backdrop-filter: blur(14px); box-shadow: var(--shadow);
 }
-.kip-slide--wide { width: min(1320px, 100%); }
+.kip-slide--wide { width: min(1340px, 100%); }
 .kip-slide__head {
   display: flex; align-items: baseline; gap: 14px;
-  padding-bottom: 12px; margin-bottom: 18px;
+  padding-bottom: 14px; margin-bottom: 22px;
   border-bottom: 1px solid rgba(255,255,255,0.12);
 }
-.kip-slide__no {
-  font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: .08em;
-  color: rgb(140, 230, 170); background: rgba(52,211,153,0.14);
-  border: 1px solid rgba(52,211,153,0.32); border-radius: 7px; padding: 3px 9px;
+.kip-slide__h {
+  margin: 0; font-size: clamp(24px, 2vw, 36px); line-height: 1.12;
+  font-weight: 700; color: var(--text);
 }
-.kip-slide__h { margin: 0; font-size: 27px; line-height: 1.15; font-weight: 700; color: var(--text); }
 .kip-slide__who {
-  margin-left: auto; font-size: 12px; color: var(--text-dim);
-  border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 3px 11px;
+  margin-left: auto; font-size: 0.62em; color: var(--text-dim);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 3px 12px;
+  white-space: nowrap;
 }
-.kip-slide__body { font-size: 16px; line-height: 1.55; color: #dfe5ee; }
-.kip-slide__body--2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 38px; align-items: start; }
+.kip-slide__body { font-size: 1em; line-height: 1.5; color: #dfe5ee; }
+.kip-slide__body--2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 44px; align-items: start; }
 .kip-slide__h3 {
-  margin: 18px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .1em;
+  margin: 20px 0 10px; font-size: 0.62em; font-weight: 700; letter-spacing: .11em;
   text-transform: uppercase; color: var(--text-dim);
 }
 .kip-slide__body--2col > div > .kip-slide__h3:first-child { margin-top: 0; }
-.kip-slide__p { margin: 0 0 10px; }
-.kip-slide__p--warn { color: #fbcf8a; }
-.kip-slide__p--good { color: rgb(140, 230, 170); }
-.kip-slide__lead { margin: 0 0 18px; font-size: 19px; line-height: 1.45; color: #eef2f8; }
-.kip-slide__lead--end { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.12); }
-.kip-slide__meta { margin: 18px 0 0; font-size: 13px; color: var(--text-dim); }
-.kip-slide__note { margin: 14px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--text-dim); }
-.kip-slide__note code { font-family: var(--mono); font-size: 12.5px; color: #cbd3df; }
-.kip-slide__cta { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 0; }
-.kip-slide__cta .kip-btn { margin-left: 0; font-size: 14px; padding: 9px 18px; }
+.kip-slide__lead { margin: 0 0 20px; font-size: 1.12em; line-height: 1.4; color: #eef2f8; max-width: 60ch; }
+.kip-slide__meta { margin: 18px 0 0; font-size: 0.66em; color: var(--text-dim); }
+.kip-slide__p { margin: 0 0 10px; max-width: 68ch; }
 
-/* Titelblatt: Video mittig, 16:9, ohne Rand-Gedöns */
-.kip-slide--title .kip-slide__body { text-align: center; }
-.kip-video { margin: 0; }
-.kip-video video {
-  width: 100%; max-height: 46vh; aspect-ratio: 16 / 9; display: block;
-  background: #0c0f14; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
-  object-fit: contain;
+/* ── Bullets: das Arbeitspferd der Präsentation ── */
+.kip-bul { margin: 0; padding: 0; list-style: none; }
+.kip-bul li {
+  position: relative; padding-left: 26px; margin-bottom: 13px; max-width: 74ch;
 }
-.kip-video__cap { margin-top: 8px; font-size: 12.5px; color: var(--text-dim); }
-.kip-video__todo { color: #fbcf8a; }
-.kip-video__todo code { font-family: var(--mono); }
-
-/* Listen */
-.kip-list { margin: 0; padding-left: 20px; }
-.kip-list li { margin-bottom: 7px; }
-.kip-list--tick { list-style: none; padding-left: 0; }
-.kip-list--tick li { position: relative; padding-left: 20px; }
-.kip-list--tick li::before {
-  content: "▸"; position: absolute; left: 0; color: rgb(140, 230, 170);
+.kip-bul li::before {
+  content: ""; position: absolute; left: 4px; top: 0.55em;
+  width: 8px; height: 8px; border-radius: 2px; background: rgba(255,255,255,0.34);
 }
-.kip-list--warn li::marker { color: #fbcf8a; }
-.kip-take { margin: 0; padding-left: 24px; font-size: 16.5px; }
-.kip-take li { margin-bottom: 14px; padding-left: 4px; }
+.kip-bul--tight li { margin-bottom: 8px; font-size: 0.92em; }
+.kip-bul__hi { color: #fff; font-weight: 600; }
+.kip-bul__hi::before { background: var(--origin) !important; }
+.kip-bul__warn { color: #fbcf8a; }
+.kip-bul__warn::before { background: var(--accent) !important; }
+.kip-take { margin: 0; padding-left: 26px; }
+.kip-take li { margin-bottom: 16px; padding-left: 6px; max-width: 74ch; }
 .kip-take li::marker { color: rgb(140, 230, 170); font-weight: 700; }
 .kip-take--next li::marker { color: var(--accent); }
+.kip-list { margin: 0; padding-left: 22px; }
+.kip-list li { margin-bottom: 8px; max-width: 74ch; }
 
-/* Kennzahlen-Kacheln */
-.kip-figs { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+/* ── Kennzahlen ── */
+.kip-figs { display: flex; flex-wrap: wrap; gap: 14px; margin: 22px 0; }
+.kip-figs--tight { margin: 16px 0 0; }
 .kip-fig {
-  flex: 1 1 200px; padding: 14px 16px;
+  flex: 1 1 210px; padding: 16px 18px;
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 10px;
+  border-radius: 11px;
 }
 .kip-fig--hero { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.3); }
 .kip-fig--good .kip-fig__val { color: rgb(140, 230, 170); }
 .kip-fig__val {
-  display: block; font-family: var(--mono); font-size: 27px; font-weight: 700;
-  color: var(--text); line-height: 1.1;
+  display: block; font-family: var(--mono); font-size: clamp(22px, 1.75vw, 32px);
+  font-weight: 700; color: var(--text); line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
-.kip-fig__lbl { display: block; margin-top: 7px; font-size: 12.5px; line-height: 1.4; color: var(--text-dim); }
+.kip-fig__lbl { display: block; margin-top: 8px; font-size: 0.62em; line-height: 1.4; color: var(--text-dim); }
 
-/* Ablaufkette: Schritt → Schritt → Schritt */
+/* ── Ablaufkette ── */
 .kip-flow {
-  display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px;
-  margin: 0 0 18px; padding: 0; list-style: none; counter-reset: none;
+  display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px;
+  margin: 0 0 22px; padding: 0; list-style: none;
 }
 .kip-flow li {
-  flex: 0 1 auto; padding: 9px 14px; font-size: 13.5px;
+  flex: 0 1 auto; padding: 11px 16px; font-size: 0.72em; font-weight: 600;
+  color: var(--text);
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 8px; display: flex; flex-direction: column; gap: 2px;
+  border-radius: 9px; display: flex; flex-direction: column; gap: 3px;
 }
-.kip-flow li span { font-family: var(--mono); font-size: 12px; color: rgb(140, 230, 170); }
-.kip-flow li + li { position: relative; margin-left: 14px; }
+.kip-flow li span { font-family: var(--mono); font-weight: 400; color: rgb(140, 230, 170); }
+.kip-flow li + li { position: relative; margin-left: 16px; }
 .kip-flow li + li::before {
-  content: "→"; position: absolute; left: -18px; top: 50%; transform: translateY(-50%);
-  color: var(--text-dim); font-size: 13px;
+  content: "›"; position: absolute; left: -19px; top: 50%; transform: translateY(-50%);
+  color: var(--text-dim); font-size: 1.3em;
 }
-.kip-flow--dec li:nth-child(3) { border-color: rgba(245,185,66,0.4); background: rgba(245,185,66,0.1); }
+.kip-flow--big li { font-size: 0.78em; padding: 13px 18px; }
+.kip-flow--dec li:last-child { border-color: rgba(245,185,66,0.45); background: rgba(245,185,66,0.1); }
+.kip-flow__rgb   { color: #7ee2a4 !important; }
+.kip-flow__depth { color: #9dbcff !important; }
+.kip-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
 .kip-tag {
-  display: inline-block; margin-right: 6px; padding: 2px 9px; border-radius: 999px;
-  font-family: var(--mono); font-size: 11.5px;
+  display: inline-block; padding: 5px 12px; border-radius: 999px;
+  font-family: var(--mono); font-size: 0.62em;
 }
-.kip-tag--rgb   { background: rgba(34,197,94,0.18);  color: #7ee2a4; border: 1px solid rgba(34,197,94,0.4); }
-.kip-tag--depth { background: rgba(37,99,235,0.22);  color: #9dbcff; border: 1px solid rgba(37,99,235,0.45); }
+.kip-tag--rgb   { background: rgba(34,197,94,0.18); color: #7ee2a4; border: 1px solid rgba(34,197,94,0.4); }
+.kip-tag--depth { background: rgba(37,99,235,0.22); color: #9dbcff; border: 1px solid rgba(37,99,235,0.45); }
 
-/* Kleine Zahlentabelle innerhalb eines Blattes */
-.kip-mini { border-collapse: collapse; font-size: 14.5px; }
-.kip-mini td { padding: 5px 16px 5px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.kip-mini td:not(:first-child) { font-family: var(--mono); text-align: right; }
+/* ── Tabellen ── */
+.kip-mini { border-collapse: collapse; font-size: 0.8em; margin-top: 12px; }
+.kip-mini td { padding: 6px 18px 6px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.kip-mini td:not(:first-child) { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
 .kip-mini--hi td { color: rgb(140, 230, 170); font-weight: 600; }
-
-/* Vergleichstabelle (Blatt 5) */
-.kip-cmp { width: 100%; border-collapse: collapse; font-size: 15px; }
+.kip-cmp { width: 100%; border-collapse: collapse; font-size: 0.85em; }
 .kip-cmp th {
-  text-align: left; padding: 8px 12px; font-size: 11.5px; letter-spacing: .08em;
+  text-align: left; padding: 9px 14px; font-size: 0.72em; letter-spacing: .09em;
   text-transform: uppercase; color: var(--text-dim);
   border-bottom: 1px solid rgba(255,255,255,0.16);
 }
-.kip-cmp td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.kip-cmp__num { text-align: right; font-family: var(--mono); font-weight: 700; }
+.kip-cmp td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.kip-cmp__num { text-align: right; font-family: var(--mono); font-weight: 700; font-variant-numeric: tabular-nums; }
 .kip-cmp--rgb   td:first-child { box-shadow: inset 3px 0 0 rgba(34,197,94,0.7); }
 .kip-cmp--depth td:first-child { box-shadow: inset 3px 0 0 rgba(37,99,235,0.75); }
 
-/* Kernaussage-Block */
+/* ── Kernaussage, Diskussion, Video, offene Slots ── */
 .kip-claim {
-  margin: 20px 0 0; padding: 16px 20px;
+  margin: 22px 0 0; padding: 18px 22px;
   background: rgba(255,255,255,0.045); border-left: 3px solid rgba(52,211,153,0.6);
-  border-radius: 0 10px 10px 0;
+  border-radius: 0 11px 11px 0;
 }
-.kip-claim p { margin: 0 0 8px; }
+.kip-claim p { margin: 0 0 8px; max-width: 74ch; }
 .kip-claim p:last-child { margin-bottom: 0; }
-.kip-claim__h { font-size: 17.5px; font-weight: 700; color: var(--text); }
 .kip-claim__punch { color: rgb(140, 230, 170); font-weight: 600; }
+.kip-qa { margin: 0; columns: 2; column-gap: 46px; font-size: 0.88em; }
+.kip-qa dt { font-weight: 700; color: var(--text); break-after: avoid; margin-bottom: 6px; }
+.kip-qa dd {
+  margin: 0 0 18px; padding-left: 14px; color: #cdd5e0;
+  border-left: 2px solid rgba(52,211,153,0.4); break-inside: avoid;
+}
+.kip-video { margin: 0; }
+.kip-video video {
+  width: 100%; max-height: 44vh; aspect-ratio: 16 / 9; display: block;
+  background: #0c0f14; border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+  object-fit: contain;
+}
+.kip-video--inline { margin: 20px 0 0; }
+.kip-video--inline video { max-height: 32vh; }
+.kip-video__cap { margin-top: 9px; font-size: 0.64em; color: var(--text-dim); }
+.kip-video__todo { color: #fbcf8a; }
+.kip-slide--title .kip-slide__body { text-align: center; }
+.kip-slide--title .kip-slide__lead { max-width: none; }
+.kip-slot {
+  margin: 20px 0 0; padding: 12px 15px; font-size: 0.62em; line-height: 1.45;
+  color: #c8b78a; background: rgba(245,185,66,0.07);
+  border: 1px dashed rgba(245,185,66,0.42); border-radius: 9px;
+}
+.kip-slot::before {
+  content: "Offen · " attr(data-owner); display: block;
+  font-family: var(--mono); font-size: 0.86em; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
+}
+.kip-slot code, .kip-slide__body code { font-family: var(--mono); color: #e6d3a5; }
 
-/* Mappen-Register: Vortragsblätter links, Live-Demos abgesetzt rechts */
-.kip-sheetbar__gap { width: 22px; }
+/* ── Navigation: Sub-Leiste über dem Register ── */
+.kip-subbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 2px; }
+.kip-sub {
+  font: inherit; font-size: 12.5px; color: #cfd6e0; cursor: pointer;
+  background: rgba(20, 24, 32, 0.88); border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 999px; padding: 6px 15px;
+  transition: background .12s, color .12s;
+}
+.kip-sub:hover { background: rgba(52, 62, 78, 0.95); color: #fff; }
+.kip-sub--active {
+  background: rgba(52, 211, 153, 0.22); color: rgb(150, 235, 180);
+  border-color: rgba(52, 211, 153, 0.5); font-weight: 600;
+}
+.kip-sub--demo { border-style: dashed; }
+.kip-sub--demo.kip-sub--active { border-style: solid; }
+.kip-sheetbar__gap { width: 24px; }
 .kip-sheetbar .kip-tab--demo {
   background: #b9c2cf; color: #38414f; font-size: 12.5px; padding: 6px 14px 7px;
 }
 .kip-sheetbar .kip-tab--demo:hover { background: #ccd4de; color: #1d2430; }
 .kip-sheetbar .kip-tab--demo.kip-tab--active { background: #fff; color: #10131a; }
 
-@media (max-width: 900px) {
-  .kip-slide__body--2col { grid-template-columns: 1fr; }
-  .kip-slide { padding: 20px 20px 24px; }
-  .kip-slide__h { font-size: 22px; }
-  .kip-slide__body { font-size: 15px; }
-  .kip-fig__val { font-size: 22px; }
-}
-
-/* ── Politur-Pass (T-190, ui-ux-pro-max) ──────────────────────────────────────
-   Vier Befunde umgesetzt: (1) Schrift skaliert mit der Projektionsfläche statt
-   fester px — auf 1920er Beamern war 16 px zu klein; (2) Fließtext auf ~72
-   Zeichen begrenzt (Lesbarkeitsregel 60–75), die Karte selbst darf breit
-   bleiben; (3) sichtbare Fokusringe, weil jetzt per Tastatur geblättert wird;
-   (4) Zahlen tabellarisch, damit Spalten nicht springen. */
-.kip-slide { font-size: clamp(15px, 1.05vw, 19px); }
-.kip-slide__body { font-size: 1em; }
-.kip-slide__h { font-size: clamp(22px, 1.85vw, 34px); }
-.kip-slide__lead { font-size: 1.18em; }
-.kip-slide__h3 { font-size: 0.76em; }
-.kip-slide__note, .kip-video__cap { font-size: 0.84em; }
-.kip-fig__val { font-size: clamp(21px, 1.7vw, 31px); }
-.kip-fig__lbl { font-size: 0.78em; }
-.kip-cmp, .kip-mini { font-size: 0.92em; }
-.kip-slide__cta .kip-btn { font-size: 0.88em; }
-
-.kip-slide__lead, .kip-slide__p, .kip-slide__note, .kip-take li, .kip-list li,
-.kip-claim p, .kip-qa dd { max-width: 72ch; }
-
-.kip-cmp__num, .kip-mini td:not(:first-child), .kip-fig__val {
-  font-variant-numeric: tabular-nums;
-}
-
-.kip-tab:focus-visible, .kip-btn:focus-visible, .kip-sel:focus-visible,
-.kip-drop:focus-within {
+/* Sichtbare Fokusringe, weil im Vortrag per Tastatur navigiert wird. */
+.kip-tab:focus-visible, .kip-sub:focus-visible, .kip-btn:focus-visible,
+.kip-sel:focus-visible, .kip-drop:focus-within {
   outline: 2px solid #6ee7b7; outline-offset: 2px; border-radius: 8px;
 }
-
-/* Vortragsmodus: Lade- und Statusmeldungen gehoeren nicht auf die Wand. */
-body.pres-mode #cell-loader,
-body.pres-mode #status { display: none !important; }
-
-/* Offene Inhalts-Slots fuer Marc und June — bewusst sichtbar, damit im Team
-   klar ist, wo etwas hingehoert. Beim Befuellen den <p class="kip-slot"> ersetzen. */
-.kip-slot {
-  margin: 18px 0 0; padding: 11px 14px; font-size: 0.84em; line-height: 1.45;
-  color: #c8b78a; background: rgba(245,185,66,0.07);
-  border: 1px dashed rgba(245,185,66,0.42); border-radius: 9px;
-}
-.kip-slot::before {
-  content: "Offen · " attr(data-owner); display: block;
-  font-family: var(--mono); font-size: 0.85em; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--accent); margin-bottom: 3px;
-}
-.kip-slot code { font-family: var(--mono); color: #e6d3a5; }
-
-/* Diskussionsblatt: Frage fett, Antwort eingerueckt darunter, zweispaltig */
-.kip-qa { margin: 0; columns: 2; column-gap: 42px; }
-.kip-qa dt {
-  font-weight: 700; color: var(--text); break-after: avoid;
-  margin-bottom: 5px;
-}
-.kip-qa dd {
-  margin: 0 0 16px; padding-left: 13px; color: #cdd5e0;
-  border-left: 2px solid rgba(52,211,153,0.4); break-inside: avoid;
-}
-.kip-video--inline { margin: 18px 0 0; }
-.kip-video--inline video { max-height: 34vh; }
-.kip-tab--backup { font-family: var(--mono); }
+/* Im Deck gehören Lade- und Statusmeldungen nicht auf die Wand. */
+body.pres-mode #cell-loader, body.pres-mode #status { display: none !important; }
 
 @media (max-width: 900px) {
-  .kip-qa { columns: 1; }
+  .kip-slide__body--2col, .kip-qa { grid-template-columns: 1fr; columns: 1; }
+  .kip-slide { padding: 20px 20px 24px; }
 }

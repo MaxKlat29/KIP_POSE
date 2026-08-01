@@ -295,68 +295,153 @@ let simInited = false;
 const batch = createBatch({ bar, pollJob, healthRef: () => lastHealth });
 window.__KIP_BATCH__ = batch;          // QS/Smoke: erlaubt __renderLive/__hideLive ohne Lauf
 pollHealth(); setInterval(pollHealth, 30000);   // Start nach batch (Training-Guard-Sync)
-// Vortragsblätter (T-190): Story-Reihenfolge 1–8, danach die vier Live-Demos.
-// Ein einziges Array haelt Tab-Optik, Pfeiltasten-Navigation und #hash zusammen.
-const PRES  = ["intro", "motivation", "rgb", "rgbd", "vergleich", "moe-exkurs", "fazit",
-               "ausblick", "diskussion", "anhang"];
-const DEMOS = ["real", "sim", "moe", "batch"];
-const TABS  = [...PRES, ...DEMOS];
+// ══ Präsentations-Deck (T-190) ═══════════════════════════════════════════════
+// DECK ist die Vortragsreihenfolge. `group` bestimmt das Register unten, `label`
+// den Schritt in der Sub-Leiste darüber. Eine Seite mit `demo` zeigt statt eines
+// Blattes den echten Bedien-Screen und stellt per `combo` die passende Pipeline
+// ein: die Live-Demo ist damit der letzte Schritt des Themas und kein Sprung
+// woandershin. Reihenfolge, Beschriftung und Navigation kommen aus dieser einen
+// Liste; das Markup enthält nur noch die Sektionen.
+const GROUPS = [
+  { id: "intro",      label: "Intro" },
+  { id: "motivation", label: "Motivation" },
+  { id: "vorgehen",   label: "Vorgehen" },
+  { id: "rgb",        label: "RGB" },
+  { id: "rgbd",       label: "RGB-D" },
+  { id: "vergleich",  label: "Vergleich" },
+  { id: "moe",        label: "MoE" },
+  { id: "fazit",      label: "Fazit" },
+  { id: "ausblick",   label: "Ausblick" },
+  { id: "diskussion", label: "Diskussion" },
+];
 
-// ARIA-Verdrahtung einmal aus dem TABS-Array statt zwoelf Mal im Markup.
-for (const k of TABS) {
-  const tab = document.getElementById(`tab-${k}`);
-  const scr = document.getElementById(`screen-${k}`);
-  if (!tab || !scr) continue;
-  tab.setAttribute("aria-controls", `screen-${k}`);
-  scr.setAttribute("role", "tabpanel");
-  scr.setAttribute("aria-labelledby", `tab-${k}`);
+const DECK = [
+  { id: "intro",          group: "intro",      label: "Titel" },
+  { id: "mot-aufgabe",    group: "motivation", label: "Aufgabe" },
+  { id: "mot-schwierig",  group: "motivation", label: "Warum schwierig" },
+  { id: "vor-ansaetze",   group: "vorgehen",   label: "Ansätze" },
+  { id: "vor-split",      group: "vorgehen",   label: "Zwei Wege" },
+  { id: "rgb-idee",       group: "rgb",        label: "Idee" },
+  { id: "rgb-umsetzung",  group: "rgb",        label: "Umsetzung" },
+  { id: "rgb-ergebnis",   group: "rgb",        label: "Ergebnis" },
+  { id: "rgb-demo",       group: "rgb",        label: "Live-Demo", demo: "sim",
+    combo: { seg: "yolo-obb", pose: "GDRNPP" } },
+  { id: "rgbd-idee",      group: "rgbd",       label: "Idee" },
+  { id: "rgbd-umsetzung", group: "rgbd",       label: "Umsetzung" },
+  { id: "rgbd-ergebnis",  group: "rgbd",       label: "Ergebnis" },
+  { id: "rgbd-demo",      group: "rgbd",       label: "Live-Demo", demo: "sim",
+    combo: { seg: "yolo-obb", pose: "FoundationPose" } },
+  { id: "vgl-zahlen",     group: "vergleich",  label: "Zahlen" },
+  { id: "vgl-befund",     group: "vergleich",  label: "Befund" },
+  { id: "vgl-demo",       group: "vergleich",  label: "Live-Eval", demo: "batch" },
+  { id: "moe-idee",       group: "moe",        label: "Idee" },
+  { id: "moe-umsetzung",  group: "moe",        label: "Umsetzung" },
+  { id: "moe-ergebnis",   group: "moe",        label: "Ergebnis" },
+  { id: "moe-demo",       group: "moe",        label: "Live-Demo", demo: "moe" },
+  { id: "fazit",          group: "fazit",      label: "Fazit" },
+  { id: "ausblick",       group: "ausblick",   label: "Ausblick" },
+  { id: "disk-fragen",    group: "diskussion", label: "Fragen" },
+  { id: "disk-zahlen",    group: "diskussion", label: "Zahlen" },
+];
+
+// Die vier Bedien-Screens bleiben zusätzlich frei anwählbar (Foto-Upload und
+// freies Arbeiten ausserhalb des Vortrags). IDs unverändert: tab-real/sim/moe/batch.
+const TOOLS = [
+  { id: "real",  label: "Foto" },
+  { id: "sim",   label: "Simulation" },
+  { id: "moe",   label: "MoE" },
+  { id: "batch", label: "Batch-Eval" },
+];
+
+const PAGE_BY_ID = new Map(DECK.map((p) => [p.id, p]));
+const TOOL_IDS = new Set(TOOLS.map((t) => t.id));
+const sheetbarEl = document.getElementById("sheetbar");
+const subbarEl = document.getElementById("subbar");
+
+function mkTab({ id, cls, label, title, onClick, controls }) {
+  const b = document.createElement("button");
+  b.id = id; b.type = "button"; b.className = cls; b.textContent = label;
+  b.setAttribute("role", "tab");
+  if (controls) b.setAttribute("aria-controls", controls);
+  if (title) b.title = title;
+  b.addEventListener("click", onClick);
+  return b;
 }
 
-function showScreen(which) {
-  const isPres = PRES.includes(which);
-  for (const k of TABS) {
-    const tab = document.getElementById(`tab-${k}`);
-    if (!tab) continue;
-    tab.classList.toggle("kip-tab--active", k === which);
-    tab.setAttribute("aria-selected", String(k === which));
+// Register einmalig bauen: nummerierte Themen, abgesetzt die Werkzeuge.
+GROUPS.forEach((g, i) => {
+  sheetbarEl.appendChild(mkTab({
+    id: `grp-${g.id}`, cls: "kip-tab kip-tab--pres", label: `${i + 1} ${g.label}`,
+    onClick: () => { const f = DECK.find((p) => p.group === g.id); if (f) showPage(f.id); },
+  }));
+});
+const gapEl = document.createElement("span");
+gapEl.className = "kip-sheetbar__gap"; gapEl.setAttribute("aria-hidden", "true");
+sheetbarEl.appendChild(gapEl);
+for (const t of TOOLS) {
+  sheetbarEl.appendChild(mkTab({
+    id: `tab-${t.id}`, cls: "kip-tab kip-tab--demo", label: t.label,
+    controls: `screen-${t.id}`, title: "Werkzeug, ausserhalb des Vortragswegs",
+    onClick: () => showPage(t.id),
+  }));
+}
+for (const p of DECK) {
+  const scr = document.getElementById(`screen-${p.id}`);
+  if (scr) scr.setAttribute("role", "tabpanel");
+}
+
+function renderSubbar(groupId, activeId) {
+  const pages = DECK.filter((p) => p.group === groupId);
+  subbarEl.innerHTML = "";
+  subbarEl.hidden = pages.length < 2;
+  if (subbarEl.hidden) return;
+  for (const p of pages) {
+    const active = p.id === activeId;
+    const b = mkTab({
+      id: `sub-${p.id}`,
+      cls: `kip-sub${p.demo ? " kip-sub--demo" : ""}${active ? " kip-sub--active" : ""}`,
+      label: p.demo ? `▶ ${p.label}` : p.label,
+      controls: `screen-${p.demo || p.id}`,
+      onClick: () => showPage(p.id),
+    });
+    b.setAttribute("aria-selected", String(active));
+    subbarEl.appendChild(b);
   }
-  for (const k of PRES) {
-    const s = document.getElementById(`screen-${k}`);
-    if (s) s.hidden = k !== which;
-  }
-  history.replaceState?.(null, "", `#${which}`);   // Deep-Link fuer den Vortrag
-  // Vortragsmodus per Body-Klasse: blendet Lade- und Statusmeldungen aus, ohne
-  // deren Logik anzufassen (scene.js togglet #cell-loader weiterhin frei).
-  document.body.classList.toggle("pres-mode", isPres);
+}
+
+// Zeigt ein Vortragsblatt: alles Bedien-Chrome aus, die 3D-Zelle bleibt Hintergrund.
+function showSlide(pageId) {
+  scrReal.hidden = scrSim.hidden = scrMoe.hidden = scrBatch.hidden = true;
+  legend.hidden = true;
   const pipeGroup = document.getElementById("pipe-group");
   const pipeCtx = document.getElementById("pipe-ctx");
-  const pipEl = document.getElementById("pip");
-  if (isPres) {
-    // Vortragsblatt: Demo-Karten, Legende, Pipeline-Auswahl und Vorschau raus.
-    // Die 3D-Zelle bleibt als ruhiger Hintergrund stehen.
-    scrReal.hidden = scrSim.hidden = scrMoe.hidden = scrBatch.hidden = true;
-    legend.hidden = true;
-    if (pipeGroup) pipeGroup.hidden = true;
-    if (pipeCtx) pipeCtx.hidden = true;
-    pipEl.hidden = true;
-    moeOverlay.show(false);
-    batch.onHide();
-    return;
-  }
-  // Gating je Tab (Upload: Depth-Regeln). MoE verhaelt sich gating-seitig wie
-  // Sim (feste Kombi, Dropdowns irrelevant) — pipeline.js kennt nur real/sim.
+  if (pipeGroup) pipeGroup.hidden = true;
+  if (pipeCtx) pipeCtx.hidden = true;
+  document.getElementById("pip").hidden = true;
+  moeOverlay.show(false);
+  batch.onHide();
+  const s = document.getElementById(`screen-${pageId}`);
+  if (s) s.hidden = false;
+}
+
+// Zeigt einen der vier Bedien-Screens (auch als Live-Demo innerhalb eines Themas).
+function showDemo(which) {
+  // Gating je Screen (Upload: Depth-Regeln). MoE verhaelt sich gating-seitig wie
+  // Sim (feste Kombi, Dropdowns irrelevant); pipeline.js kennt nur real/sim.
   pipeMode = which === "moe" ? "sim" : which;
   scrReal.hidden = which !== "real";
   scrSim.hidden  = which !== "sim";
   scrMoe.hidden  = which !== "moe";
   scrBatch.hidden = which !== "batch";
+  const pipeGroup = document.getElementById("pipe-group");
+  const pipeCtx = document.getElementById("pipe-ctx");
   // Pipeline-Dropdowns auf dem MoE-Screen ausblenden (T-178d, Max): die MoE
-  // ist eine feste Spezial-Pipeline — oben darf nichts umschaltbar sein.
+  // ist eine feste Spezial-Pipeline, oben darf nichts umschaltbar sein.
   if (pipeGroup) pipeGroup.hidden = which === "moe";
   if (pipeCtx) pipeCtx.hidden = which === "moe";
   // Legende pro Screen: Sim = GT blau / inferiert rot; MoE = GT grau +
   // Routing-Farben (gruen = RGB-Zweig, blau = RGB-D-Zweig).
-  legend.hidden  = which !== "sim" && which !== "moe";
+  legend.hidden = which !== "sim" && which !== "moe";
   if (which === "moe") {
     legend.innerHTML =
       '<span class="legend__item"><i class="legend__swatch" style="background:#9aa3af"></i>Ground-Truth (Soll)</span>'
@@ -368,7 +453,7 @@ function showScreen(which) {
       + '<span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>';
   }
   const pip = document.getElementById("pip");
-  hideInferredWith("sim"); hideInferredWith("real");   // stale "Inferiert mit" beim Tab-Wechsel weg
+  hideInferredWith("sim"); hideInferredWith("real");   // stale "Inferiert mit" weg
   if (which === "real") {
     viewer.setParts([]);                // Real ohne Foto: nur Zelle, keine Geister
     if (!chosenFile) pip.hidden = true;
@@ -390,25 +475,51 @@ function showScreen(which) {
   if (which !== "batch") batch.onHide();
   renderGating();                       // Depth-Drop + Auswahl ggf. neu gaten
 }
-for (const k of TABS) {
-  document.getElementById(`tab-${k}`)?.addEventListener("click", () => showScreen(k));
+
+function showPage(id) {
+  const page = PAGE_BY_ID.get(id);
+  if (!page && !TOOL_IDS.has(id)) return showPage(DECK[0].id);
+  history.replaceState?.(null, "", `#${id}`);
+  const groupId = page ? page.group : null;
+  for (const g of GROUPS) {
+    const b = document.getElementById(`grp-${g.id}`);
+    b.classList.toggle("kip-tab--active", g.id === groupId);
+    b.setAttribute("aria-selected", String(g.id === groupId));
+  }
+  for (const t of TOOLS) {
+    const b = document.getElementById(`tab-${t.id}`);
+    const on = !page && t.id === id;
+    b.classList.toggle("kip-tab--active", on);
+    b.setAttribute("aria-selected", String(on));
+  }
+  if (page) renderSubbar(groupId, id);
+  else { subbarEl.innerHTML = ""; subbarEl.hidden = true; }
+  for (const p of DECK) {
+    const s = document.getElementById(`screen-${p.id}`);
+    if (s) s.hidden = true;
+  }
+  // Vortragsmodus (Lade- und Statusmeldungen aus) gilt im ganzen Deck, auch auf
+  // den Live-Demos eines Themas. Nur die frei gewaehlten Werkzeuge zeigen alles.
+  document.body.classList.toggle("pres-mode", !!page);
+  // Die Live-Demo eines Themas stellt ihre Kombi selbst ein, damit ein Klick
+  // genuegt: RGB rechnet mit GDRNPP, RGB-D mit FoundationPose.
+  if (page && page.combo) pipeSel = { ...page.combo };
+  const demo = page ? page.demo : id;
+  if (demo) showDemo(demo);
+  else showSlide(page.id);
 }
-// "Live-Demo"-Knoepfe auf den Vortragsblaettern springen in die passende Demo.
-for (const b of document.querySelectorAll(".kip-goto")) {
-  b.addEventListener("click", () => showScreen(b.dataset.goto));
-}
-// Blaettern per Pfeiltaste — im Vortrag der schnellste Weg. Nicht, solange der
-// Fokus in einem Bedienelement steht (Dropdowns, Datei-Auswahl, Video).
+
+// Blaettern per Pfeiltaste durch das Deck, Werkzeuge bleiben aussen vor. Nicht,
+// solange der Fokus in einem Bedienelement steht.
 document.addEventListener("keydown", (e) => {
   if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const tag = document.activeElement?.tagName || "";
   if (/^(INPUT|SELECT|TEXTAREA|VIDEO|BUTTON)$/.test(tag)) return;
-  const cur = TABS.findIndex((k) =>
-    document.getElementById(`tab-${k}`)?.classList.contains("kip-tab--active"));
+  const cur = DECK.findIndex((p) => location.hash.slice(1) === p.id);
   const next = cur + (e.key === "ArrowRight" ? 1 : -1);
-  if (cur < 0 || next < 0 || next >= TABS.length) return;
-  showScreen(TABS[next]);
+  if (cur < 0 || next < 0 || next >= DECK.length) return;
+  showPage(DECK[next].id);
 });
 
 // ── PiP-Controls: Boxen-Toggle + Foto-View + Vergroesserung ──
@@ -748,8 +859,8 @@ document.getElementById("moe-show-cone").addEventListener("change", (e) => {
   moeOverlay.setConeVisible(e.target.checked);
 });
 
-// Einstieg: Vortragsblatt 1, oder direkt das per #hash verlinkte Blatt.
-showScreen(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "intro");
+// Einstieg: Titelblatt, oder direkt die per #hash verlinkte Seite.
+showPage(location.hash.slice(1) || DECK[0].id);
 
 // QS/Smoke-Hooks (T-164): erlauben das "Inferiert mit" + den Pipeline-Query ohne
 // echten ~60-80s-Infer-Lauf zu prüfen (Pattern wie __KIP_BATCH__/__KIP_VIEWER__).
