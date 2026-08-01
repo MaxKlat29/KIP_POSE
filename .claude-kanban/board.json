@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-01T20:23:20Z",
+  "updated": "2026-08-01T21:48:44Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-01T20:23:20Z",
+      "updated": "2026-08-01T21:48:44Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11736,6 +11736,24 @@
           "agent": "claude",
           "level": "success",
           "msg": "Interaktives Deck live: 10 Register + Sub-Tabs (Idee/Umsetzung/Ergebnis/Live-Demo), Live-Demo setzt Kombi selbst (RGB=GDRNPP, RGBD=FoundationPose, MoE, Batch), neues Vorgehen-Register, Bullets ohne Gedankenstriche, CSS konsolidiert. Deployed + live verifiziert."
+        },
+        {
+          "ts": "2026-08-01T20:51:12Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Feedback-Runde: Ergebnis nach Live-Sim, Foto-Demo raus, breitere Blaetter, Kachel-Folien aufgeloest, WIP-Zahlen entfernt, Vorgehen=Marc. Deployed."
+        },
+        {
+          "ts": "2026-08-01T21:07:56Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Adversarialer Optik-Review gestartet: 25 Deck-Seiten als 1920x1080-Screenshots, danach Fan-out mit Pruef-Agenten (Lesbarkeit/Beamer, Konsistenz, Inhalt gegen Paper, Layout) + Verify."
+        },
+        {
+          "ts": "2026-08-01T21:48:44Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Adversarialer Optik-Review durch (17 Agenten, 105 Rohbefunde, 6 bestaetigt). P0-P3 umgesetzt und deployed: Offen-Boxen versteckt (?slots holt sie zurueck), Debug-Overlays aus Bildern gecroppt, Karte auf volle Hoehe + groessere Schrift, Fazit-Widerspruch und 11-mm-Spannung geklaert, AR ins Backup, eine Kartenbreite, Hover neutralisiert."
         }
       ]
     }
