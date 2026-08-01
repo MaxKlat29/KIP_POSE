@@ -75,9 +75,9 @@
             <h2 class="kip-slide__h">Die Aufgabe</h2>
             <span class="kip-slide__who">Marc</span>
           </header>
-          <div class="kip-slide__body kip-slide__body--2col">
+          <div class="kip-slide__body">
             <div>
-              <div class="kip-cards kip-cards--2">
+              <div class="kip-cards kip-cards--4">
                 <div class="kip-card2">
                   <span class="kip-card2__h">Zivid L110+</span>
                   <span class="kip-card2__t">Kamera von oben, Farbbild und Tiefenbild</span>
@@ -104,12 +104,6 @@
               <p class="kip-slot" data-owner="Marc">Platz für Marc: Foto der echten Zelle
                 oder Taktzeit-Zahlen.</p>
             </div>
-            <div>
-              <figure class="kip-shot kip-shot--single">
-                <img src="./assets/img/detect.jpg" alt="Erkannte Bauteile mit Klassen und Konfidenz" loading="lazy" />
-                <figcaption>Erkennung in der simulierten Zelle: Klasse und Konfidenz je Teil</figcaption>
-              </figure>
-            </div>
           </div>
         </article>
       </section>
@@ -120,41 +114,41 @@
             <h2 class="kip-slide__h">Warum das schwierig ist</h2>
             <span class="kip-slide__who">Marc</span>
           </header>
-          <div class="kip-slide__body">
-            <div class="kip-cards kip-cards--4">
-              <div class="kip-card2 kip-card2--warn">
-                <span class="kip-card2__h">Glänzend und texturlos</span>
-                <span class="kip-card2__t">kaum wiedererkennbare Bildmerkmale auf der Oberfläche</span>
+          <div class="kip-slide__body kip-slide__body--split">
+            <div>
+              <div class="kip-cards kip-cards--2">
+                <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__h">Glänzend und texturlos</span>
+                  <span class="kip-card2__t">kaum wiedererkennbare Bildmerkmale</span>
+                </div>
+                <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__h">Drehsymmetrie</span>
+                  <span class="kip-card2__t">mehrere Drehlagen passen gleich gut</span>
+                </div>
+                <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__h">Der Arm verdeckt</span>
+                  <span class="kip-card2__t">optisch und im Tiefenbild</span>
+                </div>
+                <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__h">Tiefe rauscht</span>
+                  <span class="kip-card2__t">auf Metall unzuverlässig</span>
+                </div>
               </div>
-              <div class="kip-card2 kip-card2--warn">
-                <span class="kip-card2__h">Drehsymmetrie</span>
-                <span class="kip-card2__t">mehrere Drehlagen passen gleich gut zum selben Bild</span>
-              </div>
-              <div class="kip-card2 kip-card2--warn">
-                <span class="kip-card2__h">Der Arm steht im Bild</span>
-                <span class="kip-card2__t">verdeckt Teile optisch und im Tiefenbild</span>
-              </div>
-              <div class="kip-card2 kip-card2--warn">
-                <span class="kip-card2__h">Tiefe rauscht</span>
-                <span class="kip-card2__t">auf glänzendem Metall unzuverlässig, Nutzen nicht gesetzt</span>
-              </div>
+              <ul class="kip-bul">
+                <li>Bewertet wird nach dem <strong>BOP-Standard</strong>: Average Recall,
+                  symmetriebewusst, IC-BIN-Protokoll</li>
+                <li>Die Schwelle des 3D-Maßes liegt bei rund <strong>11 mm</strong>, einem
+                  Zehntel des Objektdurchmessers</li>
+                <li class="kip-bul__hi">Trainings- und Testdaten entstehen vollständig in
+                  Isaac Sim, mit exakt bekannter Referenzlage</li>
+              </ul>
             </div>
-            <div class="kip-figs">
-              <div class="kip-fig kip-fig--hero">
-                <span class="kip-fig__val">BOP</span>
-                <span class="kip-fig__lbl">Bewertung nach Average Recall, symmetriebewusst,
-                  IC-BIN-Protokoll</span>
-              </div>
-              <div class="kip-fig">
-                <span class="kip-fig__val">100 %</span>
-                <span class="kip-fig__lbl">Trainings- und Testdaten aus Isaac Sim, mit exakt
-                  bekannter Referenzlage</span>
-              </div>
-              <div class="kip-fig">
-                <span class="kip-fig__val">11 mm</span>
-                <span class="kip-fig__lbl">Schwelle des 3D-Maßes, ein Zehntel des
-                  Objektdurchmessers</span>
-              </div>
+            <div>
+              <figure class="kip-shot kip-shot--single">
+                <img src="./assets/img/detect.jpg" alt="Roboterarm zwischen den erkannten Bauteilen" loading="lazy" />
+                <figcaption>Der Arm steht mitten im Bild: er verdeckt Teile und nimmt der
+                  Tiefenkamera die Sicht</figcaption>
+              </figure>
             </div>
           </div>
         </article>
@@ -165,7 +159,7 @@
         <article class="kip-slide kip-slide--wide">
           <header class="kip-slide__head">
             <h2 class="kip-slide__h">Ansätze sichten und auswählen</h2>
-            <span class="kip-slide__who">Maximilian</span>
+            <span class="kip-slide__who">Marc</span>
           </header>
           <div class="kip-slide__body">
             <ul class="kip-bul kip-bul--tight">
@@ -227,7 +221,7 @@
         <article class="kip-slide kip-slide--wide">
           <header class="kip-slide__head">
             <h2 class="kip-slide__h">Zwei Wege, getrennt optimiert</h2>
-            <span class="kip-slide__who">Maximilian</span>
+            <span class="kip-slide__who">Marc</span>
           </header>
           <div class="kip-slide__body">
             <ol class="kip-flow kip-flow--big">
@@ -275,34 +269,31 @@
             <span class="kip-slide__who">Maximilian</span>
           </header>
           <div class="kip-slide__body">
+            <p class="kip-statement">Die Tiefe bleibt bewusst ungenutzt. Was sie liefern würde,
+              holt der Farbweg aus der Geometrie: <strong>die Teile liegen auf einer bekannten
+              Ebene</strong>.</p>
             <div class="kip-cards kip-cards--3">
               <div class="kip-card2 kip-card2--rgb">
-                <span class="kip-card2__h">Nur Farbbild</span>
-                <span class="kip-card2__t">Die Tiefe bleibt bewusst ungenutzt, weil sie auf
-                  glänzendem Metall unzuverlässig ist</span>
+                <span class="kip-card2__h">Warum ohne Tiefe</span>
+                <span class="kip-card2__t">Auf glänzendem Metall rauscht das Tiefenbild, im
+                  Infrarot-Schatten fehlt es ganz</span>
               </div>
               <div class="kip-card2 kip-card2--rgb">
-                <span class="kip-card2__h">Geometrie als Ausgleich</span>
-                <span class="kip-card2__t">Die Teile ruhen auf einer bekannten, ebenen
-                  Tischfläche</span>
+                <span class="kip-card2__h">Was die Ebene gibt</span>
+                <span class="kip-card2__t">Höhe und Kippung sind festgelegt, das Teil sitzt
+                  sauber auf dem Tisch auf</span>
               </div>
               <div class="kip-card2 kip-card2--rgb kip-card2--pick">
-                <span class="kip-card2__h">6D wird zu 3D</span>
-                <span class="kip-card2__t">Übrig bleiben Lage in der Ebene und die Drehung
+                <span class="kip-card2__h">Sechs werden drei</span>
+                <span class="kip-card2__t">Zu schätzen bleiben Lage in der Ebene und Drehung
                   um die Hochachse</span>
               </div>
             </div>
-            <div class="kip-figs kip-figs--tight">
-              <div class="kip-fig kip-fig--hero">
-                <span class="kip-fig__val">3 statt 6</span>
-                <span class="kip-fig__lbl">Freiheitsgrade, die das Modell wirklich schätzen muss</span>
-              </div>
-              <div class="kip-fig">
-                <span class="kip-fig__val">kein Tiefensensor</span>
-                <span class="kip-fig__lbl">der Weg funktioniert auch dort, wo die Tiefenkamera
-                  nichts liefert</span>
-              </div>
-            </div>
+            <ul class="kip-bul kip-bul--tight">
+              <li>Der Weg funktioniert überall auf dem Tisch, auch wo die Tiefenkamera nichts
+                liefert</li>
+              <li class="kip-bul__hi">Dafür braucht jede Bauteilklasse ihr eigenes Modell</li>
+            </ul>
           </div>
         </article>
       </section>
@@ -541,9 +532,8 @@
           <div class="kip-slide__body">
             <div class="kip-figs kip-figs--tight">
               <div class="kip-fig kip-fig--hero">
-                <span class="kip-fig__val">0,49 &rarr; 0,85</span>
-                <span class="kip-fig__lbl">mittlerer AR über alle Kombinationen, vor und nach
-                  den Datenkorrekturen</span>
+                <span class="kip-fig__val">0,85</span>
+                <span class="kip-fig__lbl">mittlerer AR über alle zwölf Kombinationen</span>
               </div>
               <div class="kip-fig">
                 <span class="kip-fig__val">12</span>
@@ -572,8 +562,7 @@
             </table>
             <ul class="kip-bul kip-bul--tight">
               <li>Je 100 Szenen auf den Ankerklassen, Absturzrate null</li>
-              <li>Mittlerer AR über alle Kombinationen: 0,49 auf 0,85 nach den
-                Datenkorrekturen</li>
+              <li>Zwölf lauffähige Kombinationen aus Erkennung und Lageschätzung</li>
             </ul>
           </div>
         </article>

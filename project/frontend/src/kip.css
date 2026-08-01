@@ -658,3 +658,22 @@ body.pres-mode #cell-loader, body.pres-mode #status { display: none !important; 
   .kip-vs { grid-template-columns: 1fr; }
   .kip-vs__mid { display: none; }
 }
+
+/* ── Mehr Platz auf den Blättern (Max): Karte breiter, Ränder schmaler ── */
+.kip-screen--slide { top: 54px; left: 10px; right: 10px; bottom: 100px; padding: 6px 2px 10px; }
+.kip-slide { width: min(1240px, 100%); padding: 24px 32px 28px; }
+.kip-slide--wide { width: min(1600px, 100%); }
+.kip-slide__head { padding-bottom: 12px; margin-bottom: 18px; }
+
+/* Split-Layout: Inhalt links, Bild rechts schmaler als halbe Breite. */
+.kip-slide__body--split { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px 40px; align-items: start; }
+
+/* Aussagesatz statt weiterer Kachelreihe: trägt die Folie, ohne Box zu sein. */
+.kip-statement {
+  margin: 0 0 20px; padding-left: 16px; max-width: 78ch;
+  font-size: 1.14em; line-height: 1.45; color: #eef2f8;
+  border-left: 3px solid rgba(52,211,153,0.7);
+}
+.kip-statement strong { color: rgb(150, 235, 180); }
+
+@media (max-width: 1100px) { .kip-slide__body--split { grid-template-columns: 1fr; } }
