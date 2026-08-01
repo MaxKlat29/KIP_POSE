@@ -135,12 +135,12 @@
                 </div>
               </div>
               <ul class="kip-bul">
-                <li>Bewertet wird nach dem <strong>BOP-Standard</strong>: Average Recall,
-                  symmetriebewusst, IC-BIN-Protokoll</li>
-                <li>Die Schwelle des 3D-Maßes liegt bei rund <strong>11 mm</strong>, einem
-                  Zehntel des Objektdurchmessers</li>
-                <li class="kip-bul__hi">Trainings- und Testdaten entstehen vollständig in
-                  Isaac Sim, mit exakt bekannter Referenzlage</li>
+                <li>Jede dieser vier Eigenschaften trifft eine andere Stelle der Verarbeitung:
+                  Erkennung, Drehlage, Sichtbarkeit, Tiefe</li>
+                <li>Keine davon lässt sich wegkonstruieren, die Bauteile und die Zelle sind
+                  gegeben</li>
+                <li class="kip-bul__hi">Also braucht es Verfahren, die damit umgehen, und einen
+                  Maßstab, der sie fair vergleicht</li>
               </ul>
             </div>
             <div>
@@ -257,6 +257,57 @@
                 verglichen wurde</li>
               <li>Gleiche Testszenen, gleiche Kennzahl, gleiches Protokoll</li>
             </ul>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-vor-bewertung" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <h2 class="kip-slide__h">Womit gemessen wird</h2>
+            <span class="kip-slide__who">Marc</span>
+          </header>
+          <div class="kip-slide__body">
+            <p class="kip-statement">Zwei Wege lassen sich nur vergleichen, wenn beide auf
+              denselben Daten mit demselben Maß gemessen werden. Beides kommt hier
+              <strong>nicht von uns, sondern aus dem Standard</strong>.</p>
+            <div class="kip-cards kip-cards--3">
+              <div class="kip-card2 kip-card2--pick">
+                <span class="kip-card2__h">BOP-Standard</span>
+                <span class="kip-card2__t">Etablierter Vergleichsmaßstab für Lageschätzung.
+                  Hauptkennzahl ist der Average Recall, gemittelt über mehrere Fehlermaße</span>
+                <span class="kip-badges"><i class="kip-badge">AR</i><i class="kip-badge">IC-BIN-Protokoll</i></span>
+              </div>
+              <div class="kip-card2">
+                <span class="kip-card2__h">Symmetriebewusst</span>
+                <span class="kip-card2__t">Der Fehler wird über alle erlaubten Symmetrielagen
+                  minimiert. Eine korrekte Lage gilt nicht als Fehler, nur weil das Teil
+                  gedreht erscheint</span>
+                <span class="kip-badges"><i class="kip-badge">MSSD</i><i class="kip-badge">MSPD</i><i class="kip-badge">VSD</i></span>
+              </div>
+              <div class="kip-card2">
+                <span class="kip-card2__h">Daten aus der Simulation</span>
+                <span class="kip-card2__t">Alle Trainings- und Testszenen entstehen in Isaac Sim
+                  mit exakt bekannter Referenzlage, danach Umwandlung ins BOP-Format</span>
+                <span class="kip-badges"><i class="kip-badge kip-badge--free">100 % synthetisch</i></span>
+              </div>
+            </div>
+            <div class="kip-figs kip-figs--tight">
+              <div class="kip-fig kip-fig--hero">
+                <span class="kip-fig__val">11 mm</span>
+                <span class="kip-fig__lbl">Schwelle des 3D-Maßes, ein Zehntel des
+                  Objektdurchmessers</span>
+              </div>
+              <div class="kip-fig">
+                <span class="kip-fig__val">100</span>
+                <span class="kip-fig__lbl">Testszenen je Klasse, für jede Kombination dieselben</span>
+              </div>
+              <div class="kip-fig">
+                <span class="kip-fig__val">IC-BIN</span>
+                <span class="kip-fig__lbl">Protokoll für mehrere gleichartige Teile dicht
+                  beieinander, wie im Griff in die Kiste</span>
+              </div>
+            </div>
           </div>
         </article>
       </section>

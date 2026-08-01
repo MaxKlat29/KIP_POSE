@@ -677,3 +677,30 @@ body.pres-mode #cell-loader, body.pres-mode #status { display: none !important; 
 .kip-statement strong { color: rgb(150, 235, 180); }
 
 @media (max-width: 1100px) { .kip-slide__body--split { grid-template-columns: 1fr; } }
+
+
+/* ── Mehr Luft (Max): Blätter atmen vertikal, Karten und Listen weiter ── */
+.kip-slide {
+  padding: 34px 42px 38px;
+  min-height: min(58vh, 640px);
+  display: flex; flex-direction: column;
+}
+.kip-slide__head { padding-bottom: 16px; margin-bottom: 26px; }
+.kip-slide__body { flex: 1; }
+.kip-cards { gap: 16px; margin-bottom: 26px; }
+.kip-card2 { padding: 18px 20px; gap: 8px; }
+.kip-card2__t { line-height: 1.5; }
+.kip-bul li { margin-bottom: 15px; }
+.kip-bul--tight li { margin-bottom: 11px; }
+.kip-figs { gap: 16px; margin: 26px 0; }
+.kip-figs--tight { margin: 20px 0 0; }
+.kip-fig { padding: 18px 20px; }
+.kip-statement { margin-bottom: 26px; }
+.kip-legend-inline { margin-top: 10px; }
+
+/* Vorschau und Ladeanzeige sassen auf der Höhe des Registers: seit der
+   zweistufigen Navigation ist die Leiste zwei Zeilen hoch, die Vorschau lag
+   darüber. Beide rutschen über die Leiste. */
+.pip { bottom: 104px; }
+.pip.pip--big { bottom: 104px; }
+.kip-cell-loader { bottom: 104px; }

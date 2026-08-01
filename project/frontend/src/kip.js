@@ -321,6 +321,7 @@ const DECK = [
   { id: "mot-schwierig",  group: "motivation", label: "Warum schwierig" },
   { id: "vor-ansaetze",   group: "vorgehen",   label: "Ansätze" },
   { id: "vor-split",      group: "vorgehen",   label: "Zwei Wege" },
+  { id: "vor-bewertung",  group: "vorgehen",   label: "Bewertung" },
   { id: "rgb-idee",       group: "rgb",        label: "Idee" },
   { id: "rgb-umsetzung",  group: "rgb",        label: "Umsetzung" },
   { id: "rgb-demo",       group: "rgb",        label: "Live-Sim", demo: "sim",
