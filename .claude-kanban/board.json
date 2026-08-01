@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-01T19:33:43Z",
+  "updated": "2026-08-01T19:34:29Z",
   "columns": [
     {
       "id": "backlog",
@@ -11673,7 +11673,7 @@
       "id": "T-190",
       "title": "Seminar-Präsentation: Website als Präsi umbauen (Story-Tabs + Paper-Inhalte + Live-Demos)",
       "description": "",
-      "column": "in_progress",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-01T19:33:43Z",
+      "updated": "2026-08-01T19:34:29Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11706,6 +11706,18 @@
           "agent": "claude",
           "level": "warn",
           "msg": "Offen: assets/intro_pickplace.mp4 fehlt (June schickt Video per Mail); Inhaltswuensche von Marc/June noch nicht eingearbeitet; Deploy auf /KIP steht aus."
+        },
+        {
+          "ts": "2026-08-01T19:34:28Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-08-01T19:34:29Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "committed 1213487"
         }
       ]
     }
