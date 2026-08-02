@@ -85,26 +85,33 @@
               <div class="kip-cards kip-cards--4">
                 <div class="kip-card2">
                   <span class="kip-card2__h">Zivid L110+</span>
-                  <span class="kip-card2__t">Kamera von oben, Farbbild und Tiefenbild</span>
+                  <span class="kip-card2__t">blickt von oben auf den Montagetisch und liefert
+                    Farbbild und Tiefenbild in einer Aufnahme</span>
                 </div>
                 <div class="kip-card2">
                   <span class="kip-card2__h">Neura Lara5</span>
-                  <span class="kip-card2__t">Roboterarm mit Schunk-Greifer</span>
+                  <span class="kip-card2__t">führt mit einem Schunk-Greifer die Fügeoperation
+                    aus, sobald er weiß, wo er zufassen soll</span>
                 </div>
                 <div class="kip-card2">
-                  <span class="kip-card2__h">CAD aller Teile</span>
-                  <span class="kip-card2__t">liegt vollständig vor</span>
+                  <span class="kip-card2__h">CAD aller Bauteile</span>
+                  <span class="kip-card2__t">liegt vollständig vor, jede Geometrie ist also
+                    exakt bekannt</span>
                 </div>
                 <div class="kip-card2 kip-card2--gap">
-                  <span class="kip-card2__h">Was fehlt</span>
-                  <span class="kip-card2__t">die Brücke vom CAD zum Kamerabild</span>
+                  <span class="kip-card2__h">Was bisher fehlte</span>
+                  <span class="kip-card2__t">die Bildverarbeitung, die diese Modelle mit dem
+                    Kamerabild verbindet</span>
                 </div>
               </div>
               <ul class="kip-bul">
-                <li class="kip-bul__hi">Gesucht: je Teil Position und Drehlage, sechs
-                  Freiheitsgrade</li>
-                <li>Genau genug, damit der Greifer sicher zufasst</li>
-                <li>Ohne diese Lage keine automatisierte Fügeoperation</li>
+                <li class="kip-bul__hi">Gesucht ist für jedes Teil die vollständige Lage im
+                  Raum: drei Koordinaten für die Position und drei Winkel für die Drehung,
+                  zusammen die sechsdimensionale Lage.</li>
+                <li>Sie muss genau genug sein, dass der Greifer zufassen kann, ohne das Teil
+                  zu verfehlen oder gegen die Zelle zu fahren.</li>
+                <li>Ohne diese Information bleibt jede Fügeoperation Handarbeit, egal wie gut
+                  der Roboter selbst ist.</li>
               </ul>
               <p class="kip-slot" data-owner="Marc">Platz für Marc: Foto der echten Zelle
                 oder Taktzeit-Zahlen.</p>
@@ -124,28 +131,32 @@
               <div class="kip-cards kip-cards--2">
                 <div class="kip-card2 kip-card2--warn">
                   <span class="kip-card2__h">Glänzend und texturlos</span>
-                  <span class="kip-card2__t">kaum wiedererkennbare Bildmerkmale</span>
+                  <span class="kip-card2__t">Auf blankem Metall gibt es kaum Merkmale, die ein
+                    Verfahren zwischen zwei Aufnahmen wiedererkennen könnte.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
-                  <span class="kip-card2__h">Drehsymmetrie</span>
-                  <span class="kip-card2__t">mehrere Drehlagen passen gleich gut</span>
+                  <span class="kip-card2__h">Drehsymmetrische Teile</span>
+                  <span class="kip-card2__t">Mehrere Drehlagen erzeugen dasselbe Bild, aus einer
+                    Aufnahme sind sie grundsätzlich nicht unterscheidbar.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
-                  <span class="kip-card2__h">Der Arm verdeckt</span>
-                  <span class="kip-card2__t">optisch und im Tiefenbild</span>
+                  <span class="kip-card2__h">Der Arm steht im Bild</span>
+                  <span class="kip-card2__t">Er verdeckt Teile optisch und nimmt der
+                    Tiefenkamera zusätzlich die Sicht auf den Tisch.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
-                  <span class="kip-card2__h">Tiefe rauscht</span>
-                  <span class="kip-card2__t">auf Metall unzuverlässig</span>
+                  <span class="kip-card2__h">Reale Tiefe rauscht</span>
+                  <span class="kip-card2__t">Auf glänzendem Metall wird das Tiefenbild durch
+                    Reflexionen unzuverlässig, sein Nutzen ist nicht gesetzt.</span>
                 </div>
               </div>
               <ul class="kip-bul">
                 <li>Jede dieser vier Eigenschaften trifft eine andere Stelle der Verarbeitung:
-                  Erkennung, Drehlage, Sichtbarkeit, Tiefe</li>
-                <li>Keine davon lässt sich wegkonstruieren, die Bauteile und die Zelle sind
-                  gegeben</li>
-                <li class="kip-bul__hi">Also braucht es Verfahren, die damit umgehen, und einen
-                  Maßstab, der sie fair vergleicht</li>
+                  die Erkennung, die Drehlage, die Sichtbarkeit und die Tiefenmessung.</li>
+                <li>Keine davon lässt sich wegkonstruieren, denn die Bauteile und die Zelle
+                  sind so vorgegeben, wie sie in der Lernfabrik stehen.</li>
+                <li class="kip-bul__hi">Gesucht sind deshalb Verfahren, die mit diesen
+                  Bedingungen umgehen, und ein Maßstab, der sie fair gegeneinander stellt.</li>
               </ul>
             </div>
             <div>
@@ -168,10 +179,14 @@
           </header>
           <div class="kip-slide__body">
             <ul class="kip-bul kip-bul--tight">
-              <li>Kandidaten aus den Bestenlisten des BOP-Vergleichs gesichtet</li>
-              <li>Bedingung: offene Implementierung und verfügbare Modelle</li>
-              <li class="kip-bul__hi">Jeder im Team hat eigene Modelle trainiert und getestet,
-                die stärkste Variante blieb</li>
+              <li>Als Kandidaten kamen die Verfahren aus den Bestenlisten des BOP-Vergleichs
+                infrage, weil dort der Stand der Forschung unter einheitlichen Bedingungen
+                gemessen wird.</li>
+              <li>Aufgenommen wurde nur, was eine offene Implementierung und verfügbare Modelle
+                mitbringt, alles andere ließe sich weder nachvollziehen noch einbinden.</li>
+              <li class="kip-bul__hi">Jeder im Team hat anschließend eigene Modelle trainiert und
+                getestet; verglichen wurde erst danach, und die stärkste Variante ist in die
+                gemeinsame Lösung eingegangen.</li>
             </ul>
             <div class="kip-cards kip-cards--4">
               <div class="kip-card2 kip-card2--rgb">
@@ -241,27 +256,29 @@
               <div class="kip-vs__side kip-vs__side--rgb">
                 <span class="kip-vs__h">Farbweg <i class="kip-badge kip-badge--rgb">RGB</i></span>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Nur das Farbbild, keine Tiefe</li>
-                  <li>Je Bauteil ein eigenes Modell</li>
-                  <li>Tischebene als Randbedingung</li>
-                  <li>Unabhängig vom Infrarot-Schatten</li>
+                  <li>Nutzt allein das Farbbild und lässt die Tiefe bewusst ungenutzt.</li>
+                  <li>Braucht für jede Bauteilklasse ein eigenes, trainiertes Modell.</li>
+                  <li>Stützt sich auf die bekannte Tischebene als geometrische Zusatzbedingung.</li>
+                  <li>Arbeitet überall, auch im Infrarot-Schatten des Arms.</li>
                 </ul>
               </div>
               <div class="kip-vs__mid" aria-hidden="true">gegen</div>
               <div class="kip-vs__side kip-vs__side--depth">
                 <span class="kip-vs__h">Tiefenweg <i class="kip-badge kip-badge--depth">RGB-D</i></span>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Farbbild mit Tiefenkanal</li>
-                  <li>Kein bauteilspezifisches Training</li>
-                  <li>Maßstab kommt direkt aus der Tiefe</li>
-                  <li>Braucht verlässliche Tiefenwerte</li>
+                  <li>Nutzt Farbbild und Tiefenkanal gemeinsam.</li>
+                  <li>Kommt ohne bauteilspezifisches Training aus, ein CAD-Modell genügt.</li>
+                  <li>Erhält die metrische Größe direkt aus der Tiefe, statt sie zu erschließen.</li>
+                  <li>Setzt voraus, dass an dieser Stelle verlässliche Tiefenwerte vorliegen.</li>
                 </ul>
               </div>
             </div>
             <ul class="kip-bul kip-bul--tight">
-              <li class="kip-bul__hi">Beide Wege bewusst bis an ihre Grenze optimiert, bevor
-                verglichen wurde</li>
-              <li>Gleiche Testszenen, gleiche Kennzahl, gleiches Protokoll</li>
+              <li class="kip-bul__hi">Beide Wege wurden getrennt bis an ihre Grenze optimiert,
+                bevor überhaupt verglichen wurde; nur so lässt sich beziffern, was jeder für sich
+                leistet und unter welchen Bedingungen er versagt.</li>
+              <li>Der Vergleich läuft anschließend auf denselben Testszenen, mit derselben
+                Kennzahl und demselben Protokoll.</li>
             </ul>
           </div>
         </article>
@@ -301,20 +318,26 @@
               <div>
                 <h3 class="kip-slide__h3">Variiert wird bewusst</h3>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Lichtquellen, Materialien und Kameralage in der Simulation</li>
-                  <li>Einzelteile und Störobjekte fallen zufällig auf die Fläche</li>
-                  <li>Im Training zusätzlich Unschärfe, Rauschen, Graustufen</li>
-                <li class="kip-bul__hi">Der BOP-Standard selbst stellt über zwei Millionen
-                  synthetische Bilder bereit, die Spitzenverfahren trainieren ausschließlich
-                  darauf</li>
+                  <li>Bereits in der Simulation wechseln Lichtquellen, Materialien und die
+                    Lage der Kamera von Szene zu Szene.</li>
+                  <li>Einzelteile und Störobjekte fallen zufällig auf die Arbeitsfläche, die
+                    Anordnung entsteht also physikalisch statt per Hand.</li>
+                  <li>In den Trainingspipelines kommen Unschärfe, Rauschen und
+                    Graustufenkonvertierung dazu.</li>
+                  <li class="kip-bul__hi">Dass dieser Weg trägt, zeigt der Standard selbst: Er
+                    stellt über zwei Millionen synthetische Bilder bereit, und die vorderen
+                    Verfahren der Bestenliste trainieren ausschließlich darauf.</li>
                 </ul>
               </div>
               <div>
                 <h3 class="kip-slide__h3">Symmetrien werden mitgegeben</h3>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Anker und Ringmagnet: durchgehend drehbar um die Längsachse</li>
-                  <li>Zahnrad: siebenzählige Symmetrie</li>
-                  <li class="kip-bul__hi">Falsche Angaben würden den Drehfehler künstlich erhöhen</li>
+                  <li>Anker und Ringmagnet sind durchgehend um ihre Längsachse drehbar, jede
+                    Drehung um diese Achse führt zum selben Bild.</li>
+                  <li>Das Zahnrad trägt eine siebenzählige Symmetrie, es gibt also sieben
+                    gleichwertige Drehlagen.</li>
+                  <li>Diese Angaben gehen in den Datensatz ein und werden bei der Bewertung
+                    herausgerechnet, sonst wäre der gemessene Drehfehler künstlich zu hoch.</li>
                 </ul>
               </div>
             </div>
@@ -335,17 +358,22 @@
             <div class="kip-cards kip-cards--3">
               <div class="kip-card2 kip-card2--pick">
                 <span class="kip-card2__h">BOP-Standard</span>
-                <span class="kip-card2__t">Average Recall über mehrere Fehlermaße</span>
+<span class="kip-card2__t">Der Average Recall mittelt über mehrere Fehlermaße und
+                  gibt an, welcher Anteil der Schätzungen unter einer festgelegten Schwelle
+                  bleibt.</span>
                 <span class="kip-badges"><i class="kip-badge">AR</i><i class="kip-badge">IC-BIN-Protokoll</i></span>
               </div>
               <div class="kip-card2">
                 <span class="kip-card2__h">Symmetriebewusst</span>
-                <span class="kip-card2__t">Fehler über alle erlaubten Drehlagen minimiert</span>
+<span class="kip-card2__t">Der Fehler wird über alle erlaubten Symmetrielagen
+                  minimiert, damit eine korrekte Lage nicht als Fehler zählt, nur weil das Teil
+                  gedreht erscheint.</span>
                 <span class="kip-badges"><i class="kip-badge">MSSD</i><i class="kip-badge">MSPD</i><i class="kip-badge">VSD</i></span>
               </div>
               <div class="kip-card2">
                 <span class="kip-card2__h">Daten aus der Simulation</span>
-                <span class="kip-card2__t">Isaac Sim, Referenzlage exakt bekannt</span>
+<span class="kip-card2__t">Alle Szenen entstehen in Isaac Sim, die Referenzlage ist
+                  dadurch exakt bekannt statt von Hand vermessen.</span>
                 <span class="kip-badges"><i class="kip-badge kip-badge--free">100 % synthetisch</i></span>
               </div>
             </div>
@@ -383,24 +411,25 @@
             <div class="kip-cards kip-cards--3">
               <div class="kip-card2 kip-card2--rgb">
                 <span class="kip-card2__h">Warum ohne Tiefe</span>
-                <span class="kip-card2__t">Auf glänzendem Metall rauscht das Tiefenbild, im
-                  Infrarot-Schatten fehlt es ganz</span>
+<span class="kip-card2__t">Auf glänzendem Metall rauscht das Tiefenbild durch
+                  Reflexionen, und im Infrarot-Schatten des Arms fehlt es vollständig.</span>
               </div>
               <div class="kip-card2 kip-card2--rgb">
                 <span class="kip-card2__h">Was die Ebene gibt</span>
-                <span class="kip-card2__t">Höhe und Kippung sind festgelegt, das Teil sitzt
-                  sauber auf dem Tisch auf</span>
+<span class="kip-card2__t">Weil die Teile auf einer bekannten, ebenen Fläche
+                  ruhen, sind Höhe und Kippung festgelegt und das Teil sitzt sauber auf.</span>
               </div>
               <div class="kip-card2 kip-card2--rgb kip-card2--pick">
                 <span class="kip-card2__h">Sechs werden drei</span>
-                <span class="kip-card2__t">Zu schätzen bleiben Lage in der Ebene und Drehung
-                  um die Hochachse</span>
+<span class="kip-card2__t">Zu schätzen bleiben damit nur noch die Position in der
+                  Ebene und die Drehung um die Hochachse.</span>
               </div>
             </div>
             <ul class="kip-bul kip-bul--tight">
-              <li>Der Weg funktioniert überall auf dem Tisch, auch wo die Tiefenkamera nichts
-                liefert</li>
-              <li class="kip-bul__hi">Dafür braucht jede Bauteilklasse ihr eigenes Modell</li>
+              <li class="kip-bul__hi">Der Farbweg arbeitet damit überall auf dem Tisch, auch
+                dort, wo die Tiefenkamera nichts liefert.</li>
+              <li>Der Preis dafür ist ein eigenes Modell je Bauteilklasse, ein neues Teil
+                bedeutet also ein neues Training.</li>
             </ul>
           </div>
         </article>
@@ -423,20 +452,39 @@
             <div class="kip-slide__body--2col">
               <div>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Orientierte Boxen schmiegen sich an schräg liegende Teile, der Ausschnitt
-                    wird enger als bei achsparallelen Boxen</li>
-                  <li>Je Bauteilklasse ein eigenes GDRNPP-Modell, rein synthetisch trainiert</li>
-                  <li>GDRNPP sagt dichte Objektkoordinaten je Vordergrundpunkt vorher und
-                    löst daraus die Lage</li>
-                  <li>Ein Adapter setzt die Lage in Weltkoordinaten mit dem Tischnullpunkt um
-                    und setzt das Teil auf die Ebene auf</li>
+                  <li class="kip-bul__hi">Statt eines achsparallelen Rechtecks liefert der
+                    Detektor eine gedrehte Box; bei schräg liegenden Teilen schmiegt sie sich an
+                    die Kontur an und der Bildausschnitt wird deutlich enger.</li>
+                  <li>Für jede Bauteilklasse schätzt ein eigenes, rein synthetisch trainiertes
+                    GDRNPP-Modell die Lage aus diesem Ausschnitt.</li>
+                  <li>GDRNPP sagt dabei für jeden Vordergrundpunkt seine Koordinate auf dem
+                    Objekt vorher und löst aus diesen Zuordnungen die Lage.</li>
+                  <li>Ein Adapter rechnet das Ergebnis in Weltkoordinaten mit dem Tischnullpunkt
+                    um und setzt das Teil sauber auf die Ebene auf.</li>
                 </ul>
               </div>
               <div>
+                <svg class="kip-dia kip-obb" viewBox="0 0 320 210" role="img"
+                     aria-label="Vergleich: achsparallele gegen orientierte Box um ein schräg liegendes Teil">
+                  <g transform="translate(14,26)">
+                    <rect class="kip-obb__aabb" x="6" y="10" width="126" height="126" />
+                    <rect class="kip-obb__part" x="52" y="26" width="34" height="94" rx="9"
+                          transform="rotate(38 69 73)" />
+                    <text class="kip-dia__sub kip-obb__lbl" x="69" y="158" text-anchor="middle">achsparallel</text>
+                    <text class="kip-dia__sub kip-obb__lbl" x="69" y="176" text-anchor="middle">viel Hintergrund</text>
+                  </g>
+                  <g transform="translate(174,26)">
+                    <rect class="kip-obb__obb" x="46" y="20" width="46" height="106" rx="2"
+                          transform="rotate(38 69 73)" />
+                    <rect class="kip-obb__part" x="52" y="26" width="34" height="94" rx="9"
+                          transform="rotate(38 69 73)" />
+                    <text class="kip-dia__sub kip-obb__lbl kip-obb__lbl--ok" x="69" y="158" text-anchor="middle">orientiert</text>
+                    <text class="kip-dia__sub kip-obb__lbl kip-obb__lbl--ok" x="69" y="176" text-anchor="middle">enger Ausschnitt</text>
+                  </g>
+                </svg>
                 <figure class="kip-shot kip-shot--single">
                   <img src="./assets/img/detect.jpg" alt="Detektion mit Klassen und Konfidenzen" loading="lazy" />
-                  <figcaption>Schritt 1 im Bild: erkannte Teile mit Klasse. Die Darstellung zeigt
-                    umschließende Rechtecke, gerechnet wird mit der orientierten Box</figcaption>
+                  <figcaption>Erkennung in der Zelle: je Teil Klasse und Box</figcaption>
                 </figure>
               </div>
             </div>
@@ -490,11 +538,15 @@
               <div>
                 <h3 class="kip-slide__h3">Was den Ausschlag gibt</h3>
                 <ul class="kip-bul kip-bul--tight">
-                  <li class="kip-bul__hi">Bauteilspezifisches Training, je Klasse ein eigenes Modell</li>
-                  <li>Tischebene als harte Randbedingung, kein Schweben, kein Kippen</li>
-                  <li>Orientierte Boxen liefern engere Ausschnitte als achsparallele</li>
-                  <li>Symmetriebewusste Bewertung, sonst zählt jede erlaubte Drehlage als Fehler</li>
-                  <li class="kip-bul__warn">Preis: jedes neue Teil braucht ein eigenes Training</li>
+                  <li class="kip-bul__hi">Den Ausschlag gibt das bauteilspezifische Training:
+                    Jede Klasse bringt ihr eigenes Modell mit und muss keine fremden Geometrien
+                    mit abdecken.</li>
+                  <li>Die Tischebene wirkt als harte Randbedingung, kein Teil schwebt und keines
+                    kippt in eine physikalisch unmögliche Lage.</li>
+                  <li>Die orientierten Boxen liefern engere Ausschnitte und damit mehr nutzbare
+                    Bildfläche je Teil.</li>
+                  <li class="kip-bul__warn">Der Preis bleibt: Jedes neue Bauteil braucht ein
+                    eigenes Training, bevor der Farbweg es schätzen kann.</li>
                 </ul>
               </div>
             </div>
@@ -511,13 +563,15 @@
           </header>
           <div class="kip-slide__body">
             <ul class="kip-bul">
-              <li class="kip-bul__hi">Das Tiefenbild liefert den Maßstab direkt</li>
-              <li>Genau die Information, die der Farbweg erst erschließen muss</li>
-              <li>Beide Verfahren brauchen kein bauteilspezifisches Training</li>
-              <li>Nur CAD-Modell, Maske und Bild, kein einziges Trainingsbild</li>
-              <li class="kip-bul__hi">Auf den Bestenlisten des BOP-Vergleichs liegen die
-                genauesten Verfahren durchgängig auf der Tiefenseite</li>
-              <li>Reine Farbverfahren folgen dort mit rund 20 Prozentpunkten Abstand</li>
+              <li>Das Tiefenbild gibt für jeden Bildpunkt seinen Abstand zur Kamera an und
+                liefert damit die metrische Größe der Szene unmittelbar.</li>
+              <li>Genau diese Information muss sich der Farbweg erst aus dem Erscheinungsbild
+                erschließen.</li>
+              <li>Beide hier eingesetzten Verfahren kommen ohne bauteilspezifisches Training
+                aus, sie brauchen nur Bild, Maske und CAD-Modell.</li>
+              <li class="kip-bul__hi">Der Vorsprung ist messbar: Auf den Bestenlisten des
+                BOP-Vergleichs liegen die genauesten Verfahren durchgängig auf der Tiefenseite,
+                reine Farbverfahren folgen mit rund 20 Prozentpunkten Abstand.</li>
             </ul>
             <div class="kip-figs kip-figs--tight">
               <div class="kip-fig">
@@ -551,21 +605,25 @@
               <div>
                 <h3 class="kip-slide__h3">FoundationPose</h3>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Rendert Lagehypothesen aus dem CAD-Modell und vergleicht sie gegen das
-                    Tiefenbild</li>
-                  <li>Verfeinert iterativ, ein Bewertungsnetz wählt die beste Hypothese</li>
-                  <li>Setzt eine externe Maske voraus, hier aus der YOLO-Erkennung</li>
-                  <li class="kip-bul__warn">Rund 8 s je Bild, Lizenz nicht kommerziell</li>
+                  <li>Rendert aus dem CAD-Modell Lagehypothesen und vergleicht sie gegen das
+                    gemessene Tiefenbild.</li>
+                  <li>Verfeinert die beste Hypothese iterativ weiter, ein Bewertungsnetz
+                    entscheidet, welche gewinnt.</li>
+                  <li>Setzt eine externe Maske voraus, die hier aus der YOLO-Erkennung kommt.</li>
+                  <li class="kip-bul__warn">Braucht rund 8 Sekunden je Bild und steht unter
+                    einer nicht kommerziellen Lizenz.</li>
                 </ul>
               </div>
               <div>
                 <h3 class="kip-slide__h3">GigaPose 3D</h3>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Teilt die sechs Freiheitsgrade auf: Blickrichtung über rund 160 gerenderte
-                    Vorlagen</li>
-                  <li>Die übrigen vier aus einer einzigen Punktkorrespondenz</li>
-                  <li>Die Tiefe stützt den Maßstab und damit die Entfernung</li>
-                  <li class="kip-bul__hi">Robust gegen Segmentierungsfehler, lizenzfrei einsetzbar</li>
+                  <li>Teilt die sechs Freiheitsgrade auf: Die Blickrichtung kommt aus dem
+                    Vergleich mit rund 160 gerenderten Vorlagen.</li>
+                  <li>Die übrigen vier Freiheitsgrade gewinnt das Verfahren aus einer einzigen
+                    Punktkorrespondenz zwischen Eingabe und Vorlage.</li>
+                  <li>Die Tiefe stützt dabei den Maßstab und damit die geschätzte Entfernung.</li>
+                  <li class="kip-bul__hi">Es ist robust gegen Segmentierungsfehler und
+                    lizenzrechtlich unbedenklich, deshalb ist es die einsetzbare Tiefenvariante.</li>
                 </ul>
               </div>
             </div>
@@ -613,7 +671,8 @@
             <figure class="kip-shots">
               <div class="kip-shot kip-shot--croptop">
                 <img src="./assets/img/t175_3_good_4mm.jpg" alt="Schätzung deckt die Referenz, 3,7 mm Fehler" loading="lazy" />
-                <figcaption><strong class="kip-shot__good">3,7 mm</strong> gut, Boxen liegen übereinander</figcaption>
+<figcaption><strong class="kip-shot__good">3,7 mm</strong> gut, blaue Referenz und
+                  rote Schätzung liegen übereinander</figcaption>
               </div>
               <div class="kip-shot kip-shot--croptop">
                 <img src="./assets/img/t175_1_typical_40mm.jpg" alt="Typischer Fehlerfall, 40 mm" loading="lazy" />
@@ -624,13 +683,32 @@
                 <figcaption><strong class="kip-shot__bad">524,9 mm</strong> Ausreißer, Box weit daneben</figcaption>
               </div>
             </figure>
+            <svg class="kip-dia kip-mass" viewBox="0 0 600 138" role="img"
+                 aria-label="Schema: derselbe Versatz wirkt im dreidimensionalen Maß stark, im Projektionsmaß kaum">
+              <g transform="translate(6,0)">
+                <text class="kip-dia__sub kip-mass__cap" x="118" y="16" text-anchor="middle">Blick von der Seite</text>
+                <line class="kip-mass__tisch" x1="14" y1="96" x2="222" y2="96" />
+                <rect class="kip-mass__gt" x="60" y="76" width="60" height="18" rx="4" />
+                <rect class="kip-mass__pred" x="102" y="76" width="60" height="18" rx="4" />
+                <line class="kip-mass__delta" x1="90" y1="66" x2="132" y2="66" />
+                <text class="kip-mass__val" x="111" y="56" text-anchor="middle">40 mm</text>
+                <text class="kip-dia__sub kip-mass__note" x="118" y="120" text-anchor="middle">3D-Maß: über der 11-mm-Schwelle</text>
+              </g>
+              <line class="kip-mass__sep" x1="262" y1="14" x2="262" y2="118" />
+              <g transform="translate(286,0)">
+                <text class="kip-dia__sub kip-mass__cap" x="140" y="16" text-anchor="middle">Blick der Kamera von oben</text>
+                <rect class="kip-mass__gt" x="82" y="46" width="64" height="46" rx="4" />
+                <rect class="kip-mass__pred" x="90" y="50" width="64" height="46" rx="4" />
+                <text class="kip-dia__sub kip-mass__note kip-mass__note--ok" x="140" y="122" text-anchor="middle">Projektionsmaß: hält bei 0,97</text>
+              </g>
+            </svg>
             <ul class="kip-bul kip-bul--tight">
-              <li>Blau ist die Referenz, rot die Schätzung, jeweils als Box ins Bild projiziert</li>
-              <li class="kip-bul__hi">Die Drehung stimmt, es schwankt die Lage: deshalb bricht das
-                3D-Maß ein, während das Projektionsmaß bei 0,97 bleibt</li>
-              <li>Kein fester Versatz im Modell, die Streuung ist richtungslos</li>
-              <li class="kip-bul__warn">Damit liegt der Lagefehler über der Schwelle von 11 mm:
-                das Teil wäre erkannt und richtig gedreht, aber nicht sicher greifbar</li>
+              <li class="kip-bul__hi">Die Drehung stimmt, es schwankt allein die Position:
+                Deshalb bricht das dreidimensionale Maß ein, während das Projektionsmaß bei
+                0,97 bleibt.</li>
+              <li class="kip-bul__warn">Einen festen Versatz gibt es nicht, die Streuung ist
+                richtungslos. Für die Anwendung heißt das: Das Teil wäre erkannt und richtig
+                gedreht, mit 30 bis 48 mm Lagefehler aber nicht sicher greifbar.</li>
             </ul>
           </div>
         </article>
@@ -678,12 +756,14 @@
               </div>
             </div>
             <ul class="kip-bul kip-bul--tight">
-              <li>Alle zwölf Werte aus einem Lauf: je 100 Szenen, dieselben Bilder,
-                dasselbe Protokoll, Absturzrate null</li>
-              <li class="kip-bul__hi">Die Wahl der Lageschätzung entscheidet, die Erkennung
-                verschiebt nur wenige Punkte</li>
-              <li>Ausnahme GDRNPP: es arbeitet mit orientierten Boxen, aus einer Maske wird
-                ein umschließendes Rechteck, das kostet 2 Punkte</li>
+              <li>Alle zwölf Werte stammen aus einem einzigen Lauf über je 100 Szenen, mit
+                denselben Bildern und demselben Protokoll.</li>
+              <li class="kip-bul__hi">Die Tabelle zeigt, worauf es ankommt: Die Wahl der
+                Lageschätzung entscheidet über das Ergebnis, die Erkennung verschiebt es nur um
+                wenige Punkte.</li>
+              <li>Eine Ausnahme bildet GDRNPP, weil es mit orientierten Boxen arbeitet; wird
+                ihm eine Maske geliefert, entsteht daraus ein achsparalleles Rechteck und rund
+                zwei Punkte gehen verloren.</li>
             </ul>
           </div>
         </article>
@@ -734,9 +814,10 @@
               </div>
             </div>
             <ul class="kip-bul kip-bul--tight">
-              <li class="kip-bul__hi">Für die Zelle bleiben zwei ernsthafte Kandidaten:
-                GDRNPP im Farbweg und GigaPose 3D im Tiefenweg</li>
-              <li>FoundationPose dient als Obergrenze, an der sich beide messen lassen</li>
+              <li class="kip-bul__hi">Für den Einsatz in der Zelle bleiben damit zwei
+                ernsthafte Kandidaten: GDRNPP im Farbweg und GigaPose 3D im Tiefenweg.</li>
+              <li>FoundationPose bleibt als Obergrenze im Vergleich, an der sich beide messen
+                lassen, ohne selbst produktiv zu laufen.</li>
             </ul>
           </div>
         </article>
@@ -751,12 +832,14 @@
           <div class="kip-slide__body kip-slide__body--split">
             <div>
               <ul class="kip-bul">
-                <li>Der Tiefenweg trifft die Drehlage am besten und kommt ohne Training aus</li>
-                <li>Der trainierte Farbweg sitzt in der Position deutlich genauer</li>
-                <li>FoundationPose ist als Maßstab unschlagbar, mit 7,9 s je Bild und seiner
-                  Lizenz aber kein Produktivweg</li>
+                <li>Der Tiefenweg trifft die Drehlage am genauesten und kommt dabei ganz ohne
+                  bauteilspezifisches Training aus.</li>
+                <li>Der trainierte Farbweg sitzt in der Position deutlich genauer, 4 mm gegen
+                  30 bis 48 mm.</li>
+                <li>FoundationPose ist als Maßstab unschlagbar, mit 7,9 Sekunden je Bild und
+                  seiner Lizenz aber kein Weg für den Produktivbetrieb.</li>
                 <li class="kip-bul__hi">Und im Infrarot-Schatten des Arms hat der Tiefenweg
-                  gar keine Daten, der Farbweg arbeitet weiter</li>
+                  überhaupt keine Daten, während der Farbweg dort unbeeindruckt weiterarbeitet.</li>
               </ul>
               <div class="kip-claim">
                 <p class="kip-claim__punch">Wer überall den Tiefenweg wählt, ist im Schatten blind.</p>
@@ -812,12 +895,15 @@
           <div class="kip-slide__body kip-slide__body--2col">
             <div>
               <ul class="kip-bul">
-                <li>Kein einzelner Weg gewinnt überall</li>
-                <li>Die Tiefenkamera projiziert ein Infrarot-Muster auf den Tisch</li>
-                <li class="kip-bul__hi">Der Arm wirft einen Infrarot-Schatten, dort fehlt jede Tiefe</li>
-                <li>Der Farbweg sieht dort weiter, nur ungenauer</li>
-                <li>Also keine Konkurrenz, sondern eine Ortsfrage</li>
-                <li class="kip-bul__hi">Je Bauteil den passenden Experten wählen</li>
+                <li>Kein einzelner Weg gewinnt überall, das hat der Vergleich gezeigt.</li>
+                <li>Die Tiefenkamera arbeitet, indem sie ein Infrarot-Muster auf den Tisch
+                  projiziert und dessen Verzerrung misst.</li>
+                <li>Steht der Arm im Strahlengang, wirft er einen Infrarot-Schatten, und in
+                  diesem Bereich entsteht überhaupt kein Tiefenwert.</li>
+                <li>Der Farbweg sieht dort weiterhin, wenn auch mit größerem Fehler.</li>
+                <li class="kip-bul__hi">Die Frage ist damit keine Konkurrenz zwischen zwei
+                  Verfahren, sondern eine Ortsfrage: Für jedes Bauteil wird der Experte gewählt,
+                  der an dieser Stelle des Tisches arbeiten kann.</li>
               </ul>
               <p class="kip-tags">
                 <span class="kip-tag kip-tag--rgb">im Schatten: Farbweg</span>
@@ -864,11 +950,14 @@
             <div>
               <h3 class="kip-slide__h3">Schattenkarte, vorab berechnet</h3>
               <ul class="kip-bul kip-bul--tight">
-                <li>Strahlen von Infrarot-Quelle und Farbkamera auf das Raster der Tischfläche</li>
-                <li>Schnitt gegen das Zellenmodell, Standardverfahren Möller und Trumbore</li>
-                <li class="kip-bul__hi">Gesucht ist die Schnittmenge: keine Tiefe, aber die
-                  Farbkamera sieht noch hin</li>
-                <li>Ändert sich Kamera oder Arm, wird die Karte neu berechnet</li>
+                <li>Von der Infrarot-Quelle und von der Farbkamera werden Strahlen auf das
+                  Raster der Tischfläche geschossen.</li>
+                <li>Jeder Strahl wird gegen das Zellenmodell geschnitten, dafür genügt ein
+                  Standardverfahren der Computergrafik.</li>
+                <li class="kip-bul__hi">Entscheidend ist die Schnittmenge beider Ergebnisse:
+                  die Fläche, auf der keine Tiefe ankommt, die Farbkamera aber noch hinsieht.</li>
+                <li>Ändert sich die Stellung von Kamera oder Arm, wird die Karte neu berechnet;
+                  sie gilt immer für genau eine Konfiguration.</li>
               </ul>
               <table class="kip-mini">
                 <tbody>
@@ -884,7 +973,8 @@
                 <li>im Auswahlbereich?</li>
               </ol>
               <ul class="kip-bul kip-bul--tight">
-                <li>Die Aufstandsstelle entsteht rein geometrisch, ganz ohne Tiefe</li>
+                <li>Die vermutete Aufstandsstelle entsteht rein geometrisch aus Bildposition
+                  und Tischebene, also genau ohne die Tiefe, die im Schatten fehlt.</li>
               </ul>
             </div>
             <div>
@@ -964,16 +1054,19 @@
             <div class="kip-slide__body--2col">
               <div>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Jeder Erkennungsdienst bedient <code>/segment</code>, jeder Lagedienst
-                    <code>/pose</code>, beide mit einheitlichem Ausgabeformat</li>
-                  <li class="kip-bul__hi">Deshalb lässt sich frei kombinieren, ohne Code zu ändern</li>
+                  <li>Jeder Erkennungsdienst bedient die Schnittstelle <code>/segment</code>,
+                    jeder Lagedienst die Schnittstelle <code>/pose</code>, beide mit einem
+                    einheitlichen Ausgabeformat.</li>
+                  <li class="kip-bul__hi">Genau deshalb lassen sich Erkennung und Lageschätzung
+                    frei kombinieren, ohne eine Zeile Code zu ändern.</li>
                 </ul>
               </div>
               <div>
                 <ul class="kip-bul kip-bul--tight">
-                  <li>Die Expertenauswahl greift an genau einer Stelle: im Gateway, zwischen
-                    Erkennung und Lage</li>
-                  <li>Die GPU-Dienste laufen gemeinsam im Container-Verbund auf der Arbeitsstation</li>
+                  <li>Die Expertenauswahl greift an genau einer Stelle ein, im Gateway zwischen
+                    Erkennung und Lageschätzung.</li>
+                  <li>Die GPU-Dienste laufen gemeinsam in einem Container-Verbund auf der
+                    Arbeitsstation, der Betrachter im Browser spricht nur den zentralen Server an.</li>
                 </ul>
               </div>
             </div>
@@ -999,10 +1092,12 @@
               </div>
             </div>
             <ul class="kip-bul">
-              <li>Der Verlust im Schatten ist zurückgeholt, die Stärke außerhalb bleibt</li>
-              <li>In der Simulation wird die Tiefe im Schatten ausgeblendet, rund 76.000
-                Bildpunkte je Bild</li>
-              <li>Der Tiefenweg erlebt dieselbe Blindheit wie an der realen Anlage</li>
+              <li class="kip-bul__hi">Der Verlust im Schatten ist damit zurückgeholt, ohne die
+                Stärke des Tiefenwegs außerhalb aufzugeben.</li>
+              <li>Damit das nicht nur behauptet ist, wird die Tiefe im Schatten auch in der
+                Simulation ausgeblendet, rund 76.000 Bildpunkte je Bild.</li>
+              <li>Der Tiefenweg erlebt im Versuch also dieselbe Blindheit wie an der realen
+                Anlage.</li>
             </ul>
           </div>
         </article>
@@ -1017,18 +1112,23 @@
           </header>
           <div class="kip-slide__body">
             <ol class="kip-take">
-              <li>Farbbild und Tiefenbild sind keine Konkurrenten, sondern örtlich
-                ergänzende Experten</li>
-              <li>Der Tiefenweg trifft die Drehlage am besten und kommt ohne Training aus,
-                der trainierte Farbweg sitzt in der Position genauer</li>
-              <li>Die geometrische Auswahl rettet das Teil im Schatten von 424,6 auf 3,4 mm</li>
+              <li>Farbbild und Tiefenbild sind keine Konkurrenten, sondern örtlich ergänzende
+                Experten: Jeder ist dort stark, wo der andere schwach ist.</li>
+              <li>Der Tiefenweg trifft die Drehlage am genauesten und kommt ohne Training aus,
+                der trainierte Farbweg sitzt in der Position genauer und arbeitet überall.</li>
+              <li>Eine geometrisch gesteuerte Auswahl nutzt beide dort, wo sie stark sind, und
+                bringt das Teil im Schatten von 424,6 auf 3,4 Millimeter.</li>
             </ol>
             <h3 class="kip-slide__h3">Grenzen</h3>
             <ul class="kip-bul kip-bul--tight">
-              <li>Bewertet auf nahezu idealer Tiefe aus der Simulation</li>
-              <li>Das genaueste Verfahren ist nur als Maßstab nutzbar, nicht kommerziell</li>
-              <li>Die Schattenkarte gilt je Stellung von Kamera und Arm</li>
-              <li>Bei teilweiser Sicht bleiben echte Mehrdeutigkeiten der Drehlage</li>
+              <li>Alle Werte beruhen auf der idealen Tiefe aus der Simulation; die reale Tiefe
+                rauscht auf glänzendem Metall, diese Domänenlücke ist noch nicht vermessen.</li>
+              <li>Das genaueste Verfahren ist wegen seiner Lizenz nur als Maßstab nutzbar, nicht
+                für den Betrieb.</li>
+              <li>Die berechnete Schattenkarte gilt für eine konkrete Stellung von Kamera und
+                Arm und muss bei Änderungen neu bestimmt werden.</li>
+              <li>Bei teilweise verdeckten Teilen bleiben echte Mehrdeutigkeiten der Drehlage,
+                die kein Weg allein auflöst.</li>
             </ul>
             <p class="kip-slot" data-owner="Jerun">Platz für Jeruns eigene Fazit-Punkte.</p>
           </div>
@@ -1043,11 +1143,13 @@
           </header>
           <div class="kip-slide__body">
             <ol class="kip-take kip-take--next">
-              <li>Prüfung an realen Daten, dazu der Abgleich der berechneten mit der
-                realen Schattenfläche</li>
-              <li>Tiefenvorlagen für das Zahnrad, damit auch diese Klasse den Tiefenweg
-                nutzen kann</li>
-              <li>Übertragbarkeit: neue Bauteile und Verfahren ohne strukturelle Änderung</li>
+              <li>An erster Stelle steht die Prüfung an realen Daten: ein kleiner Datensatz mit
+                echter Tiefe, durch beide Wege gemessen, dazu der Abgleich der berechneten mit
+                der real gemessenen Schattenfläche.</li>
+              <li>Danach die Vervollständigung des Tiefenwegs, damit auch das Zahnrad außerhalb
+                des Schattens über die Tiefe geschätzt werden kann.</li>
+              <li>Schließlich die Übertragbarkeit: Der modulare Aufbau nimmt neue Bauteile und
+                neue Verfahren ohne strukturelle Änderung auf.</li>
             </ol>
             <figure class="kip-video kip-video--inline" id="slot-crash-video" hidden>
               <video controls preload="metadata">
@@ -1074,8 +1176,10 @@
               <dd>Lizenz nicht kommerziell, 8 s je Bild, und im Schatten fehlt die Tiefe.</dd>
 
               <dt>Ist die simulierte Tiefe nicht geschönt?</dt>
-              <dd>Ja, das ist die wichtigste Einschränkung. Prüfung an realen Daten steht an
-                erster Stelle.</dd>
+              <dd>Nein, gemessen wird korrekt und für alle Verfahren gleich. Offen ist allein
+                die Domänenlücke: Die simulierte Tiefe ist ideal, die reale rauscht auf
+                glänzendem Metall. Wie groß der Abstand ausfällt, zeigt erst der Test an
+                echten Aufnahmen.</dd>
 
               <dt>Warum synthetische Daten?</dt>
               <dd>Reale Aufnahmen mit exakter Referenzlage sind kaum zu bekommen. Die

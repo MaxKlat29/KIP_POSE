@@ -855,3 +855,36 @@ body.has-intro-video #slot-intro-still { display: none; }
   .kip-chain { grid-auto-flow: row; gap: 26px; }
   .kip-chain li + li::before { left: 50%; top: -20px; transform: translateX(-50%) rotate(90deg); }
 }
+
+/* ── Textbild: ganze Sätze brauchen etwas kleinere Schrift und mehr Zeilenluft ── */
+.kip-slide { font-size: clamp(17px, 1.22vw, 23px); padding: 32px 40px 36px; }
+.kip-slide__body { line-height: 1.55; }
+.kip-bul li { margin-bottom: 13px; }
+.kip-bul--tight li { margin-bottom: 10px; font-size: 0.94em; }
+.kip-card2__t { font-size: 0.6em; line-height: 1.5; }
+.kip-slide__lead, .kip-statement { line-height: 1.45; }
+
+/* Schema: achsparallele gegen orientierte Box */
+.kip-obb { max-width: min(420px, 100%); margin-bottom: 14px; }
+.kip-obb__part { fill: rgba(255,255,255,0.42); stroke: rgba(255,255,255,0.6); stroke-width: 1; }
+.kip-obb__aabb { fill: rgba(252,165,165,0.1); stroke: #fca5a5; stroke-width: 1.6; stroke-dasharray: 5 4; }
+.kip-obb__obb  { fill: rgba(52,211,153,0.14); stroke: #34d399; stroke-width: 1.8; }
+.kip-dia .kip-obb__lbl { fill: #fca5a5; }
+.kip-dia .kip-obb__lbl--ok { fill: rgb(140,230,170); }
+
+/* Schema: 3D-Maß gegen Projektionsmaß */
+.kip-mass { max-width: min(740px, 100%); margin-bottom: 18px; }
+.kip-mass__tisch { stroke: rgba(255,255,255,0.4); stroke-width: 1.6; }
+.kip-mass__gt   { fill: rgba(40,120,255,0.32); stroke: #2878ff; stroke-width: 1.6; }
+.kip-mass__pred { fill: rgba(255,45,45,0.26); stroke: #ff5d5d; stroke-width: 1.6; }
+.kip-mass__delta { stroke: var(--accent); stroke-width: 1.6; }
+.kip-dia .kip-mass__val { fill: var(--accent); font-family: var(--mono); font-size: 13px; }
+.kip-dia .kip-mass__cap { fill: #c3ccd8; }
+.kip-dia .kip-mass__note { fill: #fbcf8a; }
+.kip-dia .kip-mass__note--ok { fill: rgb(140,230,170); }
+.kip-mass__sep { stroke: rgba(255,255,255,0.16); stroke-width: 1; }
+
+/* Bildstreifen kompakter, damit Kacheln, Bilder, Schema und Text auf ein Blatt passen. */
+.kip-shots img { max-height: 26vh; object-fit: cover; }
+.kip-mass { margin: 4px auto 14px; }
+.kip-mass { max-width: min(620px, 100%); }
