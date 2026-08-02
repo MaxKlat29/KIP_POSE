@@ -52,22 +52,13 @@
           <div class="kip-slide__body">
             <p class="kip-slide__lead">Aus einem Bild von oben: welches Teil liegt wo,
               in welcher Drehlage?</p>
-            <!-- Video bleibt ausgeblendet, solange die Datei fehlt: ein leerer
-                 schwarzer Kasten auf dem Titelblatt sieht nach Fehler aus. -->
-            <figure class="kip-video" id="slot-intro-video" hidden>
-              <video id="intro-video" controls preload="metadata">
+            <figure class="kip-video" id="slot-intro-video">
+              <video id="intro-video" controls preload="metadata" playsinline>
                 <source src="./assets/intro_pickplace.mp4" type="video/mp4" />
               </video>
-              <figcaption class="kip-video__cap">Pick-and-Place in der Lernfabrik.</figcaption>
+              <figcaption class="kip-video__cap">Pick-and-Place in der Lernfabrik</figcaption>
             </figure>
-            <p class="kip-slot" data-owner="Jerun">Intro-Video: Datei als
-              <code>assets/intro_pickplace.mp4</code> ablegen, dann das <code>hidden</code>
-              an <code>#slot-intro-video</code> entfernen.</p>
-            <!-- Blickfang, solange das Intro-Video fehlt. Kommt die Datei, wird
-                 #slot-intro-video sichtbar und dieses Bild kann weg. -->
-            <figure class="kip-shot kip-shot--title" id="slot-intro-still">
-              <img src="./assets/img/detect.jpg" alt="Bauteile und Roboterarm in der Zelle" loading="lazy" />
-            </figure>
+            
             <p class="kip-slide__meta">Seminar „KI in der Produktion“ · wbk, KIT ·
               Yannic Duan, Marc Rodig, Jerun Beyer, Maximilian Klattig</p>
           </div>
@@ -1188,15 +1179,8 @@
                 darunter idealerweise eine kommerziell nutzbare Alternative zu
                 FoundationPose.</li>
             </ol>
-            <figure class="kip-video kip-video--inline" id="slot-crash-video" hidden>
-              <video controls preload="metadata">
-                <source src="./assets/crash_falsche_pose.mp4" type="video/mp4" />
-              </video>
-              <figcaption class="kip-video__cap">Was ohne genaue Lage passiert.</figcaption>
-            </figure>
-            <p class="kip-slot" data-owner="Jerun">Platz fürs Crash-Video: Datei als
-              <code>assets/crash_falsche_pose.mp4</code> ablegen, dann das
-              <code>hidden</code> an <code>#slot-crash-video</code> entfernen.</p>
+            
+            
           </div>
         </article>
       </section>
