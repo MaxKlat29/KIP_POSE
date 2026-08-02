@@ -50,8 +50,8 @@
             <span class="kip-slide__who">Marc</span>
           </header>
           <div class="kip-slide__body">
-            <p class="kip-slide__lead">Aus einem Bild von oben: welches Teil liegt wo,
-              in welcher Drehlage?</p>
+            <p class="kip-slide__lead">Damit der Roboter ein Teil greifen kann, muss er
+              wissen, welches Teil wo und in welcher Drehlage vor ihm liegt.</p>
             <figure class="kip-video" id="slot-intro-video">
               <video id="intro-video" controls preload="metadata" playsinline>
                 <source src="./assets/intro_pickplace.mp4" type="video/mp4" />
@@ -383,6 +383,10 @@
                   beieinander, wie im Griff in die Kiste</span>
               </div>
             </div>
+            <ul class="kip-bul kip-bul--tight">
+              <li class="kip-bul__hi">Damit stehen Daten und Maßstab fest. Was jetzt folgt, sind
+                die beiden Wege selbst, jeder für sich, und am Ende ihr Vergleich.</li>
+            </ul>
           </div>
         </article>
       </section>
@@ -418,8 +422,8 @@
             <ul class="kip-bul kip-bul--tight">
               <li class="kip-bul__hi">Der Farbweg arbeitet damit überall auf dem Tisch, auch
                 dort, wo die Tiefenkamera nichts liefert.</li>
-              <li>Der Preis dafür ist ein eigenes Modell je Bauteilklasse, ein neues Teil
-                bedeutet also ein neues Training.</li>
+              <li>Dafür braucht er ein Modell je Bauteilklasse, was das kostet, zeigt das
+                Ergebnis.</li>
             </ul>
           </div>
         </article>
@@ -565,6 +569,8 @@
           </header>
           <div class="kip-slide__body">
             <ul class="kip-bul">
+              <li>Genau am Preis des Farbwegs setzt der zweite Weg an: Er braucht kein
+                Training je Bauteil.</li>
               <li>Das Tiefenbild gibt für jeden Bildpunkt seinen Abstand zur Kamera an und
                 liefert damit die metrische Größe der Szene unmittelbar.</li>
               <li>Genau diese Information muss sich der Farbweg erst aus dem Erscheinungsbild
@@ -741,9 +747,10 @@
             <span class="kip-slide__who">Yannic</span>
           </header>
           <div class="kip-slide__body">
-            <p class="kip-statement">Erkennung und Lageschätzung sind getrennte Dienste.
-              Jede Erkennung lässt sich mit jeder Lageschätzung verbinden:
-              <strong>zwölf lauffähige Kombinationen</strong>, alle unter demselben Maß gemessen.</p>
+            <p class="kip-statement">Bisher standen zwei Wege im Vordergrund. Tatsächlich sind
+              Erkennung und Lageschätzung getrennte Dienste, jede Erkennung lässt sich mit jeder
+              Lageschätzung verbinden: <strong>zwölf lauffähige Kombinationen</strong>, alle unter
+              demselben Maß gemessen.</p>
             <div class="kip-matrix" role="table" aria-label="Kombinationsmatrix aus Erkennung und Lageschätzung mit AR-Werten">
               <div class="kip-matrix__row kip-matrix__row--head" role="row">
                 <span role="columnheader"></span>
