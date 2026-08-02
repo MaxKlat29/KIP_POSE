@@ -904,3 +904,17 @@ body.has-intro-video #slot-intro-still { display: none; }
 .kip-dia .kip-streu__t2 { fill: #fbcf8a; }
 .kip-dia__cap { margin: 0 0 6px; font-size: 0.58em; line-height: 1.45; color: var(--text-dim); max-width: 46ch; }
 .kip-streu { max-width: min(400px, 100%); }
+
+/* ── Rechte Spalte sauber ausrichten (Max): Vorschau und Legende stehen
+   rechtsbündig übereinander, mit gleichem Abstand zum Rand und ohne die
+   Navigationsleiste zu berühren. Vorher hing die Legende am Ende der
+   Bottombar und wanderte mit der Anzahl der Register. */
+.kip-bottombar .legend {
+  position: fixed; right: 16px; bottom: 18px; margin: 0;
+  background: rgba(16, 18, 22, 0.9); border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 10px; padding: 8px 14px; z-index: 56;
+  display: flex; gap: 18px; flex-wrap: wrap; max-width: min(38vw, 470px);
+}
+.pip { right: 16px; bottom: 74px; width: min(30vw, 400px); }
+.pip.pip--big { bottom: 74px; }
+.kip-cell-loader { right: 16px; bottom: 74px; }
