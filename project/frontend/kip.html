@@ -266,6 +266,70 @@
         </article>
       </section>
 
+      <section id="screen-vor-daten" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <h2 class="kip-slide__h">Woher die Daten kommen</h2>
+            <span class="kip-slide__who">Marc</span>
+          </header>
+          <div class="kip-slide__body">
+            <svg class="kip-dia" viewBox="0 0 920 168" role="img"
+                 aria-label="Datenpipeline vom CAD-Modell über die simulierte Zelle und den Konverter zum BOP-Datensatz">
+              <defs>
+                <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#8f9bab" />
+                </marker>
+              </defs>
+              <g class="kip-dia__box">
+                <rect x="4" y="52" width="150" height="62" rx="9" />
+                <text x="79" y="79">CAD-Modell</text>
+                <text x="79" y="98" class="kip-dia__sub">je Bauteil</text>
+              </g>
+              <line x1="158" y1="83" x2="196" y2="83" marker-end="url(#ap)" />
+              <g class="kip-dia__box kip-dia__box--accent">
+                <rect x="200" y="30" width="200" height="106" rx="9" />
+                <text x="300" y="60">Isaac Sim</text>
+                <text x="300" y="82" class="kip-dia__sub">Zelle, Kamera von oben</text>
+                <text x="300" y="101" class="kip-dia__sub">Licht, Material, Anordnung</text>
+                <text x="300" y="120" class="kip-dia__sub">zufällig variiert</text>
+              </g>
+              <line x1="404" y1="83" x2="442" y2="83" marker-end="url(#ap)" />
+              <g class="kip-dia__box">
+                <rect x="446" y="42" width="184" height="82" rx="9" />
+                <text x="538" y="70">Konverter</text>
+                <text x="538" y="90" class="kip-dia__sub">senkrechte Tiefe</text>
+                <text x="538" y="108" class="kip-dia__sub">Maße und Symmetrien</text>
+              </g>
+              <line x1="634" y1="83" x2="672" y2="83" marker-end="url(#ap)" />
+              <g class="kip-dia__box kip-dia__box--out">
+                <rect x="676" y="42" width="240" height="82" rx="9" />
+                <text x="796" y="70">BOP-Datensatz</text>
+                <text x="796" y="90" class="kip-dia__sub">Bild, Maske, Tiefe, Box</text>
+                <text x="796" y="108" class="kip-dia__sub">Referenzlage je Teil</text>
+              </g>
+            </svg>
+            <div class="kip-slide__body--2col">
+              <div>
+                <h3 class="kip-slide__h3">Variiert wird bewusst</h3>
+                <ul class="kip-bul kip-bul--tight">
+                  <li>Lichtquellen, Materialien und Kameralage in der Simulation</li>
+                  <li>Einzelteile und Störobjekte fallen zufällig auf die Fläche</li>
+                  <li>Im Training zusätzlich Unschärfe, Rauschen, Graustufen</li>
+                </ul>
+              </div>
+              <div>
+                <h3 class="kip-slide__h3">Symmetrien werden mitgegeben</h3>
+                <ul class="kip-bul kip-bul--tight">
+                  <li>Anker und Ringmagnet: durchgehend drehbar um die Längsachse</li>
+                  <li>Zahnrad: siebenzählige Symmetrie</li>
+                  <li class="kip-bul__hi">Falsche Angaben würden den Drehfehler künstlich erhöhen</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
       <section id="screen-vor-bewertung" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
         <article class="kip-slide kip-slide--wide">
           <header class="kip-slide__head">
@@ -578,6 +642,56 @@
       </section>
 
       <!-- ── Vergleich ── -->
+      <section id="screen-vgl-matrix" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <h2 class="kip-slide__h">Der Baukasten: drei mal vier</h2>
+            <span class="kip-slide__who">Yannic</span>
+          </header>
+          <div class="kip-slide__body">
+            <p class="kip-statement">Erkennung und Lageschätzung sind getrennte Dienste.
+              Jede Erkennung lässt sich mit jeder Lageschätzung verbinden:
+              <strong>zwölf lauffähige Kombinationen</strong>, alle unter demselben Maß gemessen.</p>
+            <div class="kip-matrix" role="table" aria-label="Kombinationsmatrix aus Erkennung und Lageschätzung">
+              <div class="kip-matrix__row kip-matrix__row--head" role="row">
+                <span role="columnheader"></span>
+                <span role="columnheader">GDRNPP<i>RGB</i></span>
+                <span role="columnheader">FoundationPose<i>RGB-D</i></span>
+                <span role="columnheader">GigaPose 3D<i>RGB-D</i></span>
+                <span role="columnheader">GigaPose 2D<i>RGB</i></span>
+              </div>
+              <div class="kip-matrix__row" role="row">
+                <span class="kip-matrix__rh" role="rowheader">YOLOv8-OBB<i>orientierte Box</i></span>
+                <span class="kip-matrix__c kip-matrix__c--rgb kip-matrix__c--best" role="cell">0,886<i>Farbweg</i></span>
+                <span class="kip-matrix__c kip-matrix__c--depth kip-matrix__c--best" role="cell">0,968<i>Spitze</i></span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">0,838<i>lizenzfrei</i></span>
+                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">0,636</span>
+              </div>
+              <div class="kip-matrix__row" role="row">
+                <span class="kip-matrix__rh" role="rowheader">YOLO-Seg<i>Maske</i></span>
+                <span class="kip-matrix__c kip-matrix__c--rgb kip-matrix__c--soft" role="cell">Maske → Box</span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
+                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">läuft</span>
+              </div>
+              <div class="kip-matrix__row" role="row">
+                <span class="kip-matrix__rh" role="rowheader">SAM 3<i>Text-Prompt</i></span>
+                <span class="kip-matrix__c kip-matrix__c--rgb kip-matrix__c--soft" role="cell">Maske → Box</span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
+                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">läuft</span>
+              </div>
+            </div>
+            <ul class="kip-bul kip-bul--tight">
+              <li>Gemessen wird auf denselben 100 Szenen je Klasse, mit demselben Protokoll</li>
+              <li class="kip-bul__hi">Die stärkste Kombination je Familie steht in der ersten Zeile</li>
+              <li>GDRNPP arbeitet mit orientierten Boxen; aus einer Maske wird ein
+                umschließendes Rechteck, das kostet Genauigkeit</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
       <section id="screen-vgl-zahlen" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
         <article class="kip-slide kip-slide--wide">
           <header class="kip-slide__head">
@@ -623,24 +737,60 @@
         </article>
       </section>
 
-      <section id="screen-vgl-befund" class="kip-screen kip-screen--slide" hidden>
-        <article class="kip-slide">
+      <section id="screen-vgl-befund" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
           <header class="kip-slide__head">
             <h2 class="kip-slide__h">Der Befund</h2>
             <span class="kip-slide__who">Yannic</span>
           </header>
-          <div class="kip-slide__body">
-            <ul class="kip-bul">
-              <li>Der Tiefenweg ist genauer, wo verlässliche Tiefe vorliegt</li>
-              <li>Die Tiefenkamera projiziert ein Infrarot-Muster</li>
-              <li class="kip-bul__hi">Der Arm wirft einen Infrarot-Schatten auf den Tisch,
-                dort fehlt die Tiefe</li>
-              <li>Der Farbweg arbeitet dort unbeeindruckt weiter</li>
-            </ul>
-            <div class="kip-claim">
-              <p class="kip-claim__punch">Wer überall den Tiefenweg wählt, ist im Schatten blind.</p>
-              <p class="kip-claim__punch">Wer überall den Farbweg wählt, verschenkt außerhalb
-                die genauere Tiefe.</p>
+          <div class="kip-slide__body kip-slide__body--split">
+            <div>
+              <ul class="kip-bul">
+                <li>Der Tiefenweg trifft die Drehlage am besten und kommt ohne Training aus</li>
+                <li>Der trainierte Farbweg sitzt in der Position deutlich genauer</li>
+                <li class="kip-bul__hi">Die Tiefenkamera projiziert ein Infrarot-Muster, der Arm
+                  wirft einen Schatten darauf</li>
+                <li>Im Schatten hat der Tiefenweg nichts zu rechnen, der Farbweg arbeitet weiter</li>
+              </ul>
+              <div class="kip-claim">
+                <p class="kip-claim__punch">Wer überall den Tiefenweg wählt, ist im Schatten blind.</p>
+                <p class="kip-claim__punch">Wer überall den Farbweg wählt, verschenkt außerhalb
+                  die genauere Drehlage.</p>
+              </div>
+            </div>
+            <div>
+              <svg class="kip-dia kip-radar" viewBox="0 0 340 340" role="img"
+                   aria-label="Netzdiagramm: Farbweg gegen Tiefenweg über sechs Eigenschaften">
+                <g class="kip-radar__grid">
+                  <polygon points="170.0,146.4 190.4,158.2 190.4,181.8 170.0,193.6 149.6,181.8 149.6,158.2" />
+                  <polygon points="170.0,122.8 210.9,146.4 210.9,193.6 170.0,217.2 129.1,193.6 129.1,146.4" />
+                  <polygon points="170.0,99.2 231.3,134.6 231.3,205.4 170.0,240.8 108.7,205.4 108.7,134.6" />
+                  <polygon points="170.0,75.6 251.8,122.8 251.8,217.2 170.0,264.4 88.2,217.2 88.2,122.8" />
+                  <polygon points="170.0,52.0 272.2,111.0 272.2,229.0 170.0,288.0 67.8,229.0 67.8,111.0" />
+                  <line x1="170" y1="170" x2="170.0" y2="52.0" />
+                  <line x1="170" y1="170" x2="272.2" y2="111.0" />
+                  <line x1="170" y1="170" x2="272.2" y2="229.0" />
+                  <line x1="170" y1="170" x2="170.0" y2="288.0" />
+                  <line x1="170" y1="170" x2="67.8" y2="229.0" />
+                  <line x1="170" y1="170" x2="67.8" y2="111.0" />
+                </g>
+                <polygon class="kip-radar__rgb"
+                  points="170.0,52.0 251.8,122.8 272.2,229.0 170.0,193.6 88.2,217.2 67.8,111.0" />
+                <polygon class="kip-radar__depth"
+                  points="170.0,122.8 272.2,111.0 170.0,170.0 170.0,288.0 129.1,193.6 108.7,134.6" />
+                <g class="kip-radar__lbl">
+                  <text x="170" y="34" text-anchor="middle">Lage-Genauigkeit</text>
+                  <text x="288" y="106" text-anchor="start">Drehlage</text>
+                  <text x="288" y="250" text-anchor="start">im IR-Schatten</text>
+                  <text x="170" y="322" text-anchor="middle">neues Bauteil</text>
+                  <text x="52" y="250" text-anchor="end">Geschwindigkeit</text>
+                  <text x="52" y="106" text-anchor="end">Lizenz frei</text>
+                </g>
+              </svg>
+              <p class="kip-tags kip-tags--center">
+                <span class="kip-tag kip-tag--rgb">Farbweg</span>
+                <span class="kip-tag kip-tag--depth">Tiefenweg</span>
+              </p>
             </div>
           </div>
         </article>
@@ -669,6 +819,25 @@
               </p>
             </div>
             <div>
+              <svg class="kip-dia kip-schnitt" viewBox="-6 0 500 206" role="img"
+                   aria-label="Schnitt durch die Zelle: Infrarot-Projektor, Arm, Schatten auf dem Tisch">
+                <line class="kip-schnitt__tisch" x1="20" y1="168" x2="440" y2="168" />
+                <text class="kip-dia__sub" x="30" y="190" text-anchor="start">Tischfläche</text>
+                <rect class="kip-schnitt__arm" x="150" y="60" width="46" height="108" rx="4" />
+                <text class="kip-dia__sub" x="173" y="120" text-anchor="middle">Arm</text>
+                <circle class="kip-schnitt__ir" cx="60" cy="34" r="7" />
+                <text class="kip-dia__sub kip-schnitt__ir-t" x="40" y="34" text-anchor="end">IR-Projektor</text>
+                <circle class="kip-schnitt__cam" cx="398" cy="34" r="7" />
+                <text class="kip-dia__sub kip-schnitt__cam-t" x="420" y="34" text-anchor="start">Farbkamera</text>
+                <polygon class="kip-schnitt__schatten" points="196,60 196,168 372,168" />
+                <line class="kip-schnitt__ray" x1="60" y1="34" x2="150" y2="60" />
+                <line class="kip-schnitt__ray" x1="60" y1="34" x2="196" y2="60" />
+                <line class="kip-schnitt__ray kip-schnitt__ray--ir" x1="196" y1="60" x2="372" y2="168" />
+                <line class="kip-schnitt__ray kip-schnitt__ray--cam" x1="398" y1="34" x2="232" y2="168" />
+                <rect class="kip-schnitt__wahl" x="232" y="163" width="140" height="10" rx="3" />
+                <text class="kip-dia__sub kip-schnitt__wahl-t" x="302" y="146" text-anchor="middle">Auswahlbereich</text>
+                <text class="kip-dia__sub kip-schnitt__wahl-t" x="302" y="132" text-anchor="middle">keine Tiefe, Farbe sieht hin</text>
+              </svg>
               <figure class="kip-shot kip-shot--single kip-shot--croptop">
                 <img src="./assets/img/t178_shadow_overlay.jpg" alt="Zelle mit markierter Schattenzone" loading="lazy" />
                 <figcaption><strong class="kip-shot__bad">rot</strong> keine Tiefe, Farbkamera sieht hin ·
@@ -722,6 +891,86 @@
                 <span class="kip-tag kip-tag--rgb">rot: hier greift der Farbweg</span>
                 <span class="kip-tag">grau: Sichtschatten</span>
               </p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="screen-moe-system" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
+        <article class="kip-slide kip-slide--wide">
+          <header class="kip-slide__head">
+            <h2 class="kip-slide__h">Das System dahinter</h2>
+            <span class="kip-slide__who">Maximilian</span>
+          </header>
+          <div class="kip-slide__body">
+            <svg class="kip-dia kip-arch" viewBox="-6 0 972 330" role="img"
+                 aria-label="Systemarchitektur in vier Schichten: Betrachter, Server, Vermittler, Modelldienste">
+              <defs>
+                <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#8f9bab" />
+                </marker>
+              </defs>
+              <text class="kip-arch__layer" x="8" y="30">1 Browser</text>
+              <g class="kip-dia__box kip-dia__box--out">
+                <rect x="330" y="10" width="300" height="46" rx="9" />
+                <text x="480" y="32">3D-Betrachter</text>
+                <text x="480" y="48" class="kip-dia__sub">CAD an der Lage, Schattenkarte, Routing-Farben</text>
+              </g>
+              <line x1="480" y1="58" x2="480" y2="82" marker-end="url(#a2)" />
+
+              <text class="kip-arch__layer" x="8" y="106">2 Server</text>
+              <g class="kip-dia__box">
+                <rect x="330" y="86" width="300" height="44" rx="9" />
+                <text x="480" y="108">kip_server</text>
+                <text x="480" y="124" class="kip-dia__sub">Oberfläche, Schattenkarte, Pipeline-Katalog</text>
+              </g>
+              <line x1="480" y1="132" x2="480" y2="156" marker-end="url(#a2)" />
+
+              <text class="kip-arch__layer" x="8" y="180">3 Vermittler</text>
+              <g class="kip-dia__box kip-dia__box--accent">
+                <rect x="330" y="160" width="300" height="44" rx="9" />
+                <text x="480" y="182">Gateway</text>
+                <text x="480" y="198" class="kip-dia__sub">zweistufig: Erkennung, dann Lage</text>
+              </g>
+              <line x1="400" y1="206" x2="230" y2="248" marker-end="url(#a2)" />
+              <line x1="480" y1="206" x2="480" y2="248" marker-end="url(#a2)" />
+              <line x1="560" y1="206" x2="730" y2="248" marker-end="url(#a2)" />
+
+              <text class="kip-arch__layer" x="8" y="276">4 Dienste</text>
+              <g class="kip-dia__box kip-dia__box--rgb">
+                <rect x="96" y="252" width="266" height="62" rx="9" />
+                <text x="229" y="274">Erkennung</text>
+                <text x="229" y="292" class="kip-dia__sub">YOLOv8-OBB · YOLO-Seg · SAM 3</text>
+                <text x="229" y="308" class="kip-dia__sub">Schnittstelle /segment</text>
+              </g>
+              <g class="kip-dia__box kip-dia__box--rgb">
+                <rect x="378" y="252" width="204" height="62" rx="9" />
+                <text x="480" y="274">Farbweg</text>
+                <text x="480" y="292" class="kip-dia__sub">GDRNPP</text>
+                <text x="480" y="308" class="kip-dia__sub">Schnittstelle /pose</text>
+              </g>
+              <g class="kip-dia__box kip-dia__box--depth">
+                <rect x="598" y="252" width="266" height="62" rx="9" />
+                <text x="731" y="274">Tiefenweg</text>
+                <text x="731" y="292" class="kip-dia__sub">FoundationPose · GigaPose</text>
+                <text x="731" y="308" class="kip-dia__sub">Schnittstelle /pose</text>
+              </g>
+            </svg>
+            <div class="kip-slide__body--2col">
+              <div>
+                <ul class="kip-bul kip-bul--tight">
+                  <li>Jeder Erkennungsdienst bedient <code>/segment</code>, jeder Lagedienst
+                    <code>/pose</code>, beide mit einheitlichem Ausgabeformat</li>
+                  <li class="kip-bul__hi">Deshalb lässt sich frei kombinieren, ohne Code zu ändern</li>
+                </ul>
+              </div>
+              <div>
+                <ul class="kip-bul kip-bul--tight">
+                  <li>Die Expertenauswahl greift an genau einer Stelle: im Gateway, zwischen
+                    Erkennung und Lage</li>
+                  <li>Die GPU-Dienste laufen gemeinsam im Container-Verbund auf der Arbeitsstation</li>
+                </ul>
+              </div>
             </div>
           </div>
         </article>
