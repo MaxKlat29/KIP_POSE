@@ -756,7 +756,11 @@ async function inferLiveSim() {
       .join(" · ") || "keine sichtbaren Teile";
     simStat.className = "kip-scene";
     simStat.innerHTML =
-      `<span class="kip-scene__seed">Seed ${final.seed}</span> · ${final.n_obj} Teile gespawnt` +
+      // n_obj ist die ANGEFORDERTE Zahl; nach Physik-Settle und den Szenenfiltern
+      // stehen oft weniger Teile auf dem Tisch. Angezeigt wird deshalb, was die
+      // Szene tatsaechlich enthaelt (n_gt), sonst widerspricht die Zeile dem Bild.
+      `<span class="kip-scene__seed">Seed ${final.seed}</span> · ` +
+      `${final.n_gt ?? final.n_obj} Teile in der Szene` +
       `<br>im Bild: <span class="kip-scene__parts">${breakdown}</span>`;
   } catch (e) {
     simBar.hide();
