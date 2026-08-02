@@ -640,7 +640,7 @@
             <p class="kip-statement">Erkennung und Lageschätzung sind getrennte Dienste.
               Jede Erkennung lässt sich mit jeder Lageschätzung verbinden:
               <strong>zwölf lauffähige Kombinationen</strong>, alle unter demselben Maß gemessen.</p>
-            <div class="kip-matrix" role="table" aria-label="Kombinationsmatrix aus Erkennung und Lageschätzung">
+            <div class="kip-matrix" role="table" aria-label="Kombinationsmatrix aus Erkennung und Lageschätzung mit AR-Werten">
               <div class="kip-matrix__row kip-matrix__row--head" role="row">
                 <span role="columnheader"></span>
                 <span role="columnheader">GDRNPP<i>RGB</i></span>
@@ -657,24 +657,26 @@
               </div>
               <div class="kip-matrix__row" role="row">
                 <span class="kip-matrix__rh" role="rowheader">YOLO-Seg<i>Maske</i></span>
-                <span class="kip-matrix__c kip-matrix__c--rgb kip-matrix__c--soft" role="cell">Maske → Box</span>
-                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
-                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
-                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">läuft</span>
+                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">0,863<i>Maske → Box</i></span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">0,968</span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">0,838</span>
+                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">0,636</span>
               </div>
               <div class="kip-matrix__row" role="row">
                 <span class="kip-matrix__rh" role="rowheader">SAM 3<i>Text-Prompt</i></span>
-                <span class="kip-matrix__c kip-matrix__c--rgb kip-matrix__c--soft" role="cell">Maske → Box</span>
-                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
-                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">läuft</span>
-                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">läuft</span>
+                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">0,880<i>Maske → Box</i></span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">0,964</span>
+                <span class="kip-matrix__c kip-matrix__c--depth" role="cell">0,829</span>
+                <span class="kip-matrix__c kip-matrix__c--rgb" role="cell">0,650</span>
               </div>
             </div>
             <ul class="kip-bul kip-bul--tight">
-              <li>Gemessen wird auf denselben 100 Szenen je Klasse, mit demselben Protokoll</li>
-              <li class="kip-bul__hi">Die stärkste Kombination je Familie steht in der ersten Zeile</li>
-              <li>GDRNPP arbeitet mit orientierten Boxen; aus einer Maske wird ein
-                umschließendes Rechteck, das kostet Genauigkeit</li>
+              <li>Alle zwölf Werte aus einem Lauf: je 100 Szenen, dieselben Bilder,
+                dasselbe Protokoll, Absturzrate null</li>
+              <li class="kip-bul__hi">Die Wahl der Lageschätzung entscheidet, die Erkennung
+                verschiebt nur wenige Punkte</li>
+              <li>Ausnahme GDRNPP: es arbeitet mit orientierten Boxen, aus einer Maske wird
+                ein umschließendes Rechteck, das kostet 2 Punkte</li>
             </ul>
           </div>
         </article>
@@ -867,7 +869,6 @@
               </ol>
               <ul class="kip-bul kip-bul--tight">
                 <li>Die Aufstandsstelle entsteht rein geometrisch, ganz ohne Tiefe</li>
-                <li>Zusätzlich fähigkeitsbasiert: das Zahnrad läuft immer über den Farbweg</li>
               </ul>
             </div>
             <div>

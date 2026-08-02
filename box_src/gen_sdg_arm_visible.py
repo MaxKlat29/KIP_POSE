@@ -99,8 +99,9 @@ def parse_args():
     # T-182: keep-out — no part spawns within --arm-clear (m, XY radius) of the arm
     # foundation, so dropped parts can't clip into the static arm base. The center is
     # auto-derived from the arm prim in the scene; --arm-base x,y overrides it.
-    # Default 0.13 = LARA5 pedestal (~0.08 m radius) + 0.05 m requested clearance.
-    p.add_argument("--arm-clear", type=float, default=0.13,
+    # Default 0.18 = LARA5 pedestal (~0.08 m radius) + halbe Teilelaenge (~0.05 m)
+    # + 0.05 m Puffer. Der Wert gilt fuer die ABWURF- UND die Endposition.
+    p.add_argument("--arm-clear", type=float, default=0.18,
                    help="XY keep-out radius (m) around the arm foundation; 0 disables")
     p.add_argument("--arm-base", default="",
                    help="override arm-foundation center 'x,y' (m); empty = derive from scene")
@@ -574,6 +575,33 @@ def main():
             # |z-component| > 0.5: body-Y points more "up" than horizontal
             # → Teil steht/lehnt aufrecht (= instabil bei rotationssym. Teilen).
             return abs(by_world_z) > 0.5
+
+        def _in_arm_keepout(prim_path):
+            """True, wenn das Teil NACH dem Settle im Sperrkreis um die Armbasis
+            liegt. Der Abwurf-Test greift nur fuer die Startposition; beim Fallen
+            rollen und rutschen die Teile und landen sonst am Sockel (T-190)."""
+            if arm_base_xy is None or ARM_CLEAR_R <= 0:
+                return False
+            prim = stage.GetPrimAtPath(prim_path)
+            if not prim.IsValid():
+                return False
+            try:
+                t = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
+                    Usd.TimeCode.Default()).ExtractTranslation()
+            except Exception:
+                return False
+            dx = float(t[0]) - arm_base_xy[0]; dy = float(t[1]) - arm_base_xy[1]
+            return dx * dx + dy * dy < ARM_CLEAR_R * ARM_CLEAR_R
+
+        in_keepout = [pp for pp in path2label if _in_arm_keepout(pp)]
+        for pp in in_keepout:
+            try:
+                stage.RemovePrim(pp)
+            except Exception:
+                pass
+            path2label.pop(pp, None)
+        if in_keepout:
+            log(f"  [keep-out] {len(in_keepout)} Teil(e) am Armsockel entfernt")
 
         unstable = [pp for pp, lbl in path2label.items() if _is_upright_unstable(pp, lbl)]
         for pp in unstable:

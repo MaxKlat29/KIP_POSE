@@ -442,6 +442,11 @@ function showDemo(which) {
       + '<span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>';
   }
   const pip = document.getElementById("pip");
+  const pipImg = document.getElementById("pip__img");
+  // Ein Vortragsblatt versteckt die Vorschau. Kommt man zurueck auf eine
+  // Live-Ansicht und es liegt noch ein Bild vor, gehoert es wieder hin
+  // (frueher blieb es beim Tab-Wechsel einfach stehen).
+  if ((which === "sim" || which === "real") && pipImg?.src) pip.hidden = false;
   hideInferredWith("sim"); hideInferredWith("real");   // stale "Inferiert mit" weg
   if (which === "real") {
     viewer.setParts([]);                // Real ohne Foto: nur Zelle, keine Geister
