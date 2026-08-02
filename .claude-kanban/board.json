@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-02T09:33:13Z",
+  "updated": "2026-08-02T10:12:23Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-02T09:33:13Z",
+      "updated": "2026-08-02T10:12:23Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11766,6 +11766,12 @@
           "agent": "claude",
           "level": "success",
           "msg": "Textdurchgang: vgl-zahlen zu Einsetzbarkeits-Folie umgebaut (Laufzeit+Lizenz), WIP-Tuningnotizen raus, doppelte Schatten-Erklaerung und Architektur-Satz entfernt, BOP-Bestenlisten-Kontext + synthetische-Daten-Legitimation + SAM3-Grenze ergaenzt, Laufzeiten aus run-20260610 eingepflegt."
+        },
+        {
+          "ts": "2026-08-02T10:12:23Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Textumbau: ganze Saetze mit Kontext statt Halbsaetze, Schrift 17-23px, Hervorhebungsschema (1 Kernsatz je Blatt), 2 neue Schemata (OBB vs AABB, 3D-Mass vs Projektionsmass), Domaenenluecken-Formulierung statt 'geschoent'."
         }
       ]
     }
