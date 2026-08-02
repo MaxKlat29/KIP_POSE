@@ -839,8 +839,15 @@ document.getElementById("moe-show-cone").addEventListener("change", (e) => {
   moeOverlay.setConeVisible(e.target.checked);
 });
 
-// Offen-Notizen nur auf ausdrueckliche Anforderung (?slots), nie im Vortrag.
-if (location.search.includes("slots")) document.body.classList.add("slots-sichtbar");
+// Offen-Notizen sind beim Bauen sichtbar. Fuer den Vortrag blendet Taste "n"
+// sie aus, ?clean in der URL startet direkt ohne sie.
+if (location.search.includes("clean")) document.body.classList.add("notizen-aus");
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "n" && e.key !== "N") return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
+  document.body.classList.toggle("notizen-aus");
+});
 // Einstieg: Titelblatt, oder direkt die per #hash verlinkte Seite.
 showPage(location.hash.slice(1) || DECK[0].id);
 

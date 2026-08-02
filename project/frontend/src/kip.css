@@ -711,16 +711,17 @@ body.pres-mode #cell-loader, body.pres-mode #status { display: none !important; 
 /* P0: Interne Offen-Notizen gehoeren nicht auf die Wand. Sie tragen Dateipfade
    und Selektoren; im Vortrag sind sie unsichtbar. Mit ?slots in der URL kommen
    sie zurueck, damit das Team sieht, wo noch etwas fehlt. */
-.kip-slot { display: none; }
-body.slots-sichtbar .kip-slot { display: block; }
+.kip-slot { display: block; }
+body.notizen-aus .kip-slot { display: none; }
 
 /* P1: Die Karte nutzte 58 % der Bildhoehe, alles war am Beamer unnoetig klein.
    Jetzt fuellt sie die Flaeche, und der Grundschriftgrad steigt entsprechend. */
-.kip-screen--slide { top: 56px; bottom: 94px; align-items: stretch; padding: 4px 2px 8px; }
+.kip-screen--slide { top: 56px; bottom: 94px; align-items: flex-start; padding: 4px 2px 8px; }
 .kip-slide {
-  margin: 0 auto; min-height: 0; height: 100%;
+  margin: auto; height: auto;
+  min-height: min(46vh, 470px); max-height: 100%;
   font-size: clamp(19px, 1.42vw, 26px);
-  padding: 30px 40px 34px;
+  padding: 34px 42px 38px;
   overflow-y: auto;
 }
 .kip-slide__h { font-size: clamp(27px, 2.15vw, 40px); }
