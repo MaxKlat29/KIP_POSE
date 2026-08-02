@@ -335,7 +335,7 @@ const DECK = [
   { id: "rgbd-ergebnis",  group: "rgbd",       label: "Ergebnis" },
   { id: "vgl-demo",       group: "vergleich",  label: "Live-Eval", demo: "batch" },
   { id: "vgl-matrix",     group: "vergleich",  label: "Baukasten" },
-  { id: "vgl-zahlen",     group: "vergleich",  label: "Zahlen" },
+  { id: "vgl-zahlen",     group: "vergleich",  label: "Einsetzbar" },
   { id: "vgl-befund",     group: "vergleich",  label: "Befund" },
   { id: "moe-idee",       group: "moe",        label: "Idee" },
   { id: "moe-umsetzung",  group: "moe",        label: "Umsetzung" },
