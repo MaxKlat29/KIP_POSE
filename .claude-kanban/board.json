@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-02T09:24:38Z",
+  "updated": "2026-08-02T09:33:13Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-02T09:24:38Z",
+      "updated": "2026-08-02T09:33:13Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11760,6 +11760,12 @@
           "agent": "claude",
           "level": "success",
           "msg": "Keepout am Armsockel: Post-Settle-Filter + Radius 0.13->0.18 m, SDG auf Box deployt, Worker neu gestartet, zwei Live-Szenen verifiziert (kein Teil mehr am Sockel). Isaac-Worker enabled + active, kommt mit der Box hoch. Matrix mit 12 echten AR-Werten aus run-20260610T102118Z. PiP kommt nach Blattwechsel zurueck."
+        },
+        {
+          "ts": "2026-08-02T09:33:13Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Textdurchgang: vgl-zahlen zu Einsetzbarkeits-Folie umgebaut (Laufzeit+Lizenz), WIP-Tuningnotizen raus, doppelte Schatten-Erklaerung und Architektur-Satz entfernt, BOP-Bestenlisten-Kontext + synthetische-Daten-Legitimation + SAM3-Grenze ergaenzt, Laufzeiten aus run-20260610 eingepflegt."
         }
       ]
     }
