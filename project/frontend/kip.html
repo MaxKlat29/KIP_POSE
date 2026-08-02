@@ -273,41 +273,29 @@
             <span class="kip-slide__who">Marc</span>
           </header>
           <div class="kip-slide__body">
-            <svg class="kip-dia" viewBox="0 0 920 168" role="img"
-                 aria-label="Datenpipeline vom CAD-Modell über die simulierte Zelle und den Konverter zum BOP-Datensatz">
-              <defs>
-                <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-                  <path d="M0,0 L10,5 L0,10 z" fill="#8f9bab" />
-                </marker>
-              </defs>
-              <g class="kip-dia__box">
-                <rect x="4" y="52" width="150" height="62" rx="9" />
-                <text x="79" y="79">CAD-Modell</text>
-                <text x="79" y="98" class="kip-dia__sub">je Bauteil</text>
-              </g>
-              <line x1="158" y1="83" x2="196" y2="83" marker-end="url(#ap)" />
-              <g class="kip-dia__box kip-dia__box--accent">
-                <rect x="200" y="30" width="200" height="106" rx="9" />
-                <text x="300" y="60">Isaac Sim</text>
-                <text x="300" y="82" class="kip-dia__sub">Zelle, Kamera von oben</text>
-                <text x="300" y="101" class="kip-dia__sub">Licht, Material, Anordnung</text>
-                <text x="300" y="120" class="kip-dia__sub">zufällig variiert</text>
-              </g>
-              <line x1="404" y1="83" x2="442" y2="83" marker-end="url(#ap)" />
-              <g class="kip-dia__box">
-                <rect x="446" y="42" width="184" height="82" rx="9" />
-                <text x="538" y="70">Konverter</text>
-                <text x="538" y="90" class="kip-dia__sub">senkrechte Tiefe</text>
-                <text x="538" y="108" class="kip-dia__sub">Maße und Symmetrien</text>
-              </g>
-              <line x1="634" y1="83" x2="672" y2="83" marker-end="url(#ap)" />
-              <g class="kip-dia__box kip-dia__box--out">
-                <rect x="676" y="42" width="240" height="82" rx="9" />
-                <text x="796" y="70">BOP-Datensatz</text>
-                <text x="796" y="90" class="kip-dia__sub">Bild, Maske, Tiefe, Box</text>
-                <text x="796" y="108" class="kip-dia__sub">Referenzlage je Teil</text>
-              </g>
-            </svg>
+            <!-- Kette als HTML statt SVG: SVG-Text bricht nicht um und lief bei
+                 groesserer Schrift aus den Kaesten. -->
+            <ol class="kip-chain">
+              <li>
+                <span class="kip-chain__h">CAD-Modell</span>
+                <span class="kip-chain__t">je Bauteil</span>
+              </li>
+              <li class="kip-chain--accent">
+                <span class="kip-chain__h">Isaac Sim</span>
+                <span class="kip-chain__t">Zelle, Kamera von oben</span>
+                <span class="kip-chain__t">Licht, Material, Anordnung zufällig variiert</span>
+              </li>
+              <li>
+                <span class="kip-chain__h">Konverter</span>
+                <span class="kip-chain__t">senkrechte Tiefe</span>
+                <span class="kip-chain__t">Maße und Symmetrien</span>
+              </li>
+              <li class="kip-chain--out">
+                <span class="kip-chain__h">BOP-Datensatz</span>
+                <span class="kip-chain__t">Bild, Maske, Tiefe, Box</span>
+                <span class="kip-chain__t">Referenzlage je Teil</span>
+              </li>
+            </ol>
             <div class="kip-slide__body--2col">
               <div>
                 <h3 class="kip-slide__h3">Variiert wird bewusst</h3>
@@ -914,7 +902,7 @@
               <g class="kip-dia__box kip-dia__box--out">
                 <rect x="330" y="10" width="300" height="46" rx="9" />
                 <text x="480" y="32">3D-Betrachter</text>
-                <text x="480" y="48" class="kip-dia__sub">CAD an der Lage, Schattenkarte, Routing-Farben</text>
+                <text x="480" y="48" class="kip-dia__sub">CAD an der Lage, Routing-Farben</text>
               </g>
               <line x1="480" y1="58" x2="480" y2="82" marker-end="url(#a2)" />
 
@@ -922,7 +910,7 @@
               <g class="kip-dia__box">
                 <rect x="330" y="86" width="300" height="44" rx="9" />
                 <text x="480" y="108">kip_server</text>
-                <text x="480" y="124" class="kip-dia__sub">Oberfläche, Schattenkarte, Pipeline-Katalog</text>
+                <text x="480" y="124" class="kip-dia__sub">Oberfläche, Schattenkarte, Katalog</text>
               </g>
               <line x1="480" y1="132" x2="480" y2="156" marker-end="url(#a2)" />
 

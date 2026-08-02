@@ -830,3 +830,28 @@ body.has-intro-video #slot-intro-still { display: none; }
 @media (max-width: 1100px) {
   .kip-matrix__row { grid-template-columns: 1fr 1fr; }
 }
+
+/* Prozesskette in HTML: waechst mit der Schriftgroesse, bricht um und laeuft
+   nie aus den Kaesten (im Gegensatz zu SVG-Text). */
+.kip-chain {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  gap: 30px; margin: 0 0 26px; padding: 0; list-style: none; align-items: stretch;
+}
+.kip-chain li {
+  position: relative; display: flex; flex-direction: column; gap: 5px;
+  padding: 16px 18px; border-radius: 11px;
+  background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.16);
+}
+.kip-chain li + li::before {
+  content: "›"; position: absolute; left: -22px; top: 50%; transform: translateY(-50%);
+  color: #8f9bab; font-size: 1.5em; line-height: 1;
+}
+.kip-chain--accent { background: rgba(52,211,153,0.11) !important; border-color: rgba(52,211,153,0.42) !important; }
+.kip-chain--out { background: rgba(255,255,255,0.1) !important; border-color: rgba(255,255,255,0.28) !important; }
+.kip-chain__h { font-size: 0.8em; font-weight: 700; color: var(--text); line-height: 1.2; }
+.kip-chain__t { font-size: 0.62em; line-height: 1.4; color: var(--text-dim); }
+
+@media (max-width: 1100px) {
+  .kip-chain { grid-auto-flow: row; gap: 26px; }
+  .kip-chain li + li::before { left: 50%; top: -20px; transform: translateX(-50%) rotate(90deg); }
+}
