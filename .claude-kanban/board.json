@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-02T12:42:09Z",
+  "updated": "2026-08-02T13:30:24Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-02T12:42:09Z",
+      "updated": "2026-08-02T13:30:24Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11808,6 +11808,12 @@
           "agent": "claude",
           "level": "success",
           "msg": "Intro-Video live (1.5 MB, ohne Ton), Crash-Slot entfernt, PDF aktualisiert."
+        },
+        {
+          "ts": "2026-08-02T13:30:24Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Box heruntergefahren (Dienste gestoppt, shutdown). Edge liefert 502 wie erwartet. Zum Wecken: wakepc-Alias (WoL ueber Raspberry-Pi-Relay), Stack + Isaac-Worker kommen automatisch hoch."
         }
       ]
     }
