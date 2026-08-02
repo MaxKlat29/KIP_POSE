@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-02T10:50:38Z",
+  "updated": "2026-08-02T11:12:41Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-02T10:50:38Z",
+      "updated": "2026-08-02T11:12:41Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11778,6 +11778,18 @@
           "agent": "claude",
           "level": "info",
           "msg": "Rechte Spalte ausgerichtet: PiP + Legende rechtsbuendig uebereinander. Live-Vorschau zeigt echte OBB (Server-Endpunkt live_boxes). Ergebnisfolie durch 2 Schemata ersetzt."
+        },
+        {
+          "ts": "2026-08-02T10:53:55Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Fehleranalyse Eval-Lauf (278 Instanzen, Pipeline A): Anker_Kurz Median 3.6mm/18.2% ueber Schwelle, Anker_Lang 3.1mm/18.3%. Ortsraster: Zelle x0..150/y150..300 auffaellig (60% ueber Schwelle, n=10), x-300..-150/y-300..-150 mit 30% (n=33). Ausreisser >600mm sind Zuordnungsartefakte der Nearest-Neighbour-Auswertung, nicht zwingend Modellfehler."
+        },
+        {
+          "ts": "2026-08-02T11:12:41Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Demo-Spawnbereich eingezogen: --spawn-x 0.117,0.723 --spawn-y 0.102,0.477 (6cm Randabstand zur Tischkante) + --arm-clear 0.25 (Sperrkreis um Armbasis) im kip-isaac-worker.service. Backup .bak-T190 liegt daneben. Worker laeuft, Testszene verifiziert: keine Teile mehr an Kante oder Armfuss."
         }
       ]
     }
