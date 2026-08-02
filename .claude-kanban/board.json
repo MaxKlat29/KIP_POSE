@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-01T21:48:44Z",
+  "updated": "2026-08-02T09:24:38Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-01T21:48:44Z",
+      "updated": "2026-08-02T09:24:38Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11754,6 +11754,12 @@
           "agent": "claude",
           "level": "success",
           "msg": "Adversarialer Optik-Review durch (17 Agenten, 105 Rohbefunde, 6 bestaetigt). P0-P3 umgesetzt und deployed: Offen-Boxen versteckt (?slots holt sie zurueck), Debug-Overlays aus Bildern gecroppt, Karte auf volle Hoehe + groessere Schrift, Fazit-Widerspruch und 11-mm-Spannung geklaert, AR ins Backup, eine Kartenbreite, Hover neutralisiert."
+        },
+        {
+          "ts": "2026-08-02T09:24:38Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Keepout am Armsockel: Post-Settle-Filter + Radius 0.13->0.18 m, SDG auf Box deployt, Worker neu gestartet, zwei Live-Szenen verifiziert (kein Teil mehr am Sockel). Isaac-Worker enabled + active, kommt mit der Box hoch. Matrix mit 12 echten AR-Werten aus run-20260610T102118Z. PiP kommt nach Blattwechsel zurueck."
         }
       ]
     }
