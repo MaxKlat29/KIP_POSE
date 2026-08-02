@@ -464,7 +464,7 @@
                 </ul>
               </div>
               <div>
-                <svg class="kip-dia kip-obb" viewBox="0 0 320 210" role="img"
+                <svg class="kip-dia kip-obb" viewBox="0 0 344 210" role="img"
                      aria-label="Vergleich: achsparallele gegen orientierte Box um ein schräg liegendes Teil">
                   <g transform="translate(14,26)">
                     <rect class="kip-obb__aabb" x="6" y="10" width="126" height="126" />
@@ -479,12 +479,24 @@
                     <rect class="kip-obb__part" x="52" y="26" width="34" height="94" rx="9"
                           transform="rotate(38 69 73)" />
                     <text class="kip-dia__sub kip-obb__lbl kip-obb__lbl--ok" x="69" y="158" text-anchor="middle">orientiert</text>
-                    <text class="kip-dia__sub kip-obb__lbl kip-obb__lbl--ok" x="69" y="176" text-anchor="middle">enger Ausschnitt</text>
+                    <text class="kip-dia__sub kip-obb__lbl kip-obb__lbl--ok" x="64" y="176" text-anchor="middle">enger Ausschnitt</text>
                   </g>
                 </svg>
                 <figure class="kip-shot kip-shot--single">
-                  <img src="./assets/img/detect.jpg" alt="Detektion mit Klassen und Konfidenzen" loading="lazy" />
-                  <figcaption>Erkennung in der Zelle: je Teil Klasse und Box</figcaption>
+                  <svg class="kip-obbimg" viewBox="0 0 1280 720" role="img"
+                       aria-label="Szene mit den orientierten Boxen des Detektors">
+                    <image href="./assets/img/obb_scene.jpg" x="0" y="0" width="1280" height="720" />
+                    <polygon class="kip-obbimg__box" points="1036,374 1027,530 998,528 1007,372" />
+                    <polygon class="kip-obbimg__box" points="371,252 316,222 346,169 400,199" />
+                    <polygon class="kip-obbimg__box" points="943,614 892,636 872,592 924,570" />
+                    <polygon class="kip-obbimg__box" points="333,462 341,561 311,563 303,465" />
+                    <text class="kip-obbimg__lbl" x="998" y="362">Anker lang</text>
+                    <text class="kip-obbimg__lbl" x="316" y="159">Zahnrad</text>
+                    <text class="kip-obbimg__lbl" x="872" y="560">Zahnrad</text>
+                    <text class="kip-obbimg__lbl" x="303" y="452">Anker lang</text>
+                  </svg>
+                  <figcaption>Echte Ausgabe des Detektors: die Boxen sind gedreht und liegen
+                    an der Kontur der Teile</figcaption>
                 </figure>
               </div>
             </div>
@@ -668,40 +680,57 @@
                 <span class="kip-fig__lbl">zufälliges Schwanken der Lage, Schwelle 11 mm</span>
               </div>
             </div>
-            <figure class="kip-shots">
-              <div class="kip-shot kip-shot--croptop">
-                <img src="./assets/img/t175_3_good_4mm.jpg" alt="Schätzung deckt die Referenz, 3,7 mm Fehler" loading="lazy" />
-<figcaption><strong class="kip-shot__good">3,7 mm</strong> gut, blaue Referenz und
-                  rote Schätzung liegen übereinander</figcaption>
+            <div class="kip-slide__body--split">
+              <div>
+                <svg class="kip-dia kip-mass" viewBox="0 0 600 138" role="img"
+                     aria-label="Derselbe Versatz wirkt im dreidimensionalen Maß stark, im Projektionsmaß kaum">
+                  <g transform="translate(6,0)">
+                    <text class="kip-dia__sub kip-mass__cap" x="118" y="16" text-anchor="middle">Blick von der Seite</text>
+                    <line class="kip-mass__tisch" x1="14" y1="96" x2="222" y2="96" />
+                    <rect class="kip-mass__gt" x="60" y="76" width="60" height="18" rx="4" />
+                    <rect class="kip-mass__pred" x="102" y="76" width="60" height="18" rx="4" />
+                    <line class="kip-mass__delta" x1="90" y1="66" x2="132" y2="66" />
+                    <text class="kip-mass__val" x="111" y="56" text-anchor="middle">40 mm</text>
+                    <text class="kip-dia__sub kip-mass__note" x="118" y="120" text-anchor="middle">3D-Maß: über der 11-mm-Schwelle</text>
+                  </g>
+                  <line class="kip-mass__sep" x1="262" y1="14" x2="262" y2="118" />
+                  <g transform="translate(286,0)">
+                    <text class="kip-dia__sub kip-mass__cap" x="140" y="16" text-anchor="middle">Blick der Kamera von oben</text>
+                    <rect class="kip-mass__gt" x="82" y="46" width="64" height="46" rx="4" />
+                    <rect class="kip-mass__pred" x="90" y="50" width="64" height="46" rx="4" />
+                    <text class="kip-dia__sub kip-mass__note kip-mass__note--ok" x="140" y="122" text-anchor="middle">Projektionsmaß: hält bei 0,97</text>
+                  </g>
+                </svg>
+                <p class="kip-dia__cap">Derselbe Fehler, zwei Maße: Von der Seite trennt er die
+                  Boxen deutlich, aus der Kamera überlagern sie sich fast.</p>
               </div>
-              <div class="kip-shot kip-shot--croptop">
-                <img src="./assets/img/t175_1_typical_40mm.jpg" alt="Typischer Fehlerfall, 40 mm" loading="lazy" />
-                <figcaption><strong class="kip-shot__warn">40,2 mm</strong> typisch, sichtbarer Versatz</figcaption>
+              <div>
+                <svg class="kip-dia kip-streu" viewBox="0 0 300 200" role="img"
+                     aria-label="Die Schätzungen streuen richtungslos um die Referenzlage, außerhalb der Schwelle">
+                  <circle class="kip-streu__thr" cx="150" cy="98" r="30" />
+                  <circle class="kip-streu__ref" cx="150" cy="98" r="6" />
+                <circle class="kip-streu__p" cx="196" cy="98" r="4.5" />
+                <circle class="kip-streu__p" cx="190" cy="135" r="4.5" />
+                <circle class="kip-streu__p" cx="203" cy="134" r="4.5" />
+                <circle class="kip-streu__p" cx="160" cy="145" r="4.5" />
+                <circle class="kip-streu__p" cx="122" cy="147" r="4.5" />
+                <circle class="kip-streu__p" cx="126" cy="159" r="4.5" />
+                <circle class="kip-streu__p" cx="104" cy="119" r="4.5" />
+                <circle class="kip-streu__p" cx="93" cy="81" r="4.5" />
+                <circle class="kip-streu__p" cx="83" cy="89" r="4.5" />
+                <circle class="kip-streu__p" cx="118" cy="56" r="4.5" />
+                <circle class="kip-streu__p" cx="154" cy="37" r="4.5" />
+                <circle class="kip-streu__p" cx="146" cy="52" r="4.5" />
+                <circle class="kip-streu__p" cx="185" cy="56" r="4.5" />
+                <circle class="kip-streu__p" cx="213" cy="88" r="4.5" />
+                  <text class="kip-dia__sub kip-streu__t1" x="150" y="22" text-anchor="middle">Schwelle 11 mm</text>
+                  <text class="kip-dia__sub kip-streu__t2" x="150" y="190" text-anchor="middle">30 bis 48 mm, richtungslos</text>
+                </svg>
+                <p class="kip-dia__cap">Kein fester Versatz, keine Richtung: Eine Kalibrierung
+                  könnte diesen Fehler nicht beheben.</p>
               </div>
-              <div class="kip-shot kip-shot--croptop">
-                <img src="./assets/img/t175_2_highflip_525mm.jpg" alt="Starker Fehlerfall, 525 mm" loading="lazy" />
-                <figcaption><strong class="kip-shot__bad">524,9 mm</strong> Ausreißer, Box weit daneben</figcaption>
-              </div>
-            </figure>
-            <svg class="kip-dia kip-mass" viewBox="0 0 600 138" role="img"
-                 aria-label="Schema: derselbe Versatz wirkt im dreidimensionalen Maß stark, im Projektionsmaß kaum">
-              <g transform="translate(6,0)">
-                <text class="kip-dia__sub kip-mass__cap" x="118" y="16" text-anchor="middle">Blick von der Seite</text>
-                <line class="kip-mass__tisch" x1="14" y1="96" x2="222" y2="96" />
-                <rect class="kip-mass__gt" x="60" y="76" width="60" height="18" rx="4" />
-                <rect class="kip-mass__pred" x="102" y="76" width="60" height="18" rx="4" />
-                <line class="kip-mass__delta" x1="90" y1="66" x2="132" y2="66" />
-                <text class="kip-mass__val" x="111" y="56" text-anchor="middle">40 mm</text>
-                <text class="kip-dia__sub kip-mass__note" x="118" y="120" text-anchor="middle">3D-Maß: über der 11-mm-Schwelle</text>
-              </g>
-              <line class="kip-mass__sep" x1="262" y1="14" x2="262" y2="118" />
-              <g transform="translate(286,0)">
-                <text class="kip-dia__sub kip-mass__cap" x="140" y="16" text-anchor="middle">Blick der Kamera von oben</text>
-                <rect class="kip-mass__gt" x="82" y="46" width="64" height="46" rx="4" />
-                <rect class="kip-mass__pred" x="90" y="50" width="64" height="46" rx="4" />
-                <text class="kip-dia__sub kip-mass__note kip-mass__note--ok" x="140" y="122" text-anchor="middle">Projektionsmaß: hält bei 0,97</text>
-              </g>
-            </svg>
+            </div>
+            
             <ul class="kip-bul kip-bul--tight">
               <li class="kip-bul__hi">Die Drehung stimmt, es schwankt allein die Position:
                 Deshalb bricht das dreidimensionale Maß ein, während das Projektionsmaß bei

@@ -2025,6 +2025,40 @@ def sim_live_rgb(job: str):
     return FileResponse(str(p), media_type="image/png")
 
 
+# T-190: Der Detektor liefert ORIENTIERTE Boxen; die Live-Vorschau zeichnete
+# bisher die achsparallelen Rechtecke aus det.json. Das widersprach der Aussage
+# der Praesentation. Liegt neben dem Job eine obb_2d_*.json, werden deren Ecken
+# als Polygon gezeichnet, sonst bleibt es beim bisherigen Rechteck.
+_OBB_COLOR = {
+    "anker_kurz": (255, 149, 0), "anker_lang": (255, 61, 129),
+    "zahnrad": (34, 211, 238), "ringmagnet": (167, 139, 250),
+}
+
+
+def _draw_obb_overlay(draw, job_dir) -> bool:
+    """Zeichnet die orientierten Boxen des Detektors. True, wenn welche da waren."""
+    import glob as _glob
+    cand = sorted(_glob.glob(str(job_dir / "obb_2d_*.json")))
+    if not cand:
+        return False
+    try:
+        boxes = json.load(open(cand[0])).get("boxes", [])
+    except Exception:
+        return False
+    drawn = 0
+    for b in boxes:
+        pts = [(float(x), float(y)) for x, y in (b.get("corners") or [])]
+        if len(pts) < 3:
+            continue
+        cls = str(b.get("class", "")).lower()
+        col = _OBB_COLOR.get(cls, (52, 211, 153))
+        draw.line(pts + [pts[0]], fill=col, width=4)
+        lx = min(p[0] for p in pts); ly = min(p[1] for p in pts)
+        _draw_label(draw, lx + 4, max(0, ly - 24), cls.replace("_", " ").title(), col)
+        drawn += 1
+    return drawn > 0
+
+
 @app.get("/api/sim/live_boxes/{job}")
 def sim_live_boxes(job: str):
     """RGB + farbige Detektor-Boxen ueberlagert (Live-Frame)."""
@@ -2035,6 +2069,10 @@ def sim_live_boxes(job: str):
     if not rgb.exists():
         raise HTTPException(404, "Live-Bild nicht gefunden")
     img = Image.open(rgb).convert("RGB"); draw = ImageDraw.Draw(img)
+    # T-190: bevorzugt die orientierten Boxen des Detektors zeichnen.
+    if _draw_obb_overlay(draw, _LIVE_ROOT / job):
+        buf = io.BytesIO(); img.save(buf, "PNG"); buf.seek(0)
+        return StreamingResponse(buf, media_type="image/png")
     if detp.exists():
         det = json.load(open(detp))
         # T-113: nur Boxen mit behaltener (on-table) Pred — Off-Table-FPs raus (2D == 3D).

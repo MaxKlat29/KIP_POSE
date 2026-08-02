@@ -888,3 +888,19 @@ body.has-intro-video #slot-intro-still { display: none; }
 .kip-shots img { max-height: 26vh; object-fit: cover; }
 .kip-mass { margin: 4px auto 14px; }
 .kip-mass { max-width: min(620px, 100%); }
+
+/* Echte Detektor-Ausgabe: orientierte Boxen als Overlay ueber dem Szenenbild,
+   damit Aussage und Bild dasselbe zeigen. */
+.kip-obbimg { width: 100%; display: block; border-radius: 10px; border: 1px solid rgba(255,255,255,0.16); }
+.kip-obbimg__box { fill: rgba(52,211,153,0.12); stroke: #34d399; stroke-width: 4; }
+.kip-obbimg__lbl { fill: #8ce9b0; font-family: var(--mono); font-size: 22px; font-weight: 600; }
+
+/* Streuschema: warum der Restfehler nicht kalibrierbar ist */
+.kip-streu { max-width: min(340px, 100%); }
+.kip-streu__thr { fill: rgba(52,211,153,0.09); stroke: rgba(52,211,153,0.6); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.kip-streu__ref { fill: #2878ff; stroke: #fff; stroke-width: 1.4; }
+.kip-streu__p { fill: rgba(255,93,93,0.75); }
+.kip-dia .kip-streu__t1 { fill: rgb(140,230,170); }
+.kip-dia .kip-streu__t2 { fill: #fbcf8a; }
+.kip-dia__cap { margin: 0 0 6px; font-size: 0.58em; line-height: 1.45; color: var(--text-dim); max-width: 46ch; }
+.kip-streu { max-width: min(400px, 100%); }
