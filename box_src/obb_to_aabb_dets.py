@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OBB -> AABB detection bridge for GDRNPP/BOP  (Story S-401 / T-067, Viktor adr.md §4).
+"""OBB -> AABB detection bridge for GDRNPP/BOP  (Story S-401 / T-067, adr.md §4).
 
 Our detector is yolov8s-obb (Oriented Bounding Boxes). GDRNPP (and every BOP
 pose stage) consumes the BOP DEFAULT DETECTION FORMAT: a flat JSON list, one
@@ -13,7 +13,7 @@ format) that:
   4. writes the BOP detection json keyed for GDRNPP's DET_FILES_TEST.
 
 It also exposes obb_corners_to_aabb() as a library function so the inference
-glue (Jonas, S-302) can reuse the exact same conversion, and an ADR-017 variant
+glue (S-302) can reuse the exact same conversion, and an ADR-017 variant
 that emits [x0,y0,x1,y1] for pose_result.bbox_2d.
 
 BOP detection entry (adr.md §4.1):

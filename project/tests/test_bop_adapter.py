@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit-Tests für den BOP -> pose_result Adapter (Viktor adr.md §3).
+"""Unit-Tests für den BOP -> pose_result Adapter (adr.md §3).
 
 Kritischer Test: **Round-Trip**. Eine bekannte Welt-Pose wird in den Kamera-Frame
 projiziert (R_m2c, t_m2c erzeugt, BOP-Konvention), dann durch den Adapter geschickt

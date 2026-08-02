@@ -3,7 +3,7 @@
 
 WHY THIS EXISTS
   yolo-seg-svc on the box was running a STOCK COCO `yolo26n.pt` -> 0 anker
-  detections (Sam's S-006 finding). That kills combos 2/4/5 (yolo-seg + FP /
+  detections (S-006 finding). That kills combos 2/4/5 (yolo-seg + FP /
   GigaPose). This trains a proper `yolo26m-seg` on the workstation SDG data so
   `best.pt` becomes a drop-in for yolo-svc/app.py.
 
@@ -231,7 +231,7 @@ def main():
     model.train(
         data=yaml_path, epochs=a.epochs, imgsz=a.imgsz, batch=a.batch, device=dev,
         project=os.path.join(a.out, "_runs"), name="seg", exist_ok=True,
-        # best-checkpoint + early stopping (Kai-Prinzip: never last-epoch)
+        # best-checkpoint + early stopping (Prinzip: never last-epoch)
         patience=30, close_mosaic=15, lr0=0.01, optimizer="auto",
         # top-down planar parts: rotation/flip OK, NO perspective/shear.
         degrees=180.0, fliplr=0.5, flipud=0.5, perspective=0.0, shear=0.0,

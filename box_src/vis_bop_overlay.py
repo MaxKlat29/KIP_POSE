@@ -7,7 +7,7 @@ OpenGL->OpenCV flip, scale-strip) is correct, the projected mesh wireframe/point
 land exactly on the part in the image — WITH the LARA5 arm visible as an
 occluder (parts behind the arm partly hidden).
 
-This is the visual acceptance gate (Viktor adr.md §1.6 vis_gt_poses equivalent),
+This is the visual acceptance gate (adr.md §1.6 vis_gt_poses equivalent),
 written self-contained so it does not need the bop_toolkit hydra/EGL renderer.
 
 Output: <out>/overlay_{im:06d}.png  — RGB with per-instance coloured mesh-point

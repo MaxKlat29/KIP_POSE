@@ -16,7 +16,7 @@ der Box-venv; die lokalen pipelines-Tests laufen stdlib+numpy):
                            Mathematik (bop_pose_to_world mit t in **mm**, Boden-Snap,
                            Symmetrie-Kanonisierung ueber den CamelCase-Part, assemble_doc).
   * `pipelines_status`   — die 12-Kombi-`/api/pipelines`-Payload mit `available` +
-                           **`unavailable_reason`** (enum, Mia S-010 §12 Pflicht-Feld) +
+                           **`unavailable_reason`** (enum, S-010 §12 Pflicht-Feld) +
                            seg/pose/needs_depth/is_pipeline_a/degraded. Health-Probe injizierbar.
   * `unavailable_reason` — die Enum-Logik (service_down | training | None).
 
@@ -30,7 +30,7 @@ from typing import Callable, Optional
 
 from .combos import FEASIBLE_COMBOS
 
-# ── unavailable_reason-Enum (Mia S-010 §12) ───────────────────────────────────
+# ── unavailable_reason-Enum (S-010 §12) ───────────────────────────────────
 # Das FE muss „Dienst gerade nicht aktiv" von „Modell trainiert noch" unterscheiden
 # koennen (sonst kann es Available-disabled nicht von Gating-disabled trennen).
 REASON_SERVICE_DOWN = "service_down"   # /health down/evicted → Option disabled „Dienst nicht aktiv"
@@ -59,7 +59,7 @@ _SEG_COMBO_TO_GATEWAY = {"yolo-obb": "yolo", "yolo-seg": "yolo", "sam3": "sam3"}
 # Quelle der Wahrheit ist jetzt FEASIBLE_COMBOS (alle ~12 feasible Kombis, T-155) statt
 # nur der kuratierten 7-Whitelist. Sonst fehlen 5 Kombis (3 yolo-obb-Mesh + 2 gdrnpp-
 # degraded) → resolve_combo_id/combo_to_gateway werfen InvalidCombo bei direktem
-# Inferenz/Eval (Lena+Sam T-154-Befund). Pipeline A bleibt ausgenommen (Live-Pfad).
+# Inferenz/Eval (T-154-Befund). Pipeline A bleibt ausgenommen (Live-Pfad).
 # Ein neues Seg-/Pose-Modul in combos.SEG_SOURCES/POSE_SOURCES taucht damit
 # AUTOMATISCH auf — der 12-Kombi-Invarianten-Test (test_gateway_proxy) faengt, falls
 # `_SEG_COMBO_TO_GATEWAY` dann nicht mitwaechst.
@@ -287,7 +287,7 @@ def gateway_predict_to_pose_result(gateway_resp: dict, *, camera: dict,
 # ── /api/pipelines — die 7-Kombi-Payload mit unavailable_reason ───────────────
 def unavailable_reason(available: bool, *, service_up: bool,
                        training: bool) -> "str | None":
-    """Die unavailable_reason-Enum-Logik (Mia S-010 §12).
+    """Die unavailable_reason-Enum-Logik (S-010 §12).
 
     Rueckgabe:
       None             → Kombi available (kein Grund).
@@ -316,7 +316,7 @@ def pipelines_status(*, gateway_health: Optional[dict] = None,
     mehr hart hardcoded — sie faellt aus der Matrix (GDRNPP koppelt jetzt mit allen 3
     Seg; mit yolo-seg/sam3 = `degraded`, AABB-aus-Maske).
 
-    Pro Kombi (Mia S-010 §12 + T-147-Flags):
+    Pro Kombi (S-010 §12 + T-147-Flags):
       id, name, description, seg, pose, needs_depth, is_pipeline_a,
       available (bool), unavailable_reason (service_down|training|None),
       recommended (bool), degraded (bool), degraded_reason (str|None),
@@ -330,7 +330,7 @@ def pipelines_status(*, gateway_health: Optional[dict] = None,
       gateway_health : die `gateway/health`-Antwort {ok, yolo, fp, gigapose, sam3}
                        (gateway/app.py:292-311). None → Gateway nicht erreichbar →
                        alle Mesh-Kombis service_down. Pipeline A bleibt UNBERUEHRT.
-      live_pipeline_a_available : ob der :8077/:8078-Live-Pfad lebt. Mia §6: solange
+      live_pipeline_a_available : ob der :8077/:8078-Live-Pfad lebt. UX-Spec §6: solange
                        er lebt, ist Pipeline A (und der GDRNPP-Pose-Pfad) available.
       training_segs  : Set der Seg-Quellen, deren Modell gerade trainiert (S-008).
                        Diese Kombis → unavailable_reason 'training' statt 'service_down'.
@@ -410,7 +410,7 @@ def _gateway_service_up(gateway_health: Optional[dict]) -> dict:
             'gdrnpp' (gdrnpp-svc, nativer GDRNPP-Pose-Service fuer die degraded-Kombis).
 
     Vorher fehlten 'yolo-obb' + 'gdrnpp' → die 3 yolo-obb-Mesh-Kombis fielen faelschlich
-    auf service_down, obwohl yolo-obb-svc im Gateway-/health ok war (Sam T-154-Befund).
+    auf service_down, obwohl yolo-obb-svc im Gateway-/health ok war (T-154-Befund).
     Der Gateway-Health-Knoten heisst `yolo_obb` (Underscore); unsere source-id ist
     `yolo-obb` (Bindestrich, == SEG_SOURCES-id / Mesh-Name) — hier explizit gemappt.
     """
@@ -448,7 +448,7 @@ def available_combo_ids(pipelines: list) -> list:
 
 
 # ── Result-Metadaten: welche Kombi/welches Modell wurde gefahren (S-014 / T-140) ──
-# Lena (T-164) zeigt im Result an, was wirklich lief. Single-Source = FEASIBLE_COMBOS;
+# Das Result zeigt an, was wirklich lief. Single-Source = FEASIBLE_COMBOS;
 # funktioniert auch fuer Pipeline A ('gdrnpp', der Live-Monolith) → die Sim/Real/Upload-
 # Pfade haengen used_combo/used_seg/used_pose/modality an JEDES Infer-Result, egal ob
 # Live-Pfad oder Gateway-Proxy.
@@ -462,7 +462,7 @@ def _modality(needs_depth: bool) -> str:
 
 
 def combo_result_meta(combo_id: str) -> dict:
-    """Die `used_*`-Result-Felder einer gefahrenen Kombi (S-014 / T-140, Lena T-164).
+    """Die `used_*`-Result-Felder einer gefahrenen Kombi (S-014 / T-140, T-164).
 
     -> {used_combo, used_seg, used_pose, modality, needs_depth, degraded}.
       * used_combo : Kombi-id ('gdrnpp' = Pipeline A, sonst die Gateway-Kombi-id).

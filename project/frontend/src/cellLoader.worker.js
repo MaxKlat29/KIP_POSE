@@ -7,7 +7,7 @@
 // AUSSCHLIESSLICH im Parse; das three.js-Post-Processing (1 ms), scene.add (0 ms)
 // und der erste Render/GPU-Upload (8 ms) sind vernachlaessigbar. setTimeout/Chunking
 // hilft NICHT — ein einzelner synchroner CPU-Task laeuft zu Ende, bevor die
-// Event-Loop andere Tasks (Klicks) verarbeitet (vgl. Brain: kollission buildGrid).
+// Event-Loop andere Tasks (Klicks) verarbeitet.
 //
 // LOESUNG: Parse in diesem Worker. Wir nutzen BEWUSST KEINEN three.js-GLTFLoader
 // (dessen bare 'three'-Import braeuchte eine Worker-Importmap — fragil ohne Bundler).
@@ -17,7 +17,7 @@
 // postet sie als ZERO-COPY Transferables zurueck. Der Main-Thread baut daraus nur
 // noch billige THREE.BufferGeometry/MeshStandardMaterial (~0 ms). UI bleibt frei.
 //
-// UNTERSTUETZTE GLB-FORM (gilt fuer cell.glb/cell_web/cell_hi/cell_decals + Kais
+// UNTERSTUETZTE GLB-FORM (gilt fuer cell.glb/cell_web/cell_hi/cell_decals + die
 // neue T-107-GLB, sofern aehnlich exportiert): unkomprimiert (kein Draco/Meshopt),
 // 0 Texturen, POSITION/NORMAL als VEC3 float32, Indices SCALAR uint16/uint32,
 // keine interleavten byteStrides. Node-Transforms (matrix ODER TRS) werden
@@ -130,7 +130,7 @@ function parseGLB(buf, json, bin) {
       const pos = readAccessor(attr.POSITION);
       const nrm = attr.NORMAL != null ? readAccessor(attr.NORMAL) : null;
       const idx = prim.indices != null ? readAccessor(prim.indices) : null;
-      // COLOR_0 (Vertex-Farben): Kais cell_sharp.glb (T-107) merged die Decal-/Logo-
+      // COLOR_0 (Vertex-Farben): cell_sharp.glb (T-107) merged die Decal-/Logo-
       // Meshes zu EINEM vertex-colored Mesh — ohne COLOR_0 gingen die wbk/KIT-Logo-
       // Farben verloren. glTF erlaubt VEC3 ODER VEC4; Komponenten float (5126) ODER
       // normalisiert ubyte/ushort. Wir liefern Array + Komponentenzahl + ob normalize.

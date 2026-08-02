@@ -6,7 +6,7 @@ Hypothese (Max-Direktive, feasibler Versuch):
   Template-Scale-Matching (unzuverlaessig, cm-bis-m-Fehler) und geht UNGESNAPPT in den
   MegaPose-Refiner. Wenn der Refiner schon mit einem metrisch korrekten 3D-Startpunkt
   beginnt (coarse-T entlang des Kamerastrahls auf die beobachtete Median-Tiefe unter der
-  Maske gezogen), sollte er weniger lateral-rauschen (Theo T-166: t-Fehler ~36mm random).
+  Maske gezogen), sollte er weniger lateral-rauschen (T-166: t-Fehler ~36mm random).
 
   Projektions-erhaltend: T[:3,3] *= median(z)/Zc laesst (x/z, y/z) unveraendert, korrigiert
   nur den groben Tiefen-Float, bevor MegaPose iteriert. Reiner Numpy-Schritt, 0 VRAM.

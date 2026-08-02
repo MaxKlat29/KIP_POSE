@@ -2,7 +2,7 @@
 
 Vendored Code-Layer des Multi-Pipeline-POSE-Service-Mesh. Ursprung: Yannics
 `kip-pose-detection` (ein ~80% fertiges, scaffolded-aber-nie-end-to-end-gefahrenes
-Docker-Compose-Mesh). Hierher gebracht in T-128 (S-002, 2026-06-07, Viktor).
+Docker-Compose-Mesh). Hierher gebracht in T-128 (S-002, 2026-06-07).
 
 ## Was hier liegt
 
@@ -37,7 +37,7 @@ Docker-Compose-Mesh). Hierher gebracht in T-128 (S-002, 2026-06-07, Viktor).
 
 ## ⚠️ Noch zu bauen (eigene Stories, NICHT Teil von S-002)
 
-- **S-001 (Sam, läuft):** `foundationpose:ampere` + `gigapose:ampere` Base-Images (sm_86 rebuild).
+- **S-001 (läuft):** `foundationpose:ampere` + `gigapose:ampere` Base-Images (sm_86 rebuild).
 - ~~`gdrnpp-svc` (liest `obb`, per-Objekt-Checkpoints)~~ **✓ S-004** — `gdrnpp-svc/` (Port 8012, native
   venv, det-getrieben/T-115-safe, Round-Trip-exakt vs Live-:8078, Kombi-1-E2E grün).
 - `yolo-obb-svc` (liefert `obb`) — **✓ S-005** (Port 8011).
@@ -49,5 +49,4 @@ Docker-Compose-Mesh). Hierher gebracht in T-128 (S-002, 2026-06-07, Viktor).
 > **Dieses Verzeichnis startet KEINE Services.** Das Mesh läuft auf der Box (S-006). Hier liegt
 > nur der eingefrorene Code + Contract als Plattform-Basis.
 
-Referenzen: `CLAUDE_BRAIN/decisions/adr-021-multipipe-service-mesh.md`,
-`CLAUDE_BRAIN/team/_shared/sessions/2026-06-07-multi-pipeline-pose/recon/ARCH_RECON.md`.
+Referenzen: ADR-021 (Multipipe-Service-Mesh), `CONTRACT.md` (eingefrorener HTTP-Contract).

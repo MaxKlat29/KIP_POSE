@@ -16,7 +16,7 @@ Kein GPU/Gateway/best.pt noetig (Code-now/run-later). Prueft den fastapi-freien
   * ar_from_report: AR IC-BIN overall + per_class aus eval_bop-report.json.
   * run_batch end-to-end gegen Mock-predict + Mock-eval → results.json + EVAL.md,
     idempotent (re-run patcht).
-  * Endpoint-Schemata = Lena batch.js / Mia §14: runs/result/run/job,
+  * Endpoint-Schemata = batch.js / UX-Spec §14: runs/result/run/job,
     coverage/crash 0..1, job = sim-job-{pct,phase}.
 
 Lauf:  .venv/bin/python -m pytest project/tests/test_batch_eval.py -q
@@ -112,7 +112,7 @@ def test_feasible_configs_pipeline_a_and_recommended():
     # Genau 7 sind RECOMMENDED (die kuratierte Whitelist).
     rec = [c for c in be.EVAL_CONFIGS if c["recommended"]]
     assert len(rec) == 7
-    # FE-Labels muessen Lenas POST_L/SEG_L-Maps treffen.
+    # FE-Labels muessen die POST_L/SEG_L-Maps treffen.
     segs = {c["seg"] for c in be.EVAL_CONFIGS}
     poses = {c["pose"] for c in be.EVAL_CONFIGS}
     assert segs == {"yolo-obb", "yolo-seg", "sam3"}
@@ -580,7 +580,7 @@ def test_run_batch_end_to_end(tmp_path):
 
     results = be.run_batch(be.EVAL_CONFIGS, scenes, predict, _mock_eval_fn, out,
                            run_id="run-test")
-    # Struktur (Lena batch.js / Mia §14). PIVOT: 12 feasible, 7 recommended.
+    # Struktur (batch.js / UX-Spec §14). PIVOT: 12 feasible, 7 recommended.
     assert results["run_id"] == "run-test"
     assert results["n_configs"] == 12 and results["n_scenes"] == 3
     cfgs = results["configs"]

@@ -25,11 +25,11 @@
 #       --tty           Allocate a TTY (ssh -t) — for interactive/sudo cmds.
 #   -h, --help          Show this help.
 #
-# ENV OVERRIDES (defaults match Brain environment/gpu-workstation.md)
-#   BOX_USER          (max)
-#   BOX_HOST          (100.85.216.95)            # Tailscale IP
-#   BOX_MAC           (24:4b:fe:4b:79:e0)
-#   WOL_RELAY         (admin@100.117.146.46)      # Raspberry-Pi WoL relay
+# ENV (no defaults — configure your own box; see project/.env.example)
+#   BOX_USER          ssh user on the GPU box
+#   BOX_HOST          hostname or IP of the GPU box
+#   BOX_MAC           NIC MAC of the GPU box (Wake-on-LAN magic packet)
+#   WOL_RELAY         user@host of an always-on LAN relay that sends the WoL packet
 #   REMOTE_REPO       (/mnt/data/kip_pose)
 #   SSH_OPTS          (-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
 #   WAKE_WAIT_SECS    (90)   total seconds to wait for SSH after a wake
@@ -72,10 +72,10 @@
 set -euo pipefail
 
 # ---- defaults (overridable via env) -----------------------------------------
-BOX_USER="${BOX_USER:-max}"
-BOX_HOST="${BOX_HOST:-100.85.216.95}"
-BOX_MAC="${BOX_MAC:-24:4b:fe:4b:79:e0}"
-WOL_RELAY="${WOL_RELAY:-admin@100.117.146.46}"
+BOX_USER="${BOX_USER:-}"
+BOX_HOST="${BOX_HOST:-}"
+BOX_MAC="${BOX_MAC:-}"          # empty disables Wake-on-LAN
+WOL_RELAY="${WOL_RELAY:-}"      # empty disables Wake-on-LAN
 REMOTE_REPO="${REMOTE_REPO:-/mnt/data/kip_pose}"
 SSH_OPTS="${SSH_OPTS:--o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new}"
 WAKE_WAIT_SECS="${WAKE_WAIT_SECS:-90}"
@@ -111,6 +111,9 @@ done
 
 SSH=(ssh $SSH_OPTS)
 [[ "$USE_TTY" -eq 1 ]] && SSH+=(-t)
+# Validated here, AFTER arg parsing, so --help works without any config.
+[[ -n "$BOX_USER" && -n "$BOX_HOST" ]] \
+  || { echo "FATAL: BOX_USER/BOX_HOST not set — see project/.env.example" >&2; exit 2; }
 TARGET="${BOX_USER}@${BOX_HOST}"
 
 # ---- reachability + wake-on-LAN ---------------------------------------------
@@ -119,6 +122,9 @@ box_ssh_ok() { ${SSH[@]} -o BatchMode=yes "$TARGET" 'true' >/dev/null 2>&1; }
 ensure_box_up() {
   if box_ssh_ok; then info "box reachable: $TARGET"; return 0; fi
   if [[ "$NO_WAKE" -eq 1 ]]; then info "box down and --no-wake set"; exit 3; fi
+  if [[ -z "$WOL_RELAY" || -z "$BOX_MAC" ]]; then
+    info "box down and Wake-on-LAN not configured (set WOL_RELAY + BOX_MAC)"; exit 3
+  fi
   info "box not reachable — sending Wake-on-LAN via $WOL_RELAY"
   ssh $SSH_OPTS -o BatchMode=yes "$WOL_RELAY" "wakeonlan $BOX_MAC" \
     || info "WoL relay command returned non-zero (continuing to poll anyway)"

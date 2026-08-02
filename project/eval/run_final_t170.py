@@ -10,7 +10,7 @@ Warum als CLI-Skript statt :8077/api/eval/run: kip-server.service ist systemd OH
 --reload; der Multi-Frame-Code (discover_scenes frames=) braeuchte sonst einen
 kip-server-Restart (Mission: :8077 NICHT anfassen). Dieser Runner ist ein eigener
 Prozess, schreibt den Run mit der STANDARD-Timestamp-run-id (run-<utc>) direkt in
-EVAL_OUT (project/temp/batch_eval/<run-id>/) -> Lenas Viewer liest ihn via
+EVAL_OUT (project/temp/batch_eval/<run-id>/) -> der Viewer liest ihn via
 list_runs IDENTISCH (Run = Ordner + results.json + EVAL.md). Output byte-gleich zum
 API-Job, nur 100 statt 10 Frames.
 

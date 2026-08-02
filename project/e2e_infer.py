@@ -46,7 +46,7 @@ import sys
 import numpy as np
 from PIL import Image
 
-# BOP -> pose_result Adapter (Viktor §3) — eigenständiges Geschwister-Modul,
+# BOP -> pose_result Adapter (adr.md §3) — eigenständiges Geschwister-Modul,
 # inline-fähig (Max-Präferenz). Beide Gleise (GDRNPP/MegaPose) gehen hier durch.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import bop_adapter as BOP
@@ -366,17 +366,17 @@ def detections_for(img_path, warn=print):
     return rgb, dets
 
 
-# === BOP-6D-Pose: GDRNPP-Inferenz + Adapter (Viktor §3, ADR-018) ==============
+# === BOP-6D-Pose: GDRNPP-Inferenz + Adapter (adr.md §3, ADR-018) ==============
 # Stufe 3-Kette (pro Detektion): Crop+bbox -> call_gdrnpp(crop,K,bbox,obj_id) ->
 # (R_m2c, t_m2c) [BOP-Konvention, mm, Kamera-Frame] -> BOP-Adapter (§3.2/§3.3/
 # §3.4) -> pose_result-Eintrag. **Eine Adapter-Funktion, beide Gleise.**
 #
-# GDRNPP-Checkpoint existiert noch NICHT (Kai trainiert parallel, S-402). Daher:
+# GDRNPP-Checkpoint existiert noch NICHT (Training laeuft parallel, S-402). Daher:
 #   - call_gdrnpp() hat einen MOCK-Modus, der pro Detektion plausible (R_m2c,
 #     t_m2c) liefert, sodass die GANZE Kette JETZT grün durchläuft.
 #   - der Checkpoint-Pfad ist Arg/Config (GdrnppConfig.checkpoint). Liegt ein
 #     echtes .pth da, schaltet die Kette automatisch auf den echten Call.
-#   >>> Kais echter GDRNPP-Call wird in _gdrnpp_real() eingehängt (DIE Stelle). <<<
+#   >>> Der echte GDRNPP-Call wird in _gdrnpp_real() eingehängt (DIE Stelle). <<<
 
 # ── Default-Kamera (BOP §1.3): nur wenn keine scene_camera.json neben dem Bild ──
 # Plausibler Zivid-artiger Top-Down-Blick auf den Tray, RGB-only. K aus den
@@ -492,7 +492,7 @@ def _gdrnpp_mock(crop, K, bbox, obj_id, table_z_m=None):
 
 
 def _gdrnpp_real(crop, K, bbox, obj_id, cfg):
-    """>>> EINHÄNGE-PUNKT für Kais echten GDRNPP-Call. <<<
+    """>>> EINHÄNGE-PUNKT für den echten GDRNPP-Call. <<<
 
     Hier wird der trainierte GDRNPP-Checkpoint (cfg.checkpoint) auf den Crop
     angewendet. Erwartete Rückgabe (BOP-Konvention, EXAKT wie der Adapter sie
@@ -504,11 +504,11 @@ def _gdrnpp_real(crop, K, bbox, obj_id, cfg):
                obj_id (1-basiert, §1.2).
       Ausgabe: (R_m2c, t_m2c_mm).
 
-    Kai hängt hier den GDRNPP-Inferenz-Aufruf ein (Modell-Load gecached, AMP,
+    Hier wird der GDRNPP-Inferenz-Aufruf eingehängt (Modell-Load gecached, AMP,
     Crop->Netz->PnP/Direct-Regression). Bis dahin: NotImplementedError ->
     call_gdrnpp() fällt auf den Mock zurück, falls cfg.mock nicht gesetzt ist."""
     raise NotImplementedError(
-        "GDRNPP-Checkpoint-Inferenz noch nicht angebunden (Kai, S-402). "
+        "GDRNPP-Checkpoint-Inferenz noch nicht angebunden (S-402). "
         "Checkpoint-Pfad: %s" % cfg.checkpoint)
 
 
@@ -517,7 +517,7 @@ def call_gdrnpp(crop, K, bbox, obj_id, cfg=None):
 
     Saubere, gleichbleibende Schnittstelle für beide Modi:
       - cfg.mock=True (oder kein Checkpoint): plausibler MOCK.
-      - sonst: Kais echter GDRNPP-Call (_gdrnpp_real).
+      - sonst: der echte GDRNPP-Call (_gdrnpp_real).
     Returns: (R_m2c (3x3), t_m2c (3,) in mm).
     """
     cfg = cfg or GdrnppConfig()
@@ -598,7 +598,7 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
                    rc_margin_schedule=REFINE_RC_MARGIN_SCHEDULE,
                    tta=TTA_DEFAULT, tta_n_rot=TTA_N_ROT, tta_hflip=TTA_HFLIP,
                    tta_agg=TTA_AGG):
-    """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (Viktor §3) ->
+    """6D-Pose pro Detektion: GDRNPP-Inferenz -> BOP-Adapter (adr.md §3) ->
     [M2 Render-and-Compare-Refiner, optional] -> planares Z-Snap (T-055).
 
     Kette pro Detektion:
@@ -669,7 +669,7 @@ def estimate_poses(rgb, dets, table_origin=None, cfg=None, warn=print,
     rc = f", RC-Refine ({rc_scorer}) auf {n_rc}/{len(aligned)}" if refine_rc else ""
     tt = (f", TTA ({tta_n_rot}-rot/{tta_agg}) auf {n_tta}/{len(aligned)}"
           if tta and TTA is not None and tta_n_rot > 1 else "")
-    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (Viktor §3){snap}{rc}{tt}")
+    warn(f"[pose] {mode}: {len(aligned)} Pose(n) via BOP-Adapter (adr.md §3){snap}{rc}{tt}")
     return aligned
 
 
@@ -789,9 +789,9 @@ def run(image, out_path, cfg=None, warn=print,
         tta_agg=TTA_AGG):
     """Ganze Pipeline für ein Bild. Schreibt schema-valides pose_result.json.
 
-    Kette (ADR-018, Viktor §3/§4 + T-055 §3.5 + T-058 M2):
+    Kette (ADR-018, adr.md §3/§4 + T-055 §3.5 + T-058 M2):
       Detektor (Stufe 1, OBB->AABB §4) -> pro Detektion Crop+bbox ->
-      GDRNPP-Inferenz call_gdrnpp (Stufe 3; MOCK bis Kais Checkpoint da) ->
+      GDRNPP-Inferenz call_gdrnpp (Stufe 3; MOCK bis der Checkpoint da ist) ->
       (R_m2c, t_m2c) -> BOP-Adapter (§3) -> [M2 Render-and-Compare-Refiner, wenn
       refine_rc] -> Planar-Z-Snap auf Tischebene (§3.5, wenn planar_refine) ->
       pose_result (Stufe 4, schema-valide).

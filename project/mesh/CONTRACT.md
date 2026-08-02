@@ -1,10 +1,10 @@
 # Mesh-HTTP-Contract — FROZEN v1 (Multi-Pipeline-POSE)
 
 > **Status: FROZEN.** Single-Source-of-Truth für den HTTP-Contract des Pose-Service-Mesh.
-> Eingefroren 2026-06-07 (Viktor, T-128, Session `2026-06-07-multi-pipeline-pose`).
+> Eingefroren 2026-06-07 (T-128).
 > Abgeleitet aus dem **echten Code** der vendored Services (`gateway/app.py`,
 > `yolo-svc/app.py`, `sam3-svc/app.py`, `fp-svc/app.py`, `gigapose-svc/app.py`) — NICHT
-> aus Doku-Hörensagen. Verwandt: ADR-021 (`CLAUDE_BRAIN/decisions/adr-021-multipipe-service-mesh.md`),
+> aus Doku-Hörensagen. Verwandt: ADR-021 (Multipipe-Service-Mesh),
 > ADR-017 (frozen `pose_result`), `project/pipelines/contract.py`.
 >
 > **Diese Datei ist die Wahrheit.** Jede Änderung am Wire-Contract braucht ein Contract-Bump
@@ -159,7 +159,7 @@ POST /pose   (application/json)
 ## 4. GDRNPP-Kopplungsregel (NICHT frei kombinierbar)
 
 GDRNPP (= unsere Pipeline-A-Hauptlinie, der `gdrnpp-svc` ist in S-001 noch zu bauen) ist die
-**einzige** nicht-frei-kombinierbare Pose-Source. Gründe (ARCH_RECON H2, ML_RECON):
+**einzige** nicht-frei-kombinierbare Pose-Source. Gründe:
 
 1. **GDRNPP braucht OBB-Boxen**, keinen generischen Masken-Input. → Es konsumiert das `obb`-Feld
    der Detection/Instance, das **nur `yolo-obb` liefert**. sam3 + yolo-seg liefern kein `obb`.
@@ -198,7 +198,7 @@ Seg-Source × Pose-Source. Nur diese 7 sind valide (`gateway` `INFER_SOURCES` ×
 - GigaPose-2D + GigaPose-3D teilen **EINEN** Modell-Load — der Unterschied ist allein das
   `pipeline`-Feld im Request (kein Service-Swap, `gigapose-svc/app.py:132` `kabsch = pipeline=='rgbd'`).
 
-**Depth-Verfügbarkeit pro Modus (UX-Konsequenz, ARCH_RECON H7):**
+**Depth-Verfügbarkeit pro Modus (UX-Konsequenz):**
 - **Live (Zivid) + Sim (SDG):** Depth liegt immer vor → alle 7 Kombis wählbar.
 - **Upload:** User muss Depth liefern → Kombis 2/3/4/6 brauchen Depth-Upload-Pflichtfeld;
   ohne Depth nur Kombis 1/5/7 wählbar. FE blendet die depth-pflichtigen Kombis ohne Depth aus.
@@ -278,7 +278,7 @@ Code-Layers, 124K). Sie bleiben Mount-Referenzen (docker-compose `volumes`):
 | GigaPose-Templates (162/Objekt) | `_integration/gigapose/datasets/templates/kip2/{000001,000002}/` | mit GigaPose-Checkout | mm-gerendert |
 | FP-Weights (refiner+scorer) | upstream Google-Drive (nicht im Repo) | `/workspace/FoundationPose/weights:ro` | — |
 | GigaPose-Weights `gigaPose_v1.ckpt`, megapose | download-scripts / Box `/mnt/data/bop/weights` | `pretrained/` | — |
-| sam3 HF-Snapshot `facebook/sam3` | gated HF (Bruno/Sam-Download auf Box) | `/hf-cache:ro` (offline) | — |
+| sam3 HF-Snapshot `facebook/sam3` | gated HF (manueller Download auf Box) | `/hf-cache:ro` (offline) | — |
 | yolo-Weights `best.pt` | `assets/weights/best.pt` (bundled) oder Training-Run | `/weights/best.pt:ro` | — |
 
 > **Begründung Vendoring-Strategie:** **Copy/Vendor des Code-Layers, NICHT Git-Submodule.**
@@ -295,7 +295,7 @@ Code-Layers, 124K). Sie bleiben Mount-Referenzen (docker-compose `volumes`):
 
 Dieser Contract ist die Grenze; die folgenden Build-Tasks füllen die Services dahinter (eigene Stories):
 
-- **S-001 (Sam, läuft):** Base-Images `foundationpose:ampere` + `gigapose:ampere` (`TORCH_CUDA_ARCH_LIST="8.6"`),
+- **S-001 (läuft):** Base-Images `foundationpose:ampere` + `gigapose:ampere` (`TORCH_CUDA_ARCH_LIST="8.6"`),
   pytorch3d/nvdiffrast/xformers neu kompiliert. **Berührt diesen Contract NICHT** (nur Build-Layer).
 - **gdrnpp-svc:** neuer Pose-Service, liest `obb` statt `mask_b64` (§4), per-Objekt-Checkpoints,
   `gdrnpp`-id im `POSE_SOURCES`-Registry des Gateways ergänzen.
@@ -308,5 +308,5 @@ Dieser Contract ist die Grenze; die folgenden Build-Tasks füllen die Services d
 
 ---
 
-*Frozen: Viktor (Tech Lead), T-128, 2026-06-07. Quelle = vendored Code, nicht Doku. Änderungen am
+*Frozen: T-128, 2026-06-07. Quelle = vendored Code, nicht Doku. Änderungen am
 Wire-Contract = v2-Bump + ADR. Maschinen-Schema: `contract_schema.json`.*

@@ -89,7 +89,7 @@ collide). The canonical, detailed install + smoke-test guide is
 | `gdrnpp-venv` | 3.11 | GDRNPP 6D-pose training/inference (isolated — old pins) | `torch==2.5.1+cu121`, `numpy==1.23.5`, `detectron2` (git e0ec4e1), `mmcv-full==1.7.2`, `pytorch-lightning==1.9.0`, `timm==0.6.7`, `scipy==1.10.1`, `opencv-python==4.11.0.86` |
 
 > The version snapshot above was read off the live box on 2026-05-23 via
-> `ssh max@<GPU_HOST> '<venv>/bin/pip freeze'`. It is a reference, not a lock
+> `ssh $GPU_HOST '<venv>/bin/pip freeze'`. It is a reference, not a lock
 > file — recreate each venv following `box_src/BOP_SETUP.md`, which also covers
 > CUDA/driver requirements (RTX 3090, CUDA 12.1 wheels), the source-built
 > `mmcv-full`, and the GDRNPP weight-download caveats (password-gated).

@@ -3,7 +3,7 @@
 # kit_vpn_scoped_connect.sh — On-demand SCOPED KIT-VPN auf der GPU-Workstation.
 # -----------------------------------------------------------------------------
 # Verbindet die Workstation mit dem KIT-OpenVPN, routet aber NUR den Jetson-
-# Zellenrechner (172.22.192.166) durch den Tunnel. KEIN Full-Tunnel, KEIN
+# Zellenrechner ($JETSON_IP) durch den Tunnel. KEIN Full-Tunnel, KEIN
 # DNS-Hijack -> der restliche Workstation-Traffic (Civion-GPU-Daemon, Civion-API,
 # kip-server, Tailscale) bleibt voellig unangetastet.
 #
@@ -22,7 +22,7 @@
 set -euo pipefail
 
 D="${KITVPN_DIR:-/mnt/data/kitvpn}"
-JETSON="${JETSON_IP:-172.22.192.166}"
+JETSON="${JETSON_IP:?JETSON_IP not set — see project/.env.example}"
 CFG="$D/kit.ovpn"
 AUTH="$D/auth.txt"
 

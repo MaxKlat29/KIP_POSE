@@ -1,7 +1,7 @@
 # BOP Data Foundation — Isaac SDG → BOP for GDRNPP (S-201/202/203)
 
 Pipeline that turns the Isaac GST cell into a BOP dataset (`pose_isaac`) for
-GDRNPP/CNOS/GigaPose/MegaPose. Implements Viktor `adr.md` §1 (layout), §2
+GDRNPP/CNOS/GigaPose/MegaPose. Implements `adr.md` §1 (layout), §2
 (symmetry). Runs on the GPU box; Isaac in `isaacsim-venv`, the rest in `bop-venv`.
 
 ## obj_id mapping (frozen, adr.md §1.2 = detector class + 1)

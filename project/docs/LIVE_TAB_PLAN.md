@@ -1,7 +1,7 @@
 # /KIP Live-Tab — Architektur & Plan
 
 On-demand Live-Feed der **echten** Zellen-Anlage (Zivid-Kamera am Jetson `lara5`,
-172.22.192.166, KIT-wbk) + Aufnahme+Inferenz der aktuellen Szene, im /KIP-Frontend.
+$JETSON_IP, KIT-wbk) + Aufnahme+Inferenz der aktuellen Szene, im /KIP-Frontend.
 
 > **Leitplanke (Max):** Am Jetson wird **erstmal NICHTS angefasst/zerschossen**.
 > Live-Feed braucht zwingend Capture-Code **auf** dem Jetson (nur er hat die Kamera) →
@@ -14,7 +14,7 @@ Browser ──(https)──► max-utils.com/KIP ──► kip_server (Workstati
                                               │  /api/live/{status,preview,capture_infer,frame}
                                               ▼
                                    [scoped KIT-VPN auf der Workstation]
-                                   NUR Route 172.22.192.166/32 durch den Tunnel
+                                   NUR Route $JETSON_IP/32 durch den Tunnel
                                    (kein Full-Tunnel, kein DNS-Hijack)
                                               ▼
                               Jetson live_server :8090  (jetson_live/live_server.py)
@@ -34,7 +34,7 @@ Browser ──(https)──► max-utils.com/KIP ──► kip_server (Workstati
   - „Aufnehmen + Inferieren" → `/api/live/capture_infer` → aktuelle Szene gespeichert + inferiert,
     Ergebnis (Bild + Detektionen) in der Vorschau.
 - **`kip_server.py` `/api/live/*`** — Proxy zur Jetson-`LIVE_JETSON_URL` (default
-  `http://172.22.192.166:8090`). Nicht erreichbar → saubere **503** (kein Crash, gdrnpp-Pfad unberührt).
+  `http://$JETSON_IP:8090`). Nicht erreichbar → saubere **503** (kein Crash, gdrnpp-Pfad unberührt).
 
 ### B · Bridge — Workstation joins KIT-VPN (scoped), ⏳ SETUP-SCRIPTS GEBAUT
 - `box_src/kit_vpn_scoped_connect.sh` / `kit_vpn_scoped_disconnect.sh`:

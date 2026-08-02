@@ -65,7 +65,7 @@ from compare_pipelines import doc_to_bop_rows  # noqa: E402
 #     "yolo" (siehe _build_eval_configs); NUR Pipeline A (yolo-obb→gdrnpp) braucht die
 #     echten orientierten Boxen "yolo-obb" → gdrnpp-svc liest `obb` (S-004) nativ.
 _SEG_SOURCE = {"yolo-obb": "yolo", "yolo-seg": "yolo", "sam3": "sam3"}
-# FE-Verfahren-Note (Lena batch.js NOTE_BY-Degrade-Fallback) pro pose_id.
+# FE-Verfahren-Note (batch.js NOTE_BY-Degrade-Fallback) pro pose_id.
 # gigapose_rgb traegt seit T-177 den Tisch-Ebenen-Prior (table_plane-Snap im
 # Gateway) — im Label ausgewiesen, damit die Tabelle die Methode ehrlich nennt.
 _NOTE = {"gdrnpp": "Pipeline A", "foundationpose": "RGB-D 6DoF",
@@ -558,7 +558,7 @@ def aggregate_config(cfg: dict, per_scene: list, ar_mean=None, ar_std=None,
     (anker_kurz/lang), NICHT der eval_bop-6-obj-overall. `ar_6obj` traegt die alte
     6-Objekt-Zahl als sekundaeres Feld weiter (Transparenz). `per_class` zeigt alle 6.
 
-    Liefert exakt Lenas batch.js-Felder:
+    Liefert exakt die batch.js-Felder:
       {seg,pose, modality, ar_mean,ar_std, ar_6obj, seg_ms,pose_ms, coverage,crash_rate,
        note, is_pipeline_a, run_config_id, per_class?}
     coverage/crash_rate ∈ 0..1. modality (T-159) = "RGB"|"RGBD" (FE Input-Spalte).
@@ -940,7 +940,7 @@ def render_markdown(results: dict) -> str:
 def list_runs(out_dir) -> list:
     """Alle persistierten Laeufe unter <out_dir>, neuester zuerst.
 
-    Liefert exakt Lenas batch.js-runs-Form: [{run_id, date, duration_s, n_configs}].
+    Liefert exakt die batch.js-runs-Form: [{run_id, date, duration_s, n_configs}].
     """
     root = pathlib.Path(out_dir)
     if not root.is_dir():

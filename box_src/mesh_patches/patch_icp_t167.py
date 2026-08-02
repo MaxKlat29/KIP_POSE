@@ -1,7 +1,7 @@
 """T-167: gigapose_infer._icp env-tunable machen (max_corr/iters/estimation/snap-multi-radius).
 
 Hebel fuer den RGB-D-Translations-Fix:
-  GP_ICP_MAX_CORR  (default 0.01)  open3d-ICP-Korrespondenz-Radius (m). Theo: lateraler
+  GP_ICP_MAX_CORR  (default 0.01)  open3d-ICP-Korrespondenz-Radius (m). Befund: lateraler
                                    t-Fehler ~33mm > 1cm -> ICP greift nicht. Groesser
                                    ziehen heisst: weiter entfernte Korrespondenzen zaehlen.
   GP_ICP_ITERS     (default 50)    max_iteration der ICPConvergenceCriteria.
@@ -34,7 +34,7 @@ anchor = "        import open3d as o3d\n        import trimesh\n"
 assert anchor in src, "icp import anchor not found"
 env_block = anchor + (
     "        # T-167: Refiner-Knoepfe aus Env (0 VRAM, open3d=CPU). max_corr groesser\n"
-    "        # zieht weiter entfernte Korrespondenzen rein (Theo: lateraler t-Fehler\n"
+    "        # zieht weiter entfernte Korrespondenzen rein (Befund: lateraler t-Fehler\n"
     "        # ~33mm > 1cm Default-Radius -> ICP konnte den lateralen Drift nicht fangen).\n"
     "        if max_corr is None:\n"
     "            max_corr = float(os.environ.get('GP_ICP_MAX_CORR', '0.01'))\n"

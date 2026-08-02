@@ -8,7 +8,7 @@ Prueft die Naht, die kip_server:8077 als Proxy fuer die 6 NICHT-A-Kombis nutzt:
   * resolve_combo_id: 2-Achsen-Form (seg,pose) → Kombi-id; ungueltig → InvalidCombo.
   * gateway_predict_to_pose_result: Gateway-Antwort (T_cam_obj) → frozen pose_result
     (gleiche Mathe wie composed.py — §6-CamelCase-Mapping, §1-mm-Einheit, Klassenfilter).
-  * pipelines_status + unavailable_reason: service_down vs training (Mia S-010 §12 Pflicht).
+  * pipelines_status + unavailable_reason: service_down vs training (S-010 §12 Pflicht).
 
 Lauf:  .venv/bin/python -m pytest project/tests/test_gateway_proxy.py -q
 """
@@ -141,7 +141,7 @@ def test_resolve_combo_id_by_combo_id():
 
 
 def test_resolve_combo_id_by_seg_pose_axes():
-    # FE-Achsen (Labels aus Mia S-010 §2) → Kombi-id.
+    # FE-Achsen (Labels aus S-010 §2) → Kombi-id.
     assert g.resolve_combo_id(seg="yolo-seg", pose="FoundationPose") == "yolo_seg__foundationpose"
     assert g.resolve_combo_id(seg="sam3", pose="FoundationPose") == "sam3__foundationpose"
     assert g.resolve_combo_id(seg="yolo-seg", pose="GigaPose-3D") == "yolo_seg__gigapose_rgbd"
@@ -228,8 +228,8 @@ def test_mapping_requires_extrinsics():
                                          table_origin=[0, 0, 0.08], source_image="t")
 
 
-# ── 5) pipelines_status + unavailable_reason (Mia S-010 §12) ──────────────────
-def test_pipelines_status_has_all_mia_fields():
+# ── 5) pipelines_status + unavailable_reason (S-010 §12) ──────────────────
+def test_pipelines_status_has_all_required_fields():
     ps = g.pipelines_status(gateway_health=None, live_pipeline_a_available=True)
     assert len(ps) == 12  # T-147: Gating-Relax 7→12 (volle FEASIBLE_COMBOS-Matrix)
     for p in ps:

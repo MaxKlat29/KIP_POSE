@@ -37,7 +37,7 @@ python3 ~/kip_live/live_server.py          # bindet 0.0.0.0:8090 (nur via KIT-Ne
 ## Netzwerk-Pfad (wie die Web-App hier landet)
 ```
 Browser → max-utils.com/KIP → kip_server (Workstation) → /api/live/* Proxy
-        → [scoped KIT-VPN, NUR Route zu 172.22.192.166] → Jetson live_server:8090
+        → [scoped KIT-VPN, NUR Route zu $JETSON_IP] → Jetson live_server:8090
 ```
 Die Workstation baut das scoped VPN mit `box_src/kit_vpn_scoped_connect.sh` (nur Jetson-Route,
 kein Full-Tunnel). Voller Plan: `project/docs/LIVE_TAB_PLAN.md`.

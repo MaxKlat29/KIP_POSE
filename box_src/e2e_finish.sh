@@ -67,6 +67,9 @@
 # ENV OVERRIDES
 #   PY              python with playwright+PIL (default: python3)
 #   PORT            local http port for the viewer (default: 8099)
+#   BOX             ssh target of the GPU box, user@host (full mode; see
+#                   project/.env.example — falls back to $GPU_HOST)
+#   MAIN_REPO       primary repo checkout used as artifact fallback (default: ROOT)
 #   REMOTE_REPO     /mnt/data/kip_pose
 #   DATASET_DIR     /mnt/data/kip_pose/project/bop/pose_isaac
 #   PREDS_CSV       /mnt/data/bop/results/preds_all.csv   (full-mode eval input)
@@ -89,9 +92,21 @@ DOCS_DIR="$PROJECT_DIR/docs"
 EVAL_LOCAL="$ROOT/results/eval"
 FRONTEND_TEST="$PROJECT_DIR/frontend/test"
 
-# remote (box) paths — only used in full mode
+# remote (box) target — only used in full mode. Set BOX (user@host) in your
+# environment or project/.env; see project/.env.example.
+BOX="${BOX:-${GPU_HOST:-}}"
+# gpu_run.sh takes the target split in two; derive it from BOX so callers only
+# have to set one variable. Validated in full mode only (dry-run stays offline).
+if [ -n "$BOX" ]; then
+    export BOX_USER="${BOX_USER:-${BOX%@*}}"
+    export BOX_HOST="${BOX_HOST:-${BOX#*@}}"
+fi
 REMOTE_REPO="${REMOTE_REPO:-/mnt/data/kip_pose}"
 DATASET_DIR="${DATASET_DIR:-/mnt/data/kip_pose/project/bop/pose_isaac}"
+
+# Primary repo checkout. When this script runs from a git worktree, artifacts
+# from the main checkout are used as a fallback; override with MAIN_REPO.
+MAIN_REPO="${MAIN_REPO:-$ROOT}"
 
 # [Box-local autonomy] If ROOT==REMOTE_REPO we are running ON the box itself
 # (typically launched by box_src/finish_watcher.sh after PHASE2_TRAIN_DONE, with
@@ -101,7 +116,7 @@ DATASET_DIR="${DATASET_DIR:-/mnt/data/kip_pose/project/bop/pose_isaac}"
 # below succeed cleanly; the helpers (refine_eval.py, rc_refine_eval.py,
 # refine_rc.py, tta_pose.py, bop_adapter.py, real_pose_result.py) are expected
 # to already be in place in $REMOTE_REPO. Off-box (Mac) runs are unaffected
-# because ROOT (=/Users/Admin/POSE/..) won't match REMOTE_REPO.
+# because ROOT (the local checkout) won't match REMOTE_REPO.
 if [ "$ROOT" = "$REMOTE_REPO" ]; then
     echo "[e2e] DETECTED on-box mode (ROOT=REMOTE_REPO=$ROOT) — scp stubbed (helpers pre-deployed)"
     scp() { return 0; }
@@ -172,6 +187,14 @@ step() { echo; echo "===========================================================
 fail() { say "FAILED: $1"; say "E2E_FINISH_FAILED"; exit "${2:-1}"; }
 
 MODE="full"; [[ "$DRY_RUN" -eq 1 ]] && MODE="dry-run"
+
+# Full mode ships files to the box and calls gpu_run.sh — abort early with a
+# clear message instead of failing halfway through on an empty scp target.
+# On-box runs (ROOT==REMOTE_REPO) never leave the machine and need no BOX.
+if [[ "$DRY_RUN" -eq 0 && -z "$BOX" && "$ROOT" != "$REMOTE_REPO" ]]; then
+    fail "full mode needs the GPU box: set BOX (or GPU_HOST) to user@host — see project/.env.example" 2
+fi
+
 mkdir -p "$TEMP_DIR" "$DOCS_DIR" "$EVAL_LOCAL"
 
 say "=== E2E FINISH HARNESS START (T-048) — mode=$MODE ==="
@@ -310,12 +333,12 @@ else
   say "full: shipping levers (refine_eval.py, rc_refine_eval.py, refine_rc.py, tta_pose.py, bop_adapter.py) -> box"
   for f in "$PLANAR_LEVER" "$M2_LEVER"; do
     scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-        "$f" "max@100.85.216.95:$REMOTE_REPO/box_src/$(basename "$f")" \
+        "$f" "$BOX:$REMOTE_REPO/box_src/$(basename "$f")" \
         || fail "scp $(basename "$f") to box failed" 13
   done
   for f in "$RC_MODULE" "$TTA_MODULE" "$ADAPTER"; do
     scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-        "$f" "max@100.85.216.95:$REMOTE_REPO/project/$(basename "$f")" \
+        "$f" "$BOX:$REMOTE_REPO/project/$(basename "$f")" \
         || fail "scp $(basename "$f") to box failed" 13
   done
 
@@ -410,7 +433,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   if [[ -z "$DRY_POSE" ]]; then
     for cand in \
         "$TEMP_DIR/pose_result.json" \
-        "/Users/Admin/POSE/project/temp/pose_result.json" \
+        "$MAIN_REPO/project/temp/pose_result.json" \
         "$FRONTEND_TEST/fixtures/full.json"; do
       [[ -f "$cand" ]] && { DRY_POSE="$cand"; break; }
     done
@@ -420,7 +443,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   [[ "$DRY_POSE" != "$POSE_JSON" ]] && cp "$DRY_POSE" "$POSE_JSON"
   # det overlay: keep an existing one if present, else fall back to the main temp.
   if [[ ! -f "$DET_OVERLAY" ]]; then
-    for cand in "/Users/Admin/POSE/project/temp/det_overlay.png"; do
+    for cand in "$MAIN_REPO/project/temp/det_overlay.png"; do
       [[ -f "$cand" ]] && { cp "$cand" "$DET_OVERLAY"; break; }
     done
   fi
@@ -453,19 +476,19 @@ else
       --out-json '$REMOTE_POSE' --out-overlay '$REMOTE_OVERLAY' $REFINE_ARGS"
   say "  scp real_pose_result.py + bop_adapter.py + refine_rc.py + tta_pose.py -> box"
   scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-      "$HERE/real_pose_result.py" "max@100.85.216.95:$REMOTE_REPO/box_src/real_pose_result.py" \
+      "$HERE/real_pose_result.py" "$BOX:$REMOTE_REPO/box_src/real_pose_result.py" \
       || fail "scp real_pose_result.py to box failed" 22
   scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-      "$PROJECT_DIR/bop_adapter.py" "max@100.85.216.95:$REMOTE_REPO/project/bop_adapter.py" \
+      "$PROJECT_DIR/bop_adapter.py" "$BOX:$REMOTE_REPO/project/bop_adapter.py" \
       || fail "scp bop_adapter.py to box failed" 22
   if [[ "$M2_AVAILABLE" -eq 1 ]]; then
     scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-        "$RC_MODULE" "max@100.85.216.95:$REMOTE_REPO/project/refine_rc.py" \
+        "$RC_MODULE" "$BOX:$REMOTE_REPO/project/refine_rc.py" \
         || fail "scp refine_rc.py to box failed" 22
   fi
   if [[ "$TTA_AVAILABLE" -eq 1 ]]; then
     scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-        "$TTA_MODULE" "max@100.85.216.95:$REMOTE_REPO/project/tta_pose.py" \
+        "$TTA_MODULE" "$BOX:$REMOTE_REPO/project/tta_pose.py" \
         || fail "scp tta_pose.py to box failed" 22
   fi
   "$GPU_RUN" \
@@ -502,7 +525,7 @@ say "STEP3_REALPOSE_DONE  ($POSE_JSON)"
 VIEWER_SHOT="$TEMP_DIR/viewer_real.png"
 if [[ "$SKIP_VIEWER" -eq 1 ]]; then
   step "4/6: VIEWER-VERIFY — SKIPPED (--skip-viewer)"
-  [[ -f "$VIEWER_SHOT" ]] || cp "/Users/Admin/POSE/project/temp/viewer_real.png" "$VIEWER_SHOT" 2>/dev/null || true
+  [[ -f "$VIEWER_SHOT" ]] || cp "$MAIN_REPO/project/temp/viewer_real.png" "$VIEWER_SHOT" 2>/dev/null || true
 else
   step "4/6: VIEWER-VERIFY (headless Playwright)"
   # serve project/ so the viewer is /frontend/ and the pose is /temp/ (its default).
@@ -533,7 +556,7 @@ say "STEP4_VIEWER_DONE  ($VIEWER_SHOT)"
 step "5/6: SPLIT-SCREEN"
 SPLIT_OUT="$TEMP_DIR/final_2d_vs_3d.png"
 LEFT="$DET_OVERLAY"
-[[ -f "$LEFT" ]] || LEFT="/Users/Admin/POSE/project/temp/det_overlay.png"
+[[ -f "$LEFT" ]] || LEFT="$MAIN_REPO/project/temp/det_overlay.png"
 [[ -f "$LEFT" ]] || fail "no left-panel image (det_overlay.png) for the split-screen" 40
 [[ -f "$VIEWER_SHOT" ]] || fail "no right-panel image (viewer_real.png) for the split-screen" 40
 "$PY" "$HERE/make_splitscreen.py" --left "$LEFT" --right "$VIEWER_SHOT" --out "$SPLIT_OUT" \

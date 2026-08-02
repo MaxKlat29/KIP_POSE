@@ -71,12 +71,12 @@ run(image, out_path, cfg=GdrnppConfig(checkpoint=GDRNPP_CHECKPOINT))
 ```bash
 # all three (4.6 G):
 rsync -azP \
-  max@100.85.216.95:'/mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/{anker_kurz,anker_lang,zahnrad}/model_final.pth' \
+  $GPU_HOST:'/mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/{anker_kurz,anker_lang,zahnrad}/model_final.pth' \
   ./project/models/
 
 # or one, renamed:
 rsync -azP \
-  max@100.85.216.95:/mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/anker_kurz/model_final.pth \
+  $GPU_HOST:/mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO/anker_kurz/model_final.pth \
   ./project/models/anker_kurz.pth
 ```
 

@@ -2,7 +2,7 @@
 # Launch the yolo26m-seg ANKER training DETACHED on the box (Story S-008 / T-134).
 #
 # Runs in a tmux session so it survives ssh disconnect; logs to a file the
-# Queen can poll for `best.pt`. Training is a ~6-12h long-runner on the 3090.
+# orchestrator can poll for `best.pt`. Training is a ~6-12h long-runner on the 3090.
 #
 # VRAM budget (24GB total): live-worker ~1.7GB + sam3 transient ~3.3GB +
 # this training ~10-12GB (imgsz1024 batch12) -> headroom for live inference.
@@ -39,6 +39,6 @@ tmux new-session -d -s "$SESS" \
      2>&1 | tee $LOG"
 
 echo "LAUNCHED tmux session '$SESS'"
-echo "  monitor:  ssh max@100.85.216.95 'tail -f $LOG'"
+echo "  monitor:  ssh \$GPU_HOST 'tail -f $LOG'"
 echo "  best.pt:  $OUT/_runs/seg/weights/best.pt  (canonical copy: $OUT/best.pt)"
 echo "  metrics:  $OUT/metrics.json"

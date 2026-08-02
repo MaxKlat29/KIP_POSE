@@ -21,7 +21,7 @@ The converter (isaac_to_bop.py) turns this raw bundle into the BOP-format
 contract (scene_camera/scene_gt/scene_gt_info + mask_visib). NOTHING in here
 writes BOP files directly — clean separation (Isaac venv vs bop venv).
 
-DESIGN NOTES (Viktor adr.md cross-refs):
+DESIGN NOTES (adr.md cross-refs):
   * R5 — Arm = occluder: the arm prim is NOT given a semantic label, so it never
     appears as an instance/obj_id. It DOES occlude parts -> shows up implicitly as
     reduced visible pixels of the parts behind it (visib_fract lever).

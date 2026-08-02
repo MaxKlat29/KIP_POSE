@@ -3,7 +3,7 @@
 
 THE central data contract. Turns the raw bundle written by gen_sdg_arm_visible.py
 into a BOP dataset that CNOS / GigaPose / MegaPose / GDRNPP / bop_toolkit read
-without a single line of repo patching. Implements Viktor adr.md §1 EXACTLY.
+without a single line of repo patching. Implements adr.md §1 EXACTLY.
 
 Runs in the bop-venv (numpy + PIL only — NO Isaac dependency).
 
@@ -15,7 +15,7 @@ INPUT  (per frame idx, from gen_sdg_arm_visible.py):
     semantic_{idx:04d}.npy / .json (fallback class lookup)
     gt_raw_{idx:04d}.json          intrinsics + cam_c2w + per-instance T_obj2world
 
-OUTPUT  (BOP, Viktor adr.md §1):
+OUTPUT  (BOP, adr.md §1):
     <bop_root>/<split>/<scene_id:06d>/
         scene_camera.json     cam_K (row-major), depth_scale, cam_R_w2c, cam_t_w2c
         scene_gt.json         per-instance cam_R_m2c, cam_t_m2c (mm), obj_id
@@ -26,7 +26,7 @@ OUTPUT  (BOP, Viktor adr.md §1):
         mask/{idx:06d}_{gt:06d}.png         FULL silhouette (provisional = visible;
                                             replace with bop_toolkit calc_gt_masks)
 
-CORRECTNESS (Viktor adr.md §4-R4):
+CORRECTNESS (adr.md §4-R4):
   * w2c: gt_raw stores cam_c2w (Isaac/USD). We INVERT to w2c. [R(c2w) = R(w2c).T;
     t(w2c) = -R(w2c) @ t(c2w)].
   * mm: T_obj2world translation is scene-metres; *1000 -> mm.  cam_t_w2c also *1000.
@@ -41,7 +41,7 @@ import argparse, glob, json, os, re, sys
 import numpy as np
 from PIL import Image
 
-# ── FROZEN obj_id mapping (Viktor adr.md §1.2) ──────────────────────────────
+# ── FROZEN obj_id mapping (adr.md §1.2) ──────────────────────────────
 # label (CAD/Registry name, case-insensitive) -> obj_id (1-based)
 OBJ_ID = {
     "anker_kurz":            1,

@@ -2,7 +2,7 @@
 
 > Ticket **T-070 / Story S-501**. Measures 6D-pose predictions against the synthetic
 > BOP ground truth with the **official `bop_toolkit_lib` metrics**, symmetry-aware.
-> Built + validated *before* GDRNPP training finishes, so the moment Kai's checkpoint
+> Built + validated *before* GDRNPP training finishes, so the moment the GDRNPP checkpoint
 > lands we can score it. RGB-only, synthetic holdout (`val` split). **No training touched.**
 
 ## What it computes
@@ -21,7 +21,7 @@ Per object (`obj_id` 1..6) and as an over-objects mean:
 | **rot_naive** | Raw geodesic rotation error (no symmetry). Shown alongside `rot_deg` so the symmetry effect is visible. |
 
 Symmetry comes straight from `models_eval/models_info.json` via
-`bop_toolkit_lib.misc.get_symmetry_transformations` (Viktor ADR section 2):
+`bop_toolkit_lib.misc.get_symmetry_transformations` (ADR section 2):
 obj 1/2 (Anker) + obj 5 (Ringmagnet) continuous about Y, obj 6 (Zahnrad) discrete C_7,
 obj 3/4 none.
 

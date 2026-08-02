@@ -3,7 +3,7 @@
 Abgrenzung zu T-170 (verworfen):
   T-170 (GP_PRE_REFINE_SNAP) snappte die coarse-T nur RADIAL entlang des Kamerastrahls
   auf die Median-Maskentiefe (T[:3,3] *= z_med/Zc). Das ist projektions-erhaltend
-  (x/z, y/z bleiben) und korrigiert NUR den Tiefen-Float. Theo T-166 hat aber gezeigt:
+  (x/z, y/z bleiben) und korrigiert NUR den Tiefen-Float. T-166 hat aber gezeigt:
   der RGB-D-t-Fehler ist random LATERAL (~33mm in x/y), nicht radial. Ein radialer
   Snap kann einen lateralen Drift per Definition NICHT fangen -> T-170 minimal schlechter.
 
@@ -12,7 +12,7 @@ Dieser Hebel (NEU, von T-170 nie getestet):
   Centroids — exakt FoundationPose's guess_translation:
       uc,vc = BBox-Mitte der Maske,  z = Median-Tiefe unter der Maske
       t = K^-1 @ [uc, vc, 1] * z      (lateral X=(uc-cx)z/fx, Y=(vc-cy)z/fy + radial Z=z)
-  Rotation der coarse-Pose bleibt unberuehrt (Theo: Rotation top ~5 Grad). Das setzt
+  Rotation der coarse-Pose bleibt unberuehrt (Befund: Rotation top ~5 Grad). Das setzt
   einen metrisch UND lateral korrekten 3D-Startpunkt fuer den MegaPose-Refiner — der
   einzige Mechanismus der den lateralen Drift fangen koennte (FP nutzt genau diesen
   Init und trifft die Translation deutlich besser als GigaPose's Template-Scale-coarse).
@@ -48,7 +48,7 @@ helper = (
     "    def _centroid_init_snap(self, coarse_poses, K, depth_m, mask):\n"
     "        \"\"\"T-173: coarse-Translation VOLLSTAENDIG durch die Backprojektion des\n"
     "        Masken-Centroids ersetzen (lateral X=(uc-cx)z/fx, Y=(vc-cy)z/fy + radial\n"
-    "        Z=z_med) — exakt FoundationPose's guess_translation. Faengt Theos lateralen\n"
+    "        Z=z_med) — exakt FoundationPose's guess_translation. Faengt den lateralen\n"
     "        t-Drift, den der radiale T-170-Snap nicht fangen konnte. Rotation bleibt.\"\"\"\n"
     "        ys, xs = np.nonzero(mask > 0)\n"
     "        if xs.size < 50:\n"
@@ -86,7 +86,7 @@ old_block = (
 new_block = old_block + (
     "        # T-173 LATERALER depth-init: coarse-T vor dem Refiner durch Masken-Centroid-\n"
     "        # Backprojektion ersetzen (lateral+radial, env-gated, nur RGB-D). Der eine\n"
-    "        # Mechanismus der Theos lateralen t-Drift fangen koennte (FP nutzt genau das).\n"
+    "        # Mechanismus der den lateralen t-Drift fangen koennte (FP nutzt genau das).\n"
     "        if depth is not None and os.environ.get('GP_CENTROID_INIT', '0') == '1':\n"
     "            coarse_poses = self._centroid_init_snap(\n"
     "                coarse_poses, K, np.asarray(depth, dtype=np.float64), mask)\n"

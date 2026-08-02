@@ -11,7 +11,7 @@ __setConfigs) mit gemockten standings/configs MIT modality-Feld, und prueft:
   - Live-Re-Sort funktioniert weiter und die anderen Spalten sind unveraendert
 
 Ausfuehren (canonical venv):
-  /Users/maximilianklattig/Documents/DEV/KIP_POSE/.venv/bin/python \
+  .venv/bin/python \
     project/frontend/smoke_t160_input_column.py
 """
 import re

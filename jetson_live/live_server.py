@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """live_server.py — lightweight On-Demand Live-Feed + Capture+Infer fuer den
-Jetson-Zellen-Controller (lara5, 172.22.192.166).
+Jetson-Zellen-Controller (lara5, Adresse via LIVE_JETSON_URL / JETSON_IP).
 
 ZWECK: serviert der KIP-Web-App (ueber die Workstation, scoped KIT-VPN) einen
 on-demand Zivid-Vorschau-Feed + auf Knopfdruck eine Aufnahme der aktuellen Szene

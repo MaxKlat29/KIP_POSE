@@ -1,7 +1,6 @@
 # M2 — Multi-Hypothesis Render-and-Compare-Refiner (T-058) — gebaut, ehrlich gemessen
 
 > **Date:** 2026-05-24 · **Ticket:** T-058 · **Worktree:** `.worktrees/S-048` ·
-> **Branch:** `team/2026-05-22-pose-bop-pivot/S-048`
 > **Module:** `project/refine_rc.py` (Generator + CPU-Scorer + MegaPose-Contract) ·
 > **Integration:** `project/e2e_infer.py` + `bop_adapter.detection_to_result(rc_refiner=…)` ·
 > **Box-Harness:** `box_src/rc_refine_eval.py` (CPU-Validierung) ·

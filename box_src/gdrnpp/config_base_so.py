@@ -160,7 +160,7 @@ MODEL = dict(
         # and just relaunch. The offline path (pose_isaac_pbr_gen_xyz.py + the
         # precomputed <split>/xyz_crop pkls) is correct and committed for the record,
         # but NOT activated — switching the data path for zero speed gain adds risk
-        # to an unattended multi-day run. See team/kai-ml/learnings.md (2026-05-25 T-068).
+        # to an unattended multi-day run (T-068).
         XYZ_ONLINE=True,
         # [T-050 / PHASE2 — HIGHEST-IMPACT FIX for Zahnrad, GPU-GATED]
         # gdrn_base default is INPUT_RES=256 / OUTPUT_RES=64. The Zahnrad

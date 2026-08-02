@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """kip_server.py — FastAPI-Backend für den KIP-Pose-Web-Viewer.
 
-Läuft ON-DEMAND auf der GPU-Workstation (100.85.216.95). Serviert das
+Läuft ON-DEMAND auf der GPU-Workstation (Host via $BOX_HOST). Serviert das
 2-Screen-Frontend (frontend/) und stellt die On-Demand-Pipeline als API bereit:
 
   Screen 1 "Real"  — Foto-Upload  -> Detektor + GDRNPP -> pose_result -> 3D-Render
@@ -10,9 +10,9 @@ Läuft ON-DEMAND auf der GPU-Workstation (100.85.216.95). Serviert das
 Path-aware: hinter Caddy auf max-utils.com/KIP gemountet (KEIN path-strip dort),
 deshalb root_path=$KIP_BASE_PATH (default "/KIP"). Lokal/direkt: leer lassen.
 
-Architektur (siehe Brain projects/max-utils + patterns/gpu-on-demand-inference):
+Architektur:
   Browser -> CF-Tunnel -> cloudflared(ai-desk) -> Caddy @kip
-          -> reverse_proxy 100.85.216.95:$KIP_PORT  (Tailscale)
+          -> reverse_proxy $BOX_HOST:$KIP_PORT  (Tailscale)
           -> DIESER Server (root_path=/KIP)
 
 Start (auf der Workstation):
@@ -237,7 +237,7 @@ def _gateway_health() -> Optional[dict]:
 
 def _live_pipeline_a_available() -> bool:
     """Pipeline A (Kombi 1) lebt, solange der :8078-GDRNPP-Worker erreichbar ist.
-    Mia §6: solange der Live-Pfad lebt, ist Kombi 1 IMMER available (>=1 Kombi da).
+    UX-Spec §6: solange der Live-Pfad lebt, ist Kombi 1 IMMER available (>=1 Kombi da).
     Defensiv: bei Probe-Fehler True (der Live-Pfad ist der Anker, nicht das Mesh)."""
     try:
         import urllib.request
@@ -300,7 +300,7 @@ def _gateway_predict_multipart(combo_id: str, *, rgb_bytes: bytes,
 
 def _resolve_combo_for_infer(pipeline: str | None, seg: str | None, pose: str | None):
     """Loest (pipeline|seg|pose) zu einer Kombi-id auf. Pipeline A → 'gdrnpp'.
-    Ungueltige Kombi → 400 (Mia „niemals 12 Kombis"). Proxy-Seam fehlt → 501."""
+    Ungueltige Kombi → 400 (Vorgabe „niemals 12 Kombis"). Proxy-Seam fehlt → 501."""
     if _gwp is None:
         raise HTTPException(501, "Proxy-Seam nicht verfuegbar (pipelines.gateway_proxy fehlt).")
     try:
@@ -310,7 +310,7 @@ def _resolve_combo_for_infer(pipeline: str | None, seg: str | None, pose: str | 
 
 
 def _combo_meta(combo_id: str) -> dict:
-    """used_combo/used_seg/used_pose/modality fuer das Infer-Result (Lena T-164).
+    """used_combo/used_seg/used_pose/modality fuer das Infer-Result (T-164).
     Single-Source = gateway_proxy.combo_result_meta (FEASIBLE_COMBOS). Defensiv: faellt
     bei unbekannter id auf gdrnpp/Pipeline A zurueck (das Result traegt IMMER die Felder)."""
     if _gwp is None:
@@ -345,7 +345,7 @@ def _gateway_preds_for_frame(combo_id, *, rgb_path, depth_path, K, R_w2c, t_w2c,
     gw = _gwp.combo_to_gateway(combo_id)
     if gw["needs_depth"] and not depth_bytes:
         # Sim/Live liefern eigentlich immer Depth; fehlt sie (z.B. Isaac ohne Depth-AOV),
-        # klare 400 statt stiller Falschpose (Mia §5, image-only-Konsistenz).
+        # klare 400 statt stiller Falschpose (UX-Spec §5, image-only-Konsistenz).
         raise HTTPException(400, f"Kombi '{combo_id}' braucht ein Tiefenbild (needs_depth=true), "
                                  f"aber der Frame liefert keines.")
     R_w2c_flat = [float(x) for x in np.asarray(R_w2c, float).reshape(9)]
@@ -469,7 +469,7 @@ def pipelines():
       recommended (bool), degraded (bool), degraded_reason (str|null),
       class_ambiguity (bool).
 
-    `unavailable_reason` ist Mias Pflicht-Feld (S-010 §12): das FE muss „Dienst nicht
+    `unavailable_reason` ist ein Pflicht-Feld (S-010 §12): das FE muss „Dienst nicht
     aktiv" von „Modell trainiert noch" unterscheiden. Die T-147-Flags markieren die
     kuratierten 7 (recommended-Highlight) gegen die 5 zusaetzlichen (degraded/ambig-
     Hinweis), ohne sie wegzublenden.
@@ -540,7 +540,7 @@ async def predict(
     # RGB-D combos don't decode depth 10x too far (T-156).
     depth_scale: float = Form(1.0),
 ):
-    """EINE Origin fuers FE — die unified Inferenz-Naht (S-013, Mia S-010).
+    """EINE Origin fuers FE — die unified Inferenz-Naht (S-013, S-010).
 
     Routing (AK 1):
       * `pipeline=gdrnpp` ODER `seg=yolo-obb & pose=gdrnpp` (oder leer = Default)
@@ -554,7 +554,7 @@ async def predict(
         → Proxy an `gateway:8000/predict` (httpx), Antwort (instances[].T_cam_obj)
         → ueber dieselbe composed.py-Mapping-Mathematik → pose_result-Doc. EINE
         Origin (Caddy /KIP), kein zweiter Tunnel.
-      * Ungueltige (nicht-Whitelist) Kombi → 400 (Mia „niemals 12 Kombis").
+      * Ungueltige (nicht-Whitelist) Kombi → 400 (Vorgabe „niemals 12 Kombis").
     """
     if _gwp is None:
         raise HTTPException(501, "Proxy-Seam nicht verfuegbar (pipelines.gateway_proxy fehlt).")
@@ -637,11 +637,11 @@ def _extrinsics_or_zivid(cam_R_w2c: str | None, cam_t_w2c: str | None):
 
 
 # ── Live-Tab: on-demand Proxy zum Jetson-Zellen-Controller ──────────────────
-# Die Workstation erreicht den Jetson (172.22.192.166, KIT-wbk) on-demand ueber
+# Die Workstation erreicht den Jetson (KIT-wbk, Adresse via LIVE_JETSON_URL) on-demand ueber
 # SCOPED KIT-VPN — NUR Route zum Jetson, KEIN Full-Tunnel (box_src/kit_vpn_scoped_connect.sh).
 # Auf dem Jetson laeuft on-demand (von Max gestartet, NICHT von uns deployt)
 # jetson_live/live_server.py. Solange das nicht laeuft -> saubere 503 (kein Crash).
-LIVE_JETSON = os.environ.get("LIVE_JETSON_URL", "http://172.22.192.166:8090").rstrip("/")
+LIVE_JETSON = os.environ.get("LIVE_JETSON_URL", "http://jetson.invalid:8090").rstrip("/")
 
 
 def _live_fetch(path, method="GET", timeout=8):
@@ -860,7 +860,7 @@ def _real_infer_job(job, img_bytes, fname, combo_id="gdrnpp", depth_bytes=None,
     image-only (ADR-020): der Upload-Pfad hat KEIN GT — es gibt nur die SCHAETZUNG (rot).
     Kein blaues/gruenes GT-Overlay, keine `gt`-Seg-Quelle. Depth ist optional: Kombis mit
     needs_depth verlangen ein hochgeladenes Tiefenbild (depth_bytes) — fehlt es, klare
-    Fehlermeldung statt stiller Falschpose (Mia §5)."""
+    Fehlermeldung statt stiller Falschpose (UX-Spec §5)."""
     import numpy as np
     try:
         updir = UPLOADS / f"real_{job}"
@@ -960,11 +960,11 @@ async def real_infer_async(image: UploadFile = File(...),
         Live-Pfad (nativer :8078-GDRNPP-Worker, byte-identisch zum heutigen Default).
       * Eine der 6 NICHT-A-Kombis (per `pipeline=<combo_id>` ODER `seg=&pose=`) → Pose
         ueber das Gateway. needs_depth-Kombis verlangen ein hochgeladenes Tiefenbild
-        (`depth`); fehlt es → 400 (keine stille Falschpose, Mia §5).
+        (`depth`); fehlt es → 400 (keine stille Falschpose, UX-Spec §5).
       * Ungueltige Kombi → 400.
 
     image-only (ADR-020): KEIN GT-Overlay im Upload-Pfad, `gt`-Seg-Quelle gesperrt.
-    Result-meta traegt used_combo/used_seg/used_pose/modality (Lena T-164)."""
+    Result-meta traegt used_combo/used_seg/used_pose/modality (T-164)."""
     if (seg or "").strip().lower() == "gt":
         raise HTTPException(400, "Seg-Quelle 'gt' (GT-Masken) ist im Upload-Pfad nicht "
                                  "erlaubt (kein GT bei realen Fotos). Waehle eine echte "
@@ -1252,11 +1252,10 @@ def _wallfp_default_poses():
          "R": [0.20224183164212217, 0.5651220622235716, -0.7998344989304583,
                0.6973274973536784, 0.4903463092354758, 0.5227760644453029,
                0.6876282011517266, -0.6634737830300684, -0.29490662850657773]},
-        # HINWEIS (Queen-Korrektur 2026-06-04): die zweite ehemals hier registrierte Pose
+        # HINWEIS (Korrektur 2026-06-04): die zweite ehemals hier registrierte Pose
         # [0.2522,0.5653,-0.0666] war KEIN Wand-Panel, sondern ein ECHTES Zahnrad-Werkstueck
-        # (visuell verifiziert: 3D-Mesh mit Zaehnen + Speichen-Nabe — das blasse Zahnrad, das
-        # Max explizit als real bestaetigt hat: "STOPP der halu nicht, da ist wirklich ein
-        # Zahnrad"). Die Begruendung "bit-identische Pose ueber 7 Uploads = statisch" war
+        # (visuell verifiziert: 3D-Mesh mit Zaehnen + Speichen-Nabe — das blasse Zahnrad im
+        # Hintergrund ist ein echtes Werkstueck). Die Begruendung "bit-identische Pose ueber 7 Uploads = statisch" war
         # konfundiert: alle 7 Uploads hatten denselben Bild-md5 (f02a403d, dasselbe Foto
         # re-uploaded) -> das beweist KEINE statische Struktur, nur identische Pixel. Pose
         # ENTFERNT, damit echte Zahnraeder nicht faelschlich gedroppt werden. Es bleibt NUR
@@ -1904,7 +1903,7 @@ def sim_generate_async(pipeline: str = "gdrnpp", seg: str | None = None,
       * Ungueltige Kombi → 400 (niemals 12 Kombis).
     Das GT-Overlay (blau) bleibt IMMER (Sim hat GT). Die SCHAETZUNG (rot) kommt aus der
     gewaehlten Kombi (image-only, ADR-020). Result-meta traegt used_combo/used_seg/
-    used_pose/modality (Lena T-164).
+    used_pose/modality (T-164).
 
     `gt`-Seg-Quelle (supplied GT masks) ist hier NICHT erlaubt — Sim segmentiert das
     gerenderte RGB selbst; GT-Masken sind nur fuers Batch-Eval (S-014-Beschreibung)."""
@@ -2031,7 +2030,7 @@ def sim_generate(n_scenes: int = Form(1), force: bool = Form(False)):
 
 # ── Batch-Eval (S-012 / T-138): 7 Kombis × N SDG-Seeds → AR IC-BIN + Runtime ─────
 # Duenne FastAPI-Schicht ueber dem fastapi-freien `eval.batch_eval`-Kern. Felder =
-# Lenas batch.js-Contract (Mia §14): runs/result/run/job, coverage/crash 0..1, job =
+# der batch.js-Contract (UX-Spec §14): runs/result/run/job, coverage/crash 0..1, job =
 # gleiches {pct,phase}-Schema wie die sim-job. Der reale 7×20-Lauf braucht best.pt +
 # deployte Services (Gateway/predict) — Code jetzt, GPU-Lauf post-Training.
 import sys as _sys
@@ -2053,7 +2052,7 @@ EVAL_SPLIT = os.environ.get("EVAL_SPLIT", "val")
 def eval_runs():
     """Alle persistierten Batch-Eval-Laeufe, neuester zuerst (FE-Run-Dropdown).
 
-    -> {"runs": [{run_id, date, duration_s, n_configs}]}  (Lena batch.js)."""
+    -> {"runs": [{run_id, date, duration_s, n_configs}]}  (batch.js)."""
     from eval import batch_eval as _be
     return {"runs": _be.list_runs(EVAL_OUT)}
 
@@ -2066,7 +2065,7 @@ def eval_result(run_id: str):
        coverage,crash_rate,note,is_pipeline_a,run_config_id,per_class?}]}. modality
        (T-159) = "RGB"|"RGBD" (FE Input-Spalte). coverage/crash 0..1."""
     import re as _re
-    # M2 (SECURITY_GATE, Bruno T-145): validate run_id BEFORE load_run. The id is a
+    # M2 (SECURITY_GATE, T-145): validate run_id BEFORE load_run. The id is a
     # generated run-folder name (run_<ts>); restrict to a safe charset so a crafted
     # path (e.g. "../../etc") can never escape EVAL_OUT via load_run's join.
     if not _re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):

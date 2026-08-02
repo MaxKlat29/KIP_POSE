@@ -11,7 +11,7 @@ official ``bop_toolkit_lib`` metrics:
 
 Symmetry is read straight from ``models_eval/models_info.json`` (continuous / discrete),
 so a pose rotated about a symmetry axis is *not* punished -- this is the analytic fix for
-the eigenbau 120/91-degree problem (Viktor ADR section 2).
+the eigenbau 120/91-degree problem (ADR section 2).
 
 This module is self-contained on the box: it imports ``bop_toolkit_lib`` directly and
 does NOT touch any training. It runs read-only against the BOP dataset.

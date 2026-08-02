@@ -8,7 +8,7 @@
 
 | Was | Wert |
 |---|---|
-| Box | `max@100.85.216.95` (Tailscale) / `192.168.4.97` (LAN), Hostname `maxgpuserverobk` |
+| Box | `$GPU_HOST` (Tailscale) / `<LAN-IP>` (LAN), Hostname `<gpu-hostname>` |
 | GPU | NVIDIA RTX 3090, 24576 MiB, Driver 590.48.01 (CUDA 13.1-capable) |
 | System-CUDA (nvcc) | 12.0 — Treiber abwärtskompatibel, **cu121-Wheels** laufen |
 | Python | `python3.11` (3.11.15) — bewusst NICHT 3.12 (BOP-Repos brechen dort) |
@@ -44,7 +44,7 @@
 └── logs/                     # nohup-Logs der Heavy-Downloads/-Builds
 ```
 
-## Lizenz-Gate (Viktor adr.md §5-R2) — ERFÜLLT
+## Lizenz-Gate (adr.md §5-R2) — ERFÜLLT
 
 Alle Repos sind MIT/Apache. **Einziger echter Stolperstein war CNOS' Segmentor:**
 

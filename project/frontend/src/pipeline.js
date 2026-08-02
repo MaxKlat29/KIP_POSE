@@ -191,11 +191,11 @@ export function inferredWithText(meta, chosen) {
 export function evaluate({ sel, axis = null, mode = "real", availById = new Map(), depthPresent = false }) {
   const availOf = (combo) => {
     const m = availById.get(combo.id);
-    // Pipeline A ist der Anker: solange der Live-Pfad lebt, immer wählbar (Mia §6).
+    // Pipeline A ist der Anker: solange der Live-Pfad lebt, immer wählbar (UX-Spec §6).
     if (combo.is_pipeline_a) return { available: m ? m.available !== false : true, meta: m };
     return { available: m ? !!m.available : false, meta: m };
   };
-  // Depth-Sperre nur im Upload (real) ohne Tiefenbild (Mia §5.2 Variante a).
+  // Depth-Sperre nur im Upload (real) ohne Tiefenbild (UX-Spec §5.2 Variante a).
   const depthBlocked = (combo) => mode === "real" && combo.needs_depth && !depthPresent;
 
   // Pro (seg,pose) den finalen Zustand bestimmen (T-158: dreistufig, marken-frei).

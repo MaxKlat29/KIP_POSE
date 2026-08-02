@@ -2,7 +2,7 @@
 # =============================================================================
 # prep_gdrnpp_env.sh — one-time GDRNPP venv + source prep on the box (T-068)
 # -----------------------------------------------------------------------------
-# Sam's gdrnpp install built detectron2 but left the GDRNPP training stack
+# The earlier gdrnpp install built detectron2 but left the GDRNPP training stack
 # unrunnable on this box's Python 3.11 + torch 2.5.1. This script applies the
 # exact dependency pins + source patches + the C++ EGL renderer build that make
 # `from core.gdrn_modeling import main_gdrn` import cleanly. Idempotent.

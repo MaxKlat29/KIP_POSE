@@ -5,7 +5,7 @@ Die GigaPose-3D-ICP-Konfiguration (`gigapose_infer._icp`) war hardcoded
 Fehler zu tunen (siehe `project/docs/EVAL_T167_rgbd_refiner_tuning.md`).
 
 ## Was auf der Box geändert wurde (NICHT in diesem git-Repo — Box-Mesh liegt unter
-`/home/max/kip_mesh` + Bind-Mount `/home/max/kip_build/GigaPose`):
+`$MESH_DIR` + Bind-Mount `$GIGAPOSE_DIR`):
 
 1. **`gigapose_infer.py`** (Bind-Mount, persistent über Recreates) gepatcht via
    `patch_icp_t167.py` (idempotent, py_compile-verifiziert). Neue env:
@@ -14,15 +14,15 @@ Fehler zu tunen (siehe `project/docs/EVAL_T167_rgbd_refiner_tuning.md`).
    - `GP_ICP_ESTIMATION` (`point`|`plane`, Default point) — Punkt-zu-Punkt vs -Ebene
    Backup: `gigapose_infer.py.bak-T167`.
 
-2. **`/home/max/kip_mesh/docker-compose.yml`** — `environment:`-Block auf `gigapose-svc`
+2. **`$MESH_DIR/docker-compose.yml`** — `environment:`-Block auf `gigapose-svc`
    (host-overridebar): `GP_ICP_MAX_CORR: "${GP_ICP_MAX_CORR:-0.025}"` u.a.
    Backup: `docker-compose.yml.bak-T167`.
 
 ## Reproduktion eines Sweep-Werts
 
 ```bash
-ssh max@100.85.216.95
-cd /home/max/kip_mesh
+ssh $GPU_HOST
+cd $MESH_DIR
 GP_ICP_MAX_CORR=0.025 GP_ICP_ESTIMATION=point \
   docker compose up -d --force-recreate --no-deps gigapose-svc
 # ~60s Modell-Reload, dann:

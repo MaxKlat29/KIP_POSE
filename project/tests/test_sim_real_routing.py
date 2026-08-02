@@ -11,7 +11,7 @@ weiter ueber den :8078-Worker, die 6 NICHT-A-Kombis ueber das Gateway.
 Geprueft (FastAPI TestClient + pure Naht):
   * sim/generate_async mit seg=sam3&pose=foundationpose → KEIN Stub-Fehler mehr, die
     combo_id geht an _sim_generate_job; Sofort-Antwort traegt used_combo/used_seg/
-    used_pose/modality (Lena T-164).
+    used_pose/modality (T-164).
   * pipeline=gdrnpp → Pipeline-A-Kombi (Live-Pfad byte-identisch).
   * ungueltige Kombi → 400 (niemals 12 Kombis).
   * image-only-Guard: seg=gt → 400 (GT-Masken nur Batch-Eval), Sim/Upload.
@@ -76,7 +76,7 @@ def _gateway_resp():
     }
 
 
-# ── pure: combo_result_meta (Lena T-164 Result-Felder) ────────────────────────
+# ── pure: combo_result_meta (T-164 Result-Felder) ────────────────────────
 def test_combo_result_meta_for_all_modes():
     """used_* + modality fuer Pipeline A, eine RGB-D- und eine RGB-Kombi."""
     a = gwp.combo_result_meta("gdrnpp")
@@ -293,7 +293,7 @@ def test_real_infer_job_pipeline_a_uses_worker_not_gateway(monkeypatch, tmp_path
 
 def test_real_infer_job_needs_depth_without_depth_errors(monkeypatch, tmp_path):
     """needs_depth-Kombi im Upload OHNE Tiefenbild → klare Fehlermeldung im Job-State
-    (keine stille Falschpose, Mia §5). Das Gateway wird NIE aufgerufen."""
+    (keine stille Falschpose, UX-Spec §5). Das Gateway wird NIE aufgerufen."""
     calls = {"gateway": 0}
     monkeypatch.setattr(K, "_run_detector", lambda src, out: 2)
     monkeypatch.setattr(K, "_gateway_predict_multipart",
@@ -317,7 +317,7 @@ def test_real_infer_job_needs_depth_without_depth_errors(monkeypatch, tmp_path):
 # ── /api/predict — used_*-Konsistenz (gleiches Result-Schema wie Sim/Real) ─────
 def test_predict_result_carries_used_fields(client, monkeypatch):
     """Auch /api/predict (S-013) traegt jetzt used_combo/used_seg/used_pose/modality —
-    EIN Result-Schema fuer alle Pfade (Lena T-164)."""
+    EIN Result-Schema fuer alle Pfade (T-164)."""
     monkeypatch.setattr(K, "_gateway_predict_multipart", lambda cid, **k: _gateway_resp())
     files = {"image": ("rgb.png", _png_bytes(), "image/png"),
              "depth": ("depth.png", _png_bytes(mode="L16", val=300), "image/png")}

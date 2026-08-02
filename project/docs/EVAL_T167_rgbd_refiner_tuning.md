@@ -1,7 +1,7 @@
 # T-167 — RGB-D-Refiner-Tuning (FoundationPose + GigaPose-3D)
 
 **Session** `2026-06-07-multi-pipeline-pose` · **Ticket** T-167 · **Datum** 2026-06-08
-**Vorbefund** Theo T-166: RGB-D-Rotation top (~5°, sym-gefaltet, MSPD=1.000), aber
+**Vorbefund** T-166: RGB-D-Rotation top (~5°, sym-gefaltet, MSPD=1.000), aber
 **Translation rauscht ~33-36 mm random** — knapp über der MSSD-Schwelle (11 mm = 0.1·Ø).
 GDRNPP-RGB trifft die Translation (~4 mm) → führt mit AR 0.305 (6-obj). RGB-D bei ~0.22.
 Kein Eval-/Symmetrie-/Mesh-Bug — der Hebel ist die Refiner-/ICP-Konfiguration.
@@ -23,7 +23,7 @@ zum Vergleich: `run-20260608T113628Z` (iter=5).
 **T-167-Patch (`box_src/mesh_patches/patch_icp_t167.py`, idempotent, py_compile OK):** macht
 `_icp` env-steuerbar — `GP_ICP_MAX_CORR` (Korrespondenz-Radius m), `GP_ICP_ITERS`,
 `GP_ICP_ESTIMATION` (`point`|`plane`). 0 zusätzliches VRAM (open3d = CPU). `gigapose_infer.py`
-liegt auf einem **Bind-Mount** (`/home/max/kip_build/GigaPose`) → Patch überlebt Recreates.
+liegt auf einem **Bind-Mount** (`$GIGAPOSE_DIR`) → Patch überlebt Recreates.
 Compose-`environment:`-Block (host-overridebar) für die Sweeps; Default jetzt `0.025`.
 
 ## Befund 1 — FoundationPose: iter NICHT hochdrehbar (VRAM-Decke)
@@ -48,8 +48,8 @@ GigaPose-svc ist leicht (~2.4 GB, ICP auf CPU) → frei tunebar. Vollständiger 
 | 5 | 0.04 | **plane** | **0.0547** | 1619 | **KOLLAPS** (−75 %) |
 | 10 | 0.025 | point | 0.2133 | 2391 | schlechter (GenFlow überschießt) |
 
-- **ICP-`max_corr` größer hilft minimal und saturiert sofort** (+1.1 %, dann flach). Theos
-  ~33 mm lateraler t-Fehler ist **random, nicht systematisch** → ICP zieht etwas mehr Punkte
+- **ICP-`max_corr` größer hilft minimal und saturiert sofort** (+1.1 %, dann flach). Der
+  ~33 mm große laterale t-Fehler ist **random, nicht systematisch** → ICP zieht etwas mehr Punkte
   rein, aber es gibt keine konsistente Korrespondenz, die den Drift wegzieht.
 - **PointToPlane @ 4 cm zerstört die Pose** (0.2195→0.0547): zu großer Radius + Flächen-
   Alignment latcht auf falsche Korrespondenzen, reißt die gute coarse+GenFlow-Ausrichtung weg.
@@ -64,7 +64,7 @@ zum Preis von ~+850 ms. Das ist **innerhalb des Rauschens und ändert das Rankin
 GDRNPP-RGB (0.305) bleibt klar vorn, RGB-D bleibt 2. Klasse. FP-iter ist VRAM-blockiert.
 
 **Das ist die Decke der generischen Refiner-Präzision auf diesem 2-Anker-D1-Scope.** Der
-33-mm-Fehler ist random Refiner-Rauschen (Theo T-166 bewiesen: kein Mesh-Origin-Offset), und
+33-mm-Fehler ist random Refiner-Rauschen (T-166 bewiesen: kein Mesh-Origin-Offset), und
 random Rauschen ist per Definition nicht durch schärfere/mehr-iterierte Geometrie-Refinement
 korrigierbar — es bräuchte ein **besseres Translations-Prior** (z.B. depth-initialisierte
 Translation wie FP's `guess_translation`, oder ein auf die Teile feingetuntes Modell), nicht

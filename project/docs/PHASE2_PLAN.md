@@ -234,7 +234,6 @@ nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader
 ## Related
 - [`PROJECT_REPORT.md`](PROJECT_REPORT.md) · [`REEVAL_T038_visib20.md`](REEVAL_T038_visib20.md) ·
   `eval_gdrnpp_val.json` · ADR-018 (BOP pivot) · ADR-017 (pose_result contract)
-- Brain: `patterns/pattern-symmetry-aware-bop-eval-harness.md`
 
 ## Sources (web research)
 - SymCode/SymNet — Resolving Symmetry Ambiguity in Correspondence-based Methods: https://arxiv.org/html/2405.10557v1

@@ -47,7 +47,7 @@ Cloudflare-Tunnel an [`max-utils.com/KIP`](https://max-utils.com/KIP/), zwei Ans
 
 ```
 Browser ─https─▶ Cloudflare-Tunnel ─▶ cloudflared (ai-desk Raspi)
-                ─▶ Caddy :8000 @kip ─▶ reverse_proxy 100.85.216.95:8077
+                ─▶ Caddy :8000 @kip ─▶ reverse_proxy $BOX_HOST:8077
                 ─▶ kip_server.py (FastAPI, port 8077, systemd-Service "kip-server")
                     ├─ /api/health, /api/metrics
                     ├─ /api/sim/generate_async      ← echte Live-Isaac-Pipeline
@@ -116,7 +116,7 @@ Zwei Notebooks, beide **top-to-bottom in einem Rutsch** lauffähig:
 
 Das Projekt läuft an drei Stellen:
 
-1. **GPU-Workstation** (`max@100.85.216.95`, RTX 3090, Tailscale):
+1. **GPU-Workstation** (`$GPU_HOST`, RTX 3090, Tailscale):
    - `kip-server.service` + `kip-worker.service` (systemd)
    - Isaac Sim 5.1 in `/mnt/data/isaacsim-venv/`
    - GDRNPP in `/mnt/data/bop/repos/gdrnpp/` mit `gdrnpp-venv`
@@ -133,7 +133,7 @@ Das Projekt läuft an drei Stellen:
 git clone <repo> POSE && cd POSE
 
 # Webservice-Health prüfen (Tailscale: brauchst Workstation-Zugang via VPN)
-curl http://100.85.216.95:8077/api/health
+curl http://$BOX_HOST:8077/api/health
 # oder public (geht ohne VPN):
 curl https://max-utils.com/KIP/api/health
 
@@ -151,7 +151,7 @@ laufen auf der Workstation. Wer lokal die Pipeline reproduzieren will, geht übe
 ### Auf der Workstation deployen
 
 ```bash
-ssh max@100.85.216.95
+ssh $GPU_HOST
 # Backend-Update (kip_server.py)
 sudo systemctl restart kip-server.service
 # Worker-Update (kip_infer_worker.py) — lädt alle 3 Checkpoints, ~4 min Warm-Load
@@ -229,7 +229,7 @@ Pfad noetig.
 | Wo | Was |
 |---|---|
 | **Laptop (Inferenz via Webservice)** | `requests`, `numpy`, `Pillow`. Kein lokaler GDRNPP-Stack noetig. |
-| **GPU-Workstation (`max@100.85.216.95`, Tailscale, RTX 3090)** | `isaacsim-venv` (SDG-Render), `train-venv` (Detektor), `bop-venv` (Konverter/Eval), `gdrnpp-venv` (Worker). Konfig in `.env`. |
+| **GPU-Workstation (`$GPU_HOST`, Tailscale, RTX 3090)** | `isaacsim-venv` (SDG-Render), `train-venv` (Detektor), `bop-venv` (Konverter/Eval), `gdrnpp-venv` (Worker). Konfig in `.env`. |
 
 Box-Setup im Detail: `../box_src/BOP_SETUP.md`. Eval: `../box_src/EVAL_BOP.md`.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Box-side autonomous finish trigger. Runs ON the box (nohup), independent of any
-# external Claude session or Max's internet. Polls the phase2 chain log; when
+# external session or the operator's connectivity. Polls the phase2 chain log; when
 # PHASE2_TRAIN_DONE appears it launches e2e_finish.sh exactly once (guard file).
 # On PHASE2_FAILED it exits without launching. This closes the gap where the GDRNPP
 # training finishes autonomously but the final eval/A-B/viewer/report (e2e_finish)

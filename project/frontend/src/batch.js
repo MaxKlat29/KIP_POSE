@@ -12,7 +12,7 @@
 //   /api/eval/result → result: {configs:[{seg,pose,ar_mean,ar_std,seg_ms,pose_ms,coverage,
 //                       crash_rate,...}]}  (Flag-Felder werden ignoriert)
 //   /api/eval/run    → {job}
-//   /api/eval/job/<job> (T-153, Jonas) → live-Contract:
+//   /api/eval/job/<job> (T-153) → live-Contract:
 //     {status, pct, phase, n_done, n_total:240, run_id,
 //      standings:[{rank, config_key, seg, pose, ar, ar_std, n_scenes, seg_ms, pose_ms,
 //                  coverage, crash_rate, ...}]}  — standings nach ar sortiert,

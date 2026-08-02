@@ -114,7 +114,7 @@
                                                │ Tailscale-LAN
                                                ▼
    ┌─────────────────────────────────────────────────────────────────────┐
-   │  GPU-Workstation  (max@100.85.216.95, RTX 3090, Ubuntu 24)          │
+   │  GPU-Workstation  ($GPU_HOST, RTX 3090, Ubuntu 24)                  │
    │  ─────────────────────────────────────────────────────────────────  │
    │                                                                     │
    │   systemd-Services (Auto-Start, Auto-Restart):                      │
@@ -255,7 +255,7 @@ jupyter notebook infer.ipynb
 
 ```bash
 # 1. SSH + Isaac-Setup auf Workstation
-ssh max@100.85.216.95
+ssh $GPU_HOST
 
 # 2. SDG-Daten neu rendern (Tausende Frames, mehrere Stunden GPU)
 /mnt/data/isaacsim-venv/bin/python /mnt/data/kip_pose/box_src/gen_sdg_arm_visible.py \
@@ -293,16 +293,16 @@ python3 -m http.server 8000
 
 ```bash
 # Code-Update (Backend)
-scp project/kip_server.py max@100.85.216.95:/mnt/data/kip_pose/project/
-ssh max@100.85.216.95 'sudo systemctl restart kip-server.service'
+scp project/kip_server.py $GPU_HOST:/mnt/data/kip_pose/project/
+ssh $GPU_HOST 'sudo systemctl restart kip-server.service'
 
 # Worker-Update
-scp box_src/kip_infer_worker.py max@100.85.216.95:/mnt/data/kip_pose/box_src/
-ssh max@100.85.216.95 'sudo systemctl restart kip-worker.service'
+scp box_src/kip_infer_worker.py $GPU_HOST:/mnt/data/kip_pose/box_src/
+ssh $GPU_HOST 'sudo systemctl restart kip-worker.service'
 # → Worker lädt alle 3 Checkpoints, ~4 min Warm-Load. journalctl -u kip-worker -f
 
 # Frontend (statisch, Cache-Control no-store → keine CF-Purge nötig)
-scp project/frontend/{kip.html,src/*,assets/*} max@100.85.216.95:/mnt/data/kip_pose/project/frontend/
+scp project/frontend/{kip.html,src/*,assets/*} $GPU_HOST:/mnt/data/kip_pose/project/frontend/
 ```
 
 ---
@@ -424,13 +424,6 @@ Deckt:
 - [ ] **Live-Isaac-Daemon** statt subprocess-Spawn pro Klick (würde Sim von ~80 s auf ~10 s drücken)
 - [ ] **Mid-poly cell-Variante** (~3-4 M tris, ~80 MB) zwischen `cell_web` und `cell_hq` — falls Detail-Anforderungen steigen
 - [ ] **Architektur-Vergleich** (MegaPose / FoundPose / GigaPose Slots im Modell-Dropdown vorbereitet)
-
----
-
-## 14 · Kontakt + Lizenz
-
-Privat / WIP. Workstation: `max@100.85.216.95` (Tailscale).
-Brain-Notes für Setup + Bugs unter `/Users/Admin/Documents/CLAUDE_BRAIN/`.
 
 ---
 

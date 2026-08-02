@@ -4,7 +4,7 @@ Gateway (kein Box/GPU noetig — Gateway+Services laufen nicht permanent).
 
 Prueft die HTTP-Naht (FastAPI TestClient):
 
-  * /api/pipelines → 7 Kombis mit Mias Pflicht-Feldern (unavailable_reason etc.).
+  * /api/pipelines → 7 Kombis mit den Pflicht-Feldern (unavailable_reason etc.).
   * /api/predict Routing:
       - Pipeline A (pipeline=gdrnpp ODER seg=yolo-obb&pose=gdrnpp ODER leer)
         → UNVERAENDERTER Live-Pfad: delegiert byte-identisch an _real_infer_job,
@@ -95,7 +95,7 @@ def _gateway_resp():
 
 
 # ── /api/pipelines ────────────────────────────────────────────────────────────
-def test_pipelines_returns_12_with_mia_fields(client, monkeypatch):
+def test_pipelines_returns_12_with_required_fields(client, monkeypatch):
     monkeypatch.setattr(K, "_gateway_health", lambda: None)
     monkeypatch.setattr(K, "_live_pipeline_a_available", lambda: True)
     r = client.get("/api/pipelines")
@@ -107,7 +107,7 @@ def test_pipelines_returns_12_with_mia_fields(client, monkeypatch):
     a = [p for p in pls if p["is_pipeline_a"]]
     assert len(a) == 1 and a[0]["id"] == "gdrnpp" and a[0]["available"] is True
     for p in pls:
-        # Mia S-010 §12 Pflicht-Felder:
+        # S-010 §12 Pflicht-Felder:
         assert {"id", "seg", "pose", "needs_depth", "is_pipeline_a",
                 "available", "unavailable_reason"} <= set(p)
         # unavailable_reason ist enum oder None:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """GLB -> BOP models/  +  models_info.json with symmetries  (Story S-203 / T-062).
 
-Implements Viktor adr.md §2 EXACTLY — the analytic fix for the 120deg/91deg
+Implements adr.md §2 EXACTLY — the analytic fix for the 120deg/91deg
 rotation problem. Per part:
   * export GLB mesh -> obj_{obj_id:06d}.ply in MILLIMETRES (GLB is metres -> x1000)
   * compute diameter, min_{x,y,z}, size_{x,y,z}  (mm, BOP models_info convention)
@@ -20,7 +20,7 @@ import argparse, json, os
 import numpy as np
 import trimesh
 
-# label -> obj_id (frozen, Viktor adr.md §1.2)
+# label -> obj_id (frozen, adr.md §1.2)
 PARTS = [
     ("Anker_Kurz",            1, "continuous"),
     ("Anker_Lang",            2, "continuous"),

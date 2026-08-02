@@ -2,8 +2,7 @@
 #
 # NOTE: yolo-svc and fp-svc build FROM the locally-built `foundationpose:ampere`
 #       image (torch cu128, opencv, numpy; sm_86 source-built pytorch3d/nvdiffrast
-#       for the RTX 3090 — see S-001 / recon/S001_BUILD_REPORT.md). Build that
-#       image first (docker/Dockerfile.ampere in the FoundationPose checkout).
+#       for the RTX 3090). Build that image first (docker/Dockerfile.ampere in the FoundationPose checkout).
 #       gigapose-svc builds FROM the locally-built `gigapose:ampere` image (a
 #       SEPARATE base — GigaPose pins xformers/pytorch-lightning against an older
 #       torch and cannot reuse foundationpose:ampere); build that image too
@@ -41,7 +40,7 @@
 services:
   yolo-svc:
     build: ./yolo-svc
-    # M1 (SECURITY_GATE, Bruno T-145): NO host port. yolo-svc is reached by the
+    # M1 (SECURITY_GATE, T-145): NO host port. yolo-svc is reached by the
     # gateway over the compose network as http://yolo-svc:8001. Exposing it on the
     # host (0.0.0.0:8001) would make an internal-only service internet-reachable.
     expose:
@@ -163,7 +162,7 @@ services:
       # cache (accept the license + download once on the host). Offline mode
       # keeps the service from ever touching the network. HF_HOME must equal the
       # container mount point below (/hf_cache) so the offline resolver finds the
-      # hub/ layout — see S-009 (Bruno): snapshot lives at
+      # hub/ layout — see S-009: snapshot lives at
       # /mnt/data/kip_pose_weights/hf_cache/hub/models--facebook--sam3 (3.3 GB,
       # safetensors only, NO pickle .pt — RCE vector excluded).
       HF_HOME: /hf_cache
@@ -174,15 +173,15 @@ services:
       # find armature instances well but do NOT reliably separate anker_kurz
       # from anker_lang (measured: a mixed scene came back all-anker_lang).
       # Treat SAM3 classes as approximate; YOLO remains the classifying source.
-      # SAM3_CONF default is 0.2, NOT the 0.5 docs value (ML_RECON/yannic falle):
-      # SAM3 scores run low on these out-of-domain images.
+      # SAM3_CONF default is 0.2, NOT the 0.5 docs value: SAM3 scores run low
+      # on these out-of-domain images.
       SAM3_CONF: ${SAM3_CONF:-0.2}
       SAM3_NMS_IOU: ${SAM3_NMS_IOU:-0.5}
       SAM3_PROMPTS: ${SAM3_PROMPTS:-}
     volumes:
       # Host HuggingFace cache with the facebook/sam3 snapshot, read-only. The
       # container mount point MUST equal HF_HOME above. Default = the box path
-      # Bruno populated (S-009); override HF_CACHE_DIR in .env elsewhere.
+      # Populated in S-009; override HF_CACHE_DIR in .env elsewhere.
       - ${HF_CACHE_DIR:-/mnt/data/kip_pose_weights/hf_cache}:/hf_cache:ro
     ipc: host
     deploy:
@@ -195,7 +194,7 @@ services:
 
   gateway:
     build: ./gateway
-    # M1 (SECURITY_GATE, Bruno T-145): bind to LOOPBACK only. The gateway is the
+    # M1 (SECURITY_GATE, T-145): bind to LOOPBACK only. The gateway is the
     # single mesh entry point; the native kip_server (:8077) and the eval runner
     # reach it on the host at 127.0.0.1:8000. Binding 0.0.0.0 would expose the
     # whole mesh to the internet (the box has no forward_auth). Override the host

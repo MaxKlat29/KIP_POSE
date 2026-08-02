@@ -2,7 +2,7 @@
 """Integrationstests fuer die kip_server-/api/eval/*-Endpoints (S-012 / T-138).
 
 Gegen einen GEMOCKTEN Eval-Lauf (kein Gateway/GPU/best.pt). Prueft die HTTP-Naht
-(FastAPI TestClient) gegen Lenas batch.js-Contract (Mia §14):
+(FastAPI TestClient) gegen den batch.js-Contract (UX-Spec §14):
 
   * GET  /api/eval/runs        → {runs:[{run_id,date,duration_s,n_configs}]}
   * GET  /api/eval/result/<id> → {configs:[{seg,pose,ar_mean,ar_std,seg_ms,pose_ms,
@@ -86,7 +86,7 @@ def test_runs_lists_persisted(client):
     ids = {x["run_id"] for x in body["runs"]}
     assert ids == {"run-a", "run-b"}
     for x in body["runs"]:
-        # Genau Lenas runs-Form.
+        # Genau die runs-Form.
         assert set(x.keys()) >= {"run_id", "date", "duration_s", "n_configs"}
         assert x["n_configs"] == 12
 
@@ -102,7 +102,7 @@ def test_result_schema(client):
     assert body["run_id"] == "run-fixture"
     cfgs = body["configs"]
     assert len(cfgs) == 12
-    # Pflicht-Felder (Lena batch.js): seg,pose,ar_mean,ar_std,seg_ms,pose_ms,
+    # Pflicht-Felder (batch.js): seg,pose,ar_mean,ar_std,seg_ms,pose_ms,
     # coverage,crash_rate,note,is_pipeline_a.
     for c in cfgs:
         assert {"seg", "pose", "ar_mean", "ar_std", "seg_ms", "pose_ms",
@@ -175,7 +175,7 @@ def test_full_async_run_through_endpoints(client, tmp_path, monkeypatch):
         time.sleep(0.05)
     assert st.get("pct") == 100, st
     run_id = st["run_id"]
-    # Ergebnis ist sofort ueber /api/eval/result abrufbar (Lena's loadRuns-Flow).
+    # Ergebnis ist sofort ueber /api/eval/result abrufbar (der loadRuns-Flow).
     res = client.get(f"/api/eval/result/{run_id}").json()
     assert res["n_configs"] == 12 and res["n_scenes"] == 2
     # Gateway-Kombis (pose != gdrnpp) sind gescort; die 3 gdrnpp-Kombis (A + 2 degraded)

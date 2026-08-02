@@ -41,7 +41,7 @@ OUT_REMOTE="${OUT_REMOTE:-/mnt/data/bop/results/eval_local}"
 OUT_LOCAL="${OUT_LOCAL:-./results/eval}"
 
 BOX_USER="${BOX_USER:-max}"
-BOX_HOST="${BOX_HOST:-100.85.216.95}"
+BOX_HOST="${BOX_HOST:?BOX_HOST not set — see project/.env.example}"
 SSH_OPTS="${SSH_OPTS:--o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new}"
 
 echo "[eval_bop.sh] shipping eval_bop.py -> ${BOX_USER}@${BOX_HOST}:${REMOTE_DIR}/" >&2

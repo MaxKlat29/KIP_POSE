@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """anker_flip_repro.py — DETERMINISTIC repro + measurement harness for the
 Anker 180-degree end-to-end flip at PARTIAL visibility (Session 2026-06-01,
-S-001 / T-083, Theo).
+S-001 / T-083).
 
 THE QUESTION (read-only, no training, no GPU):
   GDRNPP predicts the Anker (obj 1 Anker_Kurz, obj 2 Anker_Lang) rotated ~180deg
@@ -744,7 +744,7 @@ def occ_compare(per_inst, args, syms):
     gt_inst = gt_R_for_inst(args.bop_root)
 
     def bands():
-        # occludiertes „nur-Schaft"-Band zuerst (Theo: visib[0.2-0.4)=43% Flip),
+        # occludiertes „nur-Schaft"-Band zuerst (Befund: visib[0.2-0.4)=43% Flip),
         # dann das breitere partial-Band + well-vis Regressionsschutz.
         return [
             ("shaft_only_0.20_0.40", 0.20, 0.40),

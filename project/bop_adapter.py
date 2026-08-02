@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""POSE — BOP -> pose_result Adapter (Viktor adr.md §3, beide Gleise).
+"""POSE — BOP -> pose_result Adapter (adr.md §3, beide Gleise).
 
 DER Adapter zwischen jedem BOP-konventionierten 6D-Pose-Schätzer (GDRNPP / Gleis B
 UND MegaPose / Gleis A) und dem eingefrorenen pose_result-Contract (ADR-017,

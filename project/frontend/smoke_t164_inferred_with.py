@@ -18,7 +18,7 @@ treibt den ECHTEN Sim-Klick-Flow (Kombi waehlen -> "Neue Szene live generieren"
   6. Keine Emojis / kein Badge-Markup in der Zeile.
 
 Ausfuehren (canonical venv):
-  /Users/maximilianklattig/Documents/DEV/KIP_POSE/.venv/bin/python \
+  .venv/bin/python \
     project/frontend/smoke_t164_inferred_with.py
 """
 import re

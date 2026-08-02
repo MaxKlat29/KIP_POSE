@@ -15,7 +15,7 @@
 # Re-runnable: rsync skips unchanged files.
 set -euo pipefail
 
-BOX="${BOX:-max@100.85.216.95}"
+BOX="${BOX:-${GPU_HOST:?set GPU_HOST or BOX (user@host) — see project/.env.example}}"
 BOX_REPO="${BOX_REPO:-/mnt/data/kip_pose}"
 BOX_GDRN_OUT="${BOX_GDRN_OUT:-/mnt/data/bop/repos/gdrnpp/output/gdrn/poseIsaacPbrSO}"
 

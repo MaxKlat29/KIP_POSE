@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Arm-VISIBLE YOLOv8-OBB detector retrain  (Story S-401 / T-067, Viktor adr.md §4).
+"""Arm-VISIBLE YOLOv8-OBB detector retrain  (Story S-401 / T-067, adr.md §4).
 
 The old detector.pt was trained arm-HIDDEN (mAP50 0.987 on the easier arm-free
 distribution). With the LARA5 arm visible (the actual task), the old detector

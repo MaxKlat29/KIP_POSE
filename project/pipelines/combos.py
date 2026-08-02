@@ -2,7 +2,7 @@
 
 Seg-Source × Pose-Source. Es gibt GENAU 7 valide Kombis (NICHT 12) — die GDRNPP-
 Kopplungsregel (CONTRACT.md §4) verbietet die uebrigen. Quelle der Wahrheit fuer die
-Whitelist + `needs_depth` + `pipeline`-Flag ist CONTRACT.md §5 (Viktor, frozen v1):
+Whitelist + `needs_depth` + `pipeline`-Flag ist CONTRACT.md §5 (frozen v1):
 
   # | Seg       | Pose          | pose_source-id  | pipeline | needs_depth
   --+-----------+---------------+-----------------+----------+------------
