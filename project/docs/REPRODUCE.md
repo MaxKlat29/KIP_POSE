@@ -139,6 +139,76 @@ command (as above) so SSH returns immediately.
 
 ---
 
+## 3b. Externe Abhängigkeiten (FoundationPose · GigaPose)
+
+Das Service-Mesh in `project/mesh/` vendort **keinen** der beiden RGB-D-Pose-
+Estimatoren. `docker-compose.yml` erwartet sie als **Schwester-Checkouts** neben
+diesem Repo (überschreibbar via `FOUNDATIONPOSE_DIR` / `GIGAPOSE_DIR` in `.env`):
+
+```
+<parent>/
+├── KIP_POSE/          ← dieses Repo
+├── FoundationPose/    ← FP_DIR
+└── GigaPose/          ← GIGAPOSE_DIR
+```
+
+Beide werden aus **KIP-Forks** geklont, nicht von upstream. Die Forks enthalten
+die projektspezifische Arbeit (Docker-Build, CAD-Modelle, gerenderte Templates,
+den GigaPose-Inferenz-Wrapper), die upstream nicht existiert:
+
+| Checkout | Klonen von | Upstream | Delta zum Upstream |
+|---|---|---|---|
+| `FoundationPose/` | <https://github.com/yannicd03/FoundationPose> | [NVlabs/FoundationPose](https://github.com/NVlabs/FoundationPose) | 3 Commits: Blackwell-(sm_120)-Docker-Build + Helper-Skripte, Weights-Bezug |
+| `GigaPose/` | <https://github.com/yannicd03/gigapose> | [nv-nguyen/gigapose](https://github.com/nv-nguyen/gigapose) | 4 Commits: headless MegaPose-Refiner (In-Process-Renderer + Depth-Snap), KIP2-Setup (Docker, CAD, Templates), Checkpoint-Bezug |
+
+> **`gigapose_infer.py` gibt es nur im Fork.** Der Wrapper, den `gigapose-svc`
+> und alle drei Patches unten adressieren, ist Teil des KIP-Forks — upstream
+> existiert die Datei nicht. Ein Klon von `nv-nguyen/gigapose` reicht also nicht.
+
+### Nach dem Klonen
+
+1. **FoundationPose:** die C++-Extension einmalig im Checkout bauen
+   (`bash build_mycpp.sh` → `mycpp/build/*.so`), sonst startet `fp-svc` nicht
+   (`module 'mycpp' has no attribute 'cluster_poses'`).
+2. **GigaPose:** Templates einmalig rendern, bevor `gigapose-svc` startet:
+   ```bash
+   python -m src.scripts.render_custom_templates custom_dataset_name=kip2
+   ```
+3. **GigaPose-Patches anwenden** — siehe nächster Abschnitt.
+
+### Die drei GigaPose-Patches sind NICHT im Fork enthalten
+
+`box_src/mesh_patches/` macht hardcodierte Refiner-Parameter in
+`gigapose_infer.py` env-steuerbar. Der Fork enthält davon nur `GP_DEPTH_SNAP`;
+die übrigen Schalter müssen nach dem Klonen aufgespielt werden:
+
+| Patch | Macht env-bar | Im Fork? |
+|---|---|---|
+| `patch_icp_t167.py` | `GP_ICP_MAX_CORR`, `GP_ICP_ITERS`, `GP_ICP_ESTIMATION` | nein |
+| `patch_pre_refine_snap_t170.py` | `GP_PRE_REFINE_SNAP` (`GP_DEPTH_SNAP` vorbestehend) | teilweise |
+| `patch_centroid_init_t173.py` | `GP_CENTROID_INIT` | nein |
+
+Alle drei sind **idempotent** (erkennen bereits gepatchten Code) und schreiben
+direkt in `$GIGAPOSE_DIR/gigapose_infer.py`. Sie erwarten den Pfad
+`/workspace/GigaPose/gigapose_infer.py`, laufen also **im Container**:
+
+```bash
+docker compose -f project/mesh/docker-compose.yml exec gigapose-svc \
+  python /patches/patch_icp_t167.py     # analog t170, t173
+```
+
+Weil `gigapose_infer.py` über einen Bind-Mount eingehängt ist, überleben die
+Patches ein `docker compose up --force-recreate`. Messwerte und Begründung der
+Default-Werte: `project/docs/EVAL_T167_rgbd_refiner_tuning.md`.
+
+> **GPU-Architektur:** die Fork-Docker-Files zielen auf **Blackwell (sm_120)**;
+> das hier dokumentierte Deployment lief auf einer **RTX 3090 (Ampere, sm_86)**
+> mit `TORCH_CUDA_ARCH_LIST="8.6"`. Für Ampere die `docker/Dockerfile.ampere`
+> im jeweiligen Checkout bauen (`foundationpose:ampere`, `gigapose:ampere`) —
+> siehe Kopf von `project/mesh/docker-compose.yml`.
+
+---
+
 ## 4. Full reproduction order (zero → results)
 
 1. **Local:** `pip install -r project/requirements.txt`; `pytest` green (§1).
@@ -150,6 +220,9 @@ command (as above) so SSH returns immediately.
    `project/models/`.
 5. **Pose:** train/run GDRNPP in `gdrnpp-venv`; point `e2e_infer.py
    --checkpoint` at the resulting `.pth`.
+5b. **RGB-D-Pfad (optional):** FoundationPose- und GigaPose-Forks als
+   Schwester-Checkouts klonen, `mycpp` bauen, kip2-Templates rendern und die
+   drei GigaPose-Patches anwenden — siehe §3b.
 6. **Eval:** score predictions with the BOP toolkit — `box_src/eval_bop.sh` /
    `box_src/EVAL_BOP.md`.
 7. **Inference + viewer (local):** `python3 project/e2e_infer.py --image ...

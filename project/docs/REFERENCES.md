@@ -27,6 +27,14 @@
 > *GigaPose: Fast and Robust Novel Object Pose Estimation via One Correspondence.*
 > CVPR 2024. arXiv: https://arxiv.org/abs/2311.14155 ·
 > Code: https://github.com/nv-nguyen/gigapose (MIT)
+> · KIP-Fork: https://github.com/yannicd03/gigapose
+
+**FoundationPose** — unified 6D pose estimation/tracking of novel objects (RGB-D-Pfad, `fp-svc`).
+> B. Wen, W. Yang, J. Kautz, S. Birchfield.
+> *FoundationPose: Unified 6D Pose Estimation and Tracking of Novel Objects.*
+> CVPR 2024 (Highlight). arXiv: https://arxiv.org/abs/2312.08344 ·
+> Code: https://github.com/NVlabs/FoundationPose (NVIDIA Source Code License)
+> · KIP-Fork: https://github.com/yannicd03/FoundationPose
 
 **MegaPose** — render-and-compare pose refinement for novel objects (Gleis A, stage 3).
 > Y. Labbé, L. Manuelli, A. Mousavian, S. Tyree, S. Birchfield, J. Tremblay,

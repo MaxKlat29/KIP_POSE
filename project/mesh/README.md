@@ -4,6 +4,15 @@ Vendored Code-Layer des Multi-Pipeline-POSE-Service-Mesh. Ursprung: Yannics
 `kip-pose-detection` (ein ~80% fertiges, scaffolded-aber-nie-end-to-end-gefahrenes
 Docker-Compose-Mesh). Hierher gebracht in T-128 (S-002, 2026-06-07).
 
+> **Zwei Estimatoren liegen NICHT hier.** `docker-compose.yml` mountet
+> FoundationPose und GigaPose aus Schwester-Checkouts (`FOUNDATIONPOSE_DIR` /
+> `GIGAPOSE_DIR`). Beide werden aus den KIP-Forks geklont — der Wrapper
+> `gigapose_infer.py`, den `gigapose-svc` und die Patches in
+> `box_src/mesh_patches/` adressieren, existiert upstream nicht:
+> <https://github.com/yannicd03/FoundationPose> ·
+> <https://github.com/yannicd03/gigapose>.
+> Vollständige Setup-Schritte: [`../docs/REPRODUCE.md` §3b](../docs/REPRODUCE.md).
+
 ## Was hier liegt
 
 | Pfad | Was | Rolle |

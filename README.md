@@ -347,6 +347,20 @@ POSE/
     └── PROJECT_REPORT.md                    akademischer Kurzbericht
 ```
 
+### Externe Checkouts (nicht in diesem Repo)
+
+Der RGB-D-Pfad des Service-Mesh (`project/mesh/`) erwartet zwei Estimatoren als
+**Schwester-Checkouts** neben diesem Repo — geklont aus den KIP-Forks, nicht von
+upstream (der GigaPose-Wrapper `gigapose_infer.py` existiert nur im Fork):
+
+| Checkout | Repo | upstream |
+|---|---|---|
+| `../FoundationPose` | <https://github.com/yannicd03/FoundationPose> | [NVlabs/FoundationPose](https://github.com/NVlabs/FoundationPose) |
+| `../GigaPose` | <https://github.com/yannicd03/gigapose> | [nv-nguyen/gigapose](https://github.com/nv-nguyen/gigapose) |
+
+Setup, Build-Schritte und die drei GigaPose-Patches aus `box_src/mesh_patches/`:
+siehe [`project/docs/REPRODUCE.md` §3b](project/docs/REPRODUCE.md).
+
 ---
 
 ## 9 · Final-AR IC-BIN (best-by-val, BOP-Toolkit)
