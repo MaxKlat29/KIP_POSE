@@ -103,6 +103,15 @@ def parse_args():
     # + 0.05 m Puffer. Der Wert gilt fuer die ABWURF- UND die Endposition.
     p.add_argument("--arm-clear", type=float, default=0.18,
                    help="XY keep-out radius (m) around the arm foundation; 0 disables")
+    # T-190: Randfilter fuer die Endlage. Der Abwurf laesst sich ueber --spawn-x/-y
+    # begrenzen, beim Fallen rollen die Teile aber an die Kante. Im aeussersten
+    # 3-cm-Streifen der Platte liegt die Fehlerquote messbar hoeher (22 % gegen
+    # 12 % weiter innen), und ein Teil halb ueber der Kante ist ohnehin kein
+    # Betriebsfall. 0 schaltet den Filter ab.
+    p.add_argument("--table-margin", type=float, default=0.0,
+                   help="Mindestabstand der Endlage zur Tischkante (m); 0 disabled")
+    p.add_argument("--table-bounds", default="0.057,0.783,0.042,0.537",
+                   help="Tischflaeche 'xmin,xmax,ymin,ymax' (m) fuer --table-margin")
     p.add_argument("--arm-base", default="",
                    help="override arm-foundation center 'x,y' (m); empty = derive from scene")
     # Smoke/debug only: force an explicit per-scene part-count sequence instead of
@@ -593,7 +602,27 @@ def main():
             dx = float(t[0]) - arm_base_xy[0]; dy = float(t[1]) - arm_base_xy[1]
             return dx * dx + dy * dy < ARM_CLEAR_R * ARM_CLEAR_R
 
-        in_keepout = [pp for pp in path2label if _in_arm_keepout(pp)]
+        _tb = [float(v) for v in a.table_bounds.split(",")]
+        TMARG = float(a.table_margin)
+
+        def _am_tischrand(prim_path):
+            """True, wenn die Endlage naeher als --table-margin an der Kante liegt."""
+            if TMARG <= 0:
+                return False
+            prim = stage.GetPrimAtPath(prim_path)
+            if not prim.IsValid():
+                return False
+            try:
+                t = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
+                    Usd.TimeCode.Default()).ExtractTranslation()
+            except Exception:
+                return False
+            x, y = float(t[0]), float(t[1])
+            return (x < _tb[0] + TMARG or x > _tb[1] - TMARG
+                    or y < _tb[2] + TMARG or y > _tb[3] - TMARG)
+
+        in_keepout = [pp for pp in path2label
+                      if _in_arm_keepout(pp) or _am_tischrand(pp)]
         for pp in in_keepout:
             try:
                 stage.RemovePrim(pp)
@@ -601,7 +630,7 @@ def main():
                 pass
             path2label.pop(pp, None)
         if in_keepout:
-            log(f"  [keep-out] {len(in_keepout)} Teil(e) am Armsockel entfernt")
+            log(f"  [keep-out] {len(in_keepout)} Teil(e) am Armsockel oder Tischrand entfernt")
 
         unstable = [pp for pp, lbl in path2label.items() if _is_upright_unstable(pp, lbl)]
         for pp in unstable:
