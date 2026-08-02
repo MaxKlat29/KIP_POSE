@@ -918,3 +918,116 @@ body.has-intro-video #slot-intro-still { display: none; }
 .pip { right: 16px; bottom: 74px; width: min(30vw, 400px); }
 .pip.pip--big { bottom: 74px; }
 .kip-cell-loader { right: 16px; bottom: 74px; }
+
+/* ══ Druckansicht (?print) ═══════════════════════════════════════════════════
+   Ein Blatt je Seite im 16:9-Format, ohne Bedien-Chrome. Das PDF ist die
+   Rueckfallebene fuer den Vortrag, deshalb steht dort genau derselbe Inhalt
+   wie auf der Wand, nur ohne Video-Platzhalter und ohne interne Notizen. */
+@page { size: 338mm 190mm; margin: 0; }
+
+body.print-mode { background: #12171f; height: auto; overflow: visible; }
+html:has(body.print-mode) { height: auto; overflow: visible; }
+body.print-mode #app {
+  position: static; display: block; height: auto; min-height: 0;
+  overflow: visible; inset: auto;
+}
+body.print-mode #scene,
+body.print-mode .kip-bottombar,
+body.print-mode #pip,
+body.print-mode #cell-loader,
+body.print-mode #status,
+body.print-mode .legend,
+body.print-mode .kip-video,
+body.print-mode .kip-slot,
+body.print-mode .kip-screen:not(.kip-screen--slide) { display: none !important; }
+
+body.print-mode .kip-screen--slide {
+  position: static; inset: auto; display: block; overflow: visible;
+  padding: 0; page-break-after: always; break-after: page;
+}
+body.print-mode .kip-screen--slide:last-of-type { page-break-after: auto; break-after: auto; }
+body.print-mode .kip-slide {
+  width: 100%; max-width: none; min-height: 176mm; height: auto; max-height: none;
+  margin: 0; border-radius: 0; border: none; box-shadow: none;
+  backdrop-filter: none; background: #161c26;
+  padding: 16mm 18mm; font-size: 15.5pt; overflow: visible;
+}
+body.print-mode .kip-slide--title { min-height: 176mm; }
+body.print-mode .kip-slide__h { font-size: 26pt; }
+body.print-mode .kip-top { position: static; height: auto; padding: 6mm 18mm 0; background: #161c26; border: none; }
+body.print-mode #app { display: block; }
+body.print-mode .kip-shots img, body.print-mode .kip-shot--single img { max-height: 62mm; }
+body.print-mode .kip-video, body.print-mode .kip-shot--title { display: none !important; }
+
+/* Farben im PDF erhalten */
+body.print-mode, body.print-mode * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+/* Druck: alles auf genau eine Seite je Blatt. Kompaktere Typo und Abstaende,
+   Bilder und Diagramme gedeckelt, damit nichts auf eine zweite Seite rutscht. */
+body.print-mode .kip-slide {
+  min-height: 0; height: 176mm; padding: 11mm 14mm; font-size: 12.5pt;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+body.print-mode .kip-slide__h { font-size: 21pt; }
+body.print-mode .kip-slide__head { padding-bottom: 4mm; margin-bottom: 6mm; }
+body.print-mode .kip-slide__body { line-height: 1.4; }
+body.print-mode .kip-bul li { margin-bottom: 2.6mm; }
+body.print-mode .kip-bul--tight li { margin-bottom: 1.8mm; }
+body.print-mode .kip-cards { gap: 3mm; margin-bottom: 5mm; }
+body.print-mode .kip-card2 { padding: 3.5mm 4mm; gap: 1.2mm; }
+body.print-mode .kip-figs { gap: 3.5mm; margin: 5mm 0; }
+body.print-mode .kip-fig { padding: 3.5mm 4mm; }
+body.print-mode .kip-fig__val { font-size: 17pt; }
+body.print-mode .kip-take li { margin-bottom: 3mm; }
+body.print-mode .kip-statement { margin-bottom: 5mm; }
+body.print-mode .kip-chain li { padding: 3.5mm 4mm; }
+body.print-mode .kip-dia { margin-bottom: 4mm; max-height: 62mm; }
+body.print-mode .kip-shots img, body.print-mode .kip-shot--single img,
+body.print-mode .kip-obbimg { max-height: 54mm; }
+body.print-mode .kip-cmp td { padding: 2mm 3mm; }
+body.print-mode .kip-cmp th { padding: 2mm 3mm; }
+body.print-mode .kip-qa { font-size: 0.86em; }
+body.print-mode .kip-qa dd { margin-bottom: 3mm; }
+body.print-mode .kip-matrix__c, body.print-mode .kip-matrix__rh { padding: 3mm 3mm; }
+body.print-mode .kip-claim { margin-top: 5mm; padding: 4mm 5mm; }
+
+/* Druck, zweiter Durchgang: eine Seite je Blatt, nichts abgeschnitten.
+   Die Kopfzeile der Anwendung entfaellt, jedes Blatt traegt seinen eigenen
+   Titel; dadurch faellt auch die Leerseite am Anfang weg. */
+body.print-mode .kip-top { display: none !important; }
+body.print-mode .kip-screen--slide { margin: 0; }
+body.print-mode .kip-slide {
+  height: 190mm; padding: 12mm 14mm; font-size: 11.5pt;
+  justify-content: flex-start;
+}
+body.print-mode .kip-slide__h { font-size: 19pt; }
+body.print-mode .kip-slide__body { font-size: 1em; }
+body.print-mode .kip-slide--title .kip-slide__body { justify-content: center; }
+body.print-mode .kip-slide__lead { font-size: 1.2em; margin-bottom: 6mm; }
+body.print-mode .kip-slide__meta { font-size: 0.72em; }
+body.print-mode .kip-fig__val { font-size: 15pt; }
+body.print-mode .kip-fig__lbl, body.print-mode .kip-card2__t { font-size: 0.66em; }
+body.print-mode .kip-dia { max-height: 52mm; }
+body.print-mode .kip-shots img, body.print-mode .kip-shot--single img,
+body.print-mode .kip-obbimg { max-height: 44mm; }
+body.print-mode .kip-shots { gap: 3mm; margin: 4mm 0; }
+body.print-mode .kip-qa { font-size: 0.8em; column-gap: 10mm; }
+body.print-mode .kip-bul li { margin-bottom: 2.2mm; }
+body.print-mode .kip-take li { margin-bottom: 2.4mm; }
+body.print-mode .kip-slide__body--split, body.print-mode .kip-slide__body--2col { gap: 4mm 10mm; }
+/* Druck: Bilder mittig und ohne schwarze Ränder (kein Cover-Zuschnitt). */
+body.print-mode .kip-shot--single img {
+  width: auto; max-width: 100%; margin: 0 auto; display: block; object-fit: contain;
+}
+body.print-mode .kip-shots img { object-fit: contain; background: transparent; }
+/* Druck: die Seitenbreite liegt unter der Mobil-Schwelle, deshalb griffen dort
+   die einspaltigen Regeln. Für das PDF gelten wieder die Vollformat-Raster. */
+body.print-mode .kip-matrix__row { grid-template-columns: 1.25fr repeat(4, 1fr) !important; }
+body.print-mode .kip-slide__body--2col { grid-template-columns: 1fr 1fr !important; }
+body.print-mode .kip-slide__body--split { grid-template-columns: 1.35fr 1fr !important; }
+body.print-mode .kip-cards--4 { grid-template-columns: repeat(4, 1fr) !important; }
+body.print-mode .kip-cards--3 { grid-template-columns: repeat(3, 1fr) !important; }
+body.print-mode .kip-vs { grid-template-columns: 1fr auto 1fr !important; }
+body.print-mode .kip-vs__mid { display: block !important; }
+body.print-mode .kip-qa { columns: 2 !important; }
+body.print-mode .kip-shots { grid-template-columns: repeat(3, 1fr) !important; }

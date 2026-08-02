@@ -1144,7 +1144,8 @@
               <li>Farbbild und Tiefenbild sind keine Konkurrenten, sondern örtlich ergänzende
                 Experten: Jeder ist dort stark, wo der andere schwach ist.</li>
               <li>Der Tiefenweg trifft die Drehlage am genauesten und kommt ohne Training aus,
-                der trainierte Farbweg sitzt in der Position genauer und arbeitet überall.</li>
+                der trainierte Farbweg sitzt in der Position genauer und funktioniert auch dort,
+                wo keine Tiefe verfügbar ist.</li>
               <li>Eine geometrisch gesteuerte Auswahl nutzt beide dort, wo sie stark sind, und
                 bringt das Teil im Schatten von 424,6 auf 3,4 Millimeter.</li>
             </ol>
@@ -1159,7 +1160,6 @@
               <li>Bei teilweise verdeckten Teilen bleiben echte Mehrdeutigkeiten der Drehlage,
                 die kein Weg allein auflöst.</li>
             </ul>
-            <p class="kip-slot" data-owner="Jerun">Platz für Jeruns eigene Fazit-Punkte.</p>
           </div>
         </article>
       </section>
@@ -1174,11 +1174,17 @@
             <ol class="kip-take kip-take--next">
               <li>An erster Stelle steht die Prüfung an realen Daten: ein kleiner Datensatz mit
                 echter Tiefe, durch beide Wege gemessen, dazu der Abgleich der berechneten mit
-                der real gemessenen Schattenfläche.</li>
+                der real gemessenen Schattenfläche. Dabei werden auch die beiden Teilwege
+                getrennt voneinander geprüft, um ihre Genauigkeit gegenüber der Gesamtlösung
+                einzuordnen.</li>
               <li>Danach die Vervollständigung des Tiefenwegs, damit auch das Zahnrad außerhalb
                 des Schattens über die Tiefe geschätzt werden kann.</li>
-              <li>Schließlich die Übertragbarkeit: Der modulare Aufbau nimmt neue Bauteile und
-                neue Verfahren ohne strukturelle Änderung auf.</li>
+              <li>Außerdem die Automatisierung der Schattenkarte, damit sie sich bei veränderter
+                Stellung von Kamera oder Arm selbstständig neu berechnet.</li>
+              <li>Schließlich die Übertragbarkeit: Der modulare Aufbau nimmt neue Bauteile aus
+                anderen Fertigungsverfahren sowie neue Verfahren ohne strukturelle Änderung auf,
+                darunter idealerweise eine kommerziell nutzbare Alternative zu
+                FoundationPose.</li>
             </ol>
             <figure class="kip-video kip-video--inline" id="slot-crash-video" hidden>
               <video controls preload="metadata">

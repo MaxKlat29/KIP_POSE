@@ -471,6 +471,7 @@ function showDemo(which) {
 }
 
 function showPage(id) {
+  if (document.body.classList.contains("print-mode")) return;
   const page = PAGE_BY_ID.get(id);
   if (!page && !TOOL_IDS.has(id)) return showPage(DECK[0].id);
   history.replaceState?.(null, "", `#${id}`);
@@ -850,6 +851,18 @@ document.getElementById("moe-show-zone").addEventListener("change", (e) => {
 document.getElementById("moe-show-cone").addEventListener("change", (e) => {
   moeOverlay.setConeVisible(e.target.checked);
 });
+
+// Druckansicht (?print): alle Vortragsblaetter untereinander, je eines pro
+// Seite, ohne Navigation, ohne 3D-Hintergrund, ohne Notizen und ohne die
+// Video-Platzhalter. Gedacht als Handout und als Rueckfallebene, falls im
+// Vortrag weder Netz noch Live-Demo verfuegbar sind.
+if (location.search.includes("print")) {
+  document.body.classList.add("print-mode", "notizen-aus");
+  for (const p of DECK) {
+    const scr = document.getElementById(`screen-${p.id}`);
+    if (scr && !p.demo) scr.hidden = false;
+  }
+}
 
 // Offen-Notizen sind beim Bauen sichtbar. Fuer den Vortrag blendet Taste "n"
 // sie aus, ?clean in der URL startet direkt ohne sie.
