@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-02T11:25:25Z",
+  "updated": "2026-08-02T12:06:00Z",
   "columns": [
     {
       "id": "backlog",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-02T11:25:25Z",
+      "updated": "2026-08-02T12:06:00Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11796,6 +11796,12 @@
           "agent": "claude",
           "level": "success",
           "msg": "Randfilter --table-margin (Post-Settle) im SDG, Live-Sim auf 8 cm. Daten: 0-3cm Randstreifen 22% ueber Schwelle vs 12% weiter innen. Verifiziert: Log meldet '3 Teile am Armsockel oder Tischrand entfernt'."
+        },
+        {
+          "ts": "2026-08-02T12:06:00Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "PDF-Foliendeck erzeugt: ?print-Ansicht + Chrome print-to-pdf, 24 Seiten 16:9, ohne Video-Slots und interne Notizen. Liegt als project/docs/KIP_Praesentation.pdf und in ~/Downloads."
         }
       ]
     }
