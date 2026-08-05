@@ -895,8 +895,10 @@ body.has-intro-video #slot-intro-still { display: none; }
 /* ── Textbild: ganze Sätze brauchen etwas kleinere Schrift und mehr Zeilenluft ── */
 .kip-slide {
   font-size: clamp(17px, 1.22vw, 23px); padding: 32px 40px 36px;
-  --card-h: 0.76em;   /* Karten-Ueberschrift */
-  --card-t: 0.62em;   /* Karten-Text, Badges, Inline-Legenden */
+  /* Je eine Stufe unter der vorigen Staffel (Max 05.08.): Ueberschrift
+     0.78 -> 0.72, Fliesstext 0.62 -> 0.58. */
+  --card-h: 0.72em;   /* Karten-Ueberschrift */
+  --card-t: 0.58em;   /* Karten-Text, Badges, Inline-Legenden */
 }
 .kip-slide__body { line-height: 1.55; }
 .kip-bul li { margin-bottom: 13px; }
