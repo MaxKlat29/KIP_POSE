@@ -1734,6 +1734,18 @@ def _pool_take(rawdir):
         src = pick / name
         if src.exists():
             shutil.copy2(src, rawdir / name)
+    # gt_raw traegt die urspruengliche Frame-Nummer der Szene. Der BOP-Konverter
+    # leitet daraus die Namen der Nachbardateien ab und suchte im Job-Verzeichnis
+    # nach instance_0007.npy statt _0000. Beim Uebernehmen deshalb auf 0 setzen.
+    gt = rawdir / "gt_raw_0000.json"
+    if gt.exists():
+        try:
+            doc = json.loads(gt.read_text())
+            if doc.get("image_id") != 0:
+                doc["image_id"] = 0
+                gt.write_text(json.dumps(doc))
+        except Exception:                 # noqa: BLE001 - lieber roh weiterreichen
+            pass
     return (rawdir / "rgb_0000.png").exists()
 
 # T-183: persistenter warmer Isaac-Worker (systemd: kip-isaac-worker). Statt pro
