@@ -318,7 +318,7 @@ const GROUPS = [
 const DECK = [
   { id: "intro",          group: "intro",      label: "Titel" },
   { id: "mot-aufgabe",    group: "motivation", label: "Ausgangssituation" },
-  { id: "mot-schwierig",  group: "motivation", label: "Warum schwierig" },
+  { id: "mot-schwierig",  group: "motivation", label: "Herausforderungen" },
   { id: "vor-ansaetze",   group: "vorgehen",   label: "Vorgehen" },
   { id: "vor-split",      group: "vorgehen",   label: "Lösungsansatz" },
   { id: "vor-modelle",    group: "vorgehen",   label: "Verfahren" },

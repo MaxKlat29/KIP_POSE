@@ -160,7 +160,7 @@
       <section id="screen-mot-schwierig" class="kip-screen kip-screen--slide kip-screen--wide" hidden>
         <article class="kip-slide kip-slide--wide">
           <header class="kip-slide__head">
-            <h2 class="kip-slide__h">Warum das schwierig ist</h2>
+            <h2 class="kip-slide__h">Herausforderungen</h2>
             <span class="kip-slide__who">Marc</span>
           </header>
           <div class="kip-slide__body kip-slide__body--split">
@@ -175,39 +175,34 @@
                 </div>
                 <div class="kip-card2 kip-card2--warn">
                   <span class="kip-card2__ico" aria-hidden="true">&#9678;</span>
-                  <span class="kip-card2__h">Erkennen genügt nicht</span>
+                  <span class="kip-card2__h">Reine Detektion genügt nicht</span>
                   <span class="kip-card2__t">Detektion und Segmentierung liefern Klasse und
                     Bildregion. Die 6D-Lage folgt daraus nicht, sie erfordert eine Korrespondenz
                     zwischen Bildpunkten und CAD-Geometrie.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
                   <span class="kip-card2__ico" aria-hidden="true">&#9878;</span>
-                  <span class="kip-card2__h">Millimeter und Grad</span>
-                  <span class="kip-card2__t">Gefordert ist Greifgenauigkeit im
-                    Millimeterbereich. Sie muss auf der Domäne erreicht werden, die am wenigsten
-                    verwertbare Merkmale liefert.</span>
+                  <span class="kip-card2__h">Sehr geringer Toleranzbereich</span>
+                  <span class="kip-card2__t">Für die praktische Anwendung ist eine
+                    Greifgenauigkeit mit sehr geringer Toleranz notwendig.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
                   <span class="kip-card2__ico" aria-hidden="true">&#8635;</span>
-                  <span class="kip-card2__h">Determinismus reicht nicht</span>
+                  <span class="kip-card2__h">Deterministisch schwer umsetzbar</span>
                   <span class="kip-card2__t">Ein deterministisch programmierter Ablauf mit
-                    Vorrichtungen und festen Greifpunkten löst genau eine Anordnung. Die Zelle
-                    muss die Lage zur Laufzeit aus einer Aufnahme inferieren.</span>
+                    Vorrichtungen und festen Greifpunkten ist durch die Varianz in der
+                    Bauteilverteilung nicht umsetzbar.</span>
                 </div>
               </div>
               <ul class="kip-bul">
-                <li>Wegkonstruieren lässt sich nichts davon, denn Bauteile, Greifer und Zelle
-                  stehen so in der Lernfabrik.</li>
-                <li class="kip-bul__hi">Gesucht sind deshalb Verfahren, die den Bezug zum
-                  CAD-Modell herstellen, und ein Maßstab, der sie fair gegeneinander stellt.</li>
+                <li class="kip-bul__hi">Prämisse: An den physischen Gegebenheiten der Anlage
+                  ist kurzfristig nichts zu ändern, sie müssen also in die Lösung integriert
+                  werden.</li>
               </ul>
             </div>
             <div>
               <figure class="kip-shot kip-shot--single">
                 <img src="./assets/img/detect_arm.jpg" alt="Roboterarm verdeckt einen Teil der Tischfläche" />
-                <figcaption>Der Detektor findet die Teile zuverlässig, hier mit 94 bis 95
-                  Prozent. Die Lage im Raum steht damit noch nicht fest. Dazu verdeckt der
-                  Arm Teile im Farb- wie im Tiefenbild.</figcaption>
               </figure>
             </div>
           </div>
