@@ -1683,6 +1683,59 @@ _LIVE_ROOT    = pathlib.Path(os.environ.get(
     "KIP_LIVE_ROOT", "/mnt/data/kip_pose/project/temp/kip_live"))
 _LIVE_ROOT.mkdir(parents=True, exist_ok=True)
 
+# ── Szenen-Puffer fuer die Vortrags-Demo (T-193, Max 05.08.) ─────────────────
+# Im Vortrag ist die Isaac-Generierung (~60-80 s) die einzige lange Wartezeit und
+# fachlich der uninteressanteste Teil — gezeigt werden soll die INFERENZ. Liegen
+# im Pool vorgerenderte Rohszenen, wird der Isaac-Schritt uebersprungen und statt
+# dessen eine Szene reihum entnommen. Die Pose-Stage laeuft danach UNVERAENDERT
+# und in Echtzeit, das Ergebnis ist also eine echte Messung auf einer echten
+# Szene, nur die Bilderzeugung stammt aus der Konserve.
+#
+# Pool leer oder Verzeichnis fehlt -> automatisch der normale Live-Pfad.
+_SIM_POOL = pathlib.Path(os.environ.get(
+    "KIP_SIM_POOL", "/mnt/data/kip_pose/sim_pool"))
+_POOL_CURSOR = _SIM_POOL / ".cursor"
+_POOL_LOCK = threading.Lock()
+# Rohdateien einer Isaac-Szene (gen_sdg_arm_visible.py, Frame 0000).
+_POOL_FILES = ("rgb_0000.png", "depth_0000.npy", "instance_0000.npy",
+               "instance_labels_0000.json", "semantic_0000.npy",
+               "semantic_0000.json", "gt_raw_0000.json")
+
+
+def _pool_scenes():
+    """Sortierte Liste der Pool-Szenen (Verzeichnisse mit rgb_0000.png)."""
+    if not _SIM_POOL.is_dir():
+        return []
+    return sorted(d for d in _SIM_POOL.iterdir()
+                  if d.is_dir() and (d / "rgb_0000.png").exists())
+
+
+def _pool_take(rawdir):
+    """Naechste Pool-Szene reihum nach rawdir kopieren. True, wenn geklappt.
+
+    Der Zaehler liegt als Datei im Pool, damit die Reihenfolge einen
+    Server-Neustart ueberlebt — im Vortrag soll nicht zweimal dieselbe Szene
+    kommen, nur weil zwischendurch neu deployt wurde.
+    """
+    scenes = _pool_scenes()
+    if not scenes:
+        return False
+    with _POOL_LOCK:
+        try:
+            idx = int(_POOL_CURSOR.read_text().strip())
+        except Exception:
+            idx = 0
+        pick = scenes[idx % len(scenes)]
+        try:
+            _POOL_CURSOR.write_text(str((idx + 1) % len(scenes)))
+        except Exception:
+            pass                      # Pool read-only -> dann eben immer ab 0
+    for name in _POOL_FILES:
+        src = pick / name
+        if src.exists():
+            shutil.copy2(src, rawdir / name)
+    return (rawdir / "rgb_0000.png").exists()
+
 # T-183: persistenter warmer Isaac-Worker (systemd: kip-isaac-worker). Statt pro
 # Sim-Klick SimulationApp cold zu booten (~25s, Swap-Thrash-Quelle) rendert der
 # schon gebootete Worker je HTTP-POST in ~2-5s. Faellt der Worker aus (Port zu),
@@ -1753,8 +1806,20 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
         # der 3 Typen pro Szene (sonst kann die Zufalls-Auswahl einen Typ auf 0
         # ziehen — Demo-Killer).
         n_obj = _r.randint(7, 10)
+        # T-193: Vortrags-Puffer. Liegt eine vorgerenderte Szene bereit, ersetzt sie
+        # den Isaac-Lauf. Die Phasenmeldungen bleiben identisch, laufen aber in
+        # Sekunden statt in einer Minute — im Vortrag ist die Bilderzeugung die
+        # uninteressante Wartezeit, gezeigt wird die Inferenz. Die faehrt danach
+        # unveraendert und in Echtzeit weiter.
+        pooled = _pool_take(rawdir)
+        if pooled:
+            for phase, pct, wait in (("Isaac Sim startet (booting)", 10, 1.4),
+                                     ("Isaac Sim rendert Frame", 40, 2.2),
+                                     ("Isaac fertig — BOP-Konvertierung", 70, 0.9)):
+                _job_set(job, phase=phase, pct=pct)
+                time.sleep(wait)
         # T-183: warmen Worker zuerst; nur wenn er gar nicht laeuft → Cold-Boot-Popen.
-        if not _isaac_warm_render(job, rawdir, n_obj, seed):
+        elif not _isaac_warm_render(job, rawdir, n_obj, seed):
             gen = subprocess.Popen(
                 [_ISAAC_VENV, _GEN_SCRIPT,
                  "--scene", _SCENE_USD,
@@ -2014,6 +2079,20 @@ def sim_generate_async(pipeline: str = "gdrnpp", seg: str | None = None,
     threading.Thread(target=_sim_generate_job, args=(job, combo_id, seg_prompts),
                      daemon=True).start()
     return {"job": job, **_combo_meta(combo_id)}
+
+
+@app.get("/api/sim/pool")
+def sim_pool_status():
+    """Zustand des Vortrags-Szenenpuffers (T-193). Leerer Pool = normaler Live-Pfad."""
+    scenes = _pool_scenes()
+    try:
+        cursor = int(_POOL_CURSOR.read_text().strip())
+    except Exception:
+        cursor = 0
+    return {"dir": str(_SIM_POOL), "count": len(scenes),
+            "next": scenes[cursor % len(scenes)].name if scenes else None,
+            "scenes": [d.name for d in scenes],
+            "active": bool(scenes)}
 
 
 @app.get("/api/sim/live_rgb/{job}")
