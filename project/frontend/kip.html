@@ -46,17 +46,17 @@
       <section id="screen-intro" class="kip-screen kip-screen--slide" hidden>
         <article class="kip-slide kip-slide--title">
           <header class="kip-slide__head">
-            <h2 class="kip-slide__h">Pose-Estimation in der Produktion</h2>
+            <h2 class="kip-slide__h">6DoF Pose-Estimation für Baugruppen</h2>
             <span class="kip-slide__who">Marc</span>
           </header>
           <div class="kip-slide__body">
-            <p class="kip-slide__lead">Damit der Roboter ein Teil greifen kann, muss er
-              wissen, welches Teil wo und in welcher Drehlage vor ihm liegt.</p>
+            <p class="kip-slide__lead">Wie ermöglicht man die millimetergenaue Lokalisierung
+              von Bauteilen und deren Orientierung im Raum?</p>
             <figure class="kip-video" id="slot-intro-video">
               <video id="intro-video" controls preload="metadata" playsinline>
                 <source src="./assets/intro_pickplace.mp4" type="video/mp4" />
               </video>
-              <figcaption class="kip-video__cap">Pick-and-Place in der Lernfabrik</figcaption>
+              <figcaption class="kip-video__cap">Exemplarischer PnP-Prozess in der Lernfabrik.</figcaption>
             </figure>
             
             <p class="kip-slide__meta">Seminar „KI in der Produktion“ · wbk, KIT ·
@@ -77,37 +77,38 @@
                 <div class="kip-card2">
                   <span class="kip-card2__ico" aria-hidden="true">&#9673;</span>
                   <span class="kip-card2__h">Zivid L110+</span>
-                  <span class="kip-card2__t">blickt von oben auf den Montagetisch und liefert
-                    Farbbild und Tiefenbild in einer Aufnahme.</span>
+                  <span class="kip-card2__t">Die Zivid-Kamera blickt direkt von oben auf den
+                    Montagetisch und liefert sowohl RGB- als auch RGB-D-Daten der aktuellen
+                    Situation.</span>
                 </div>
                 <div class="kip-card2">
                   <span class="kip-card2__ico" aria-hidden="true">&#10530;</span>
                   <span class="kip-card2__h">Neura Lara5</span>
-                  <span class="kip-card2__t">führt mit einem Schunk-Greifer die Fügeoperation
-                    aus, sobald er weiß, wo er zufassen soll.</span>
+                  <span class="kip-card2__t">Der Neura Lara5 führt mit einem Schunk-Greifer die
+                    entsprechenden deterministischen oder dynamischen Fügeoperationen aus.</span>
                 </div>
                 <div class="kip-card2">
                   <span class="kip-card2__ico" aria-hidden="true">&#9635;</span>
-                  <span class="kip-card2__h">CAD aller Bauteile</span>
-                  <span class="kip-card2__t">liegt vollständig vor, jede Geometrie ist also
-                    exakt bekannt.</span>
+                  <span class="kip-card2__h">CAD-Modelle der Baugruppen</span>
+                  <span class="kip-card2__t">Diese liegen in unserem Anwendungsfall bereits
+                    vollständig vor.</span>
                 </div>
                 <div class="kip-card2 kip-card2--gap">
                   <span class="kip-card2__ico" aria-hidden="true">&#9888;</span>
                   <span class="kip-card2__h">Was bisher fehlte</span>
-                  <span class="kip-card2__t">eine automatisierte Pipeline, die dem Roboter
-                    sagt, wo die Teile im Raum liegen, damit er sie greifen kann.</span>
+                  <span class="kip-card2__t">Eine automatisierte Pipeline von der Datengewinnung
+                    über Training und Inferenz bis zur automatischen Lokalisierung der Bauteile,
+                    um diese greifbar zu machen.</span>
                 </div>
               </div>
-              <p class="kip-statement"><strong>Aufgabenstellung:</strong> Gesucht ist für jedes
-                Teil die vollständige Lage im Raum: drei Koordinaten für die Position und drei
-                Winkel für die Drehung, zusammen die sechsdimensionale Lage, kurz
-                <strong>6DoF</strong>.</p>
+              <p class="kip-statement"><strong>Aufgabenstellung:</strong> Gesucht ist ein Verfahren,
+                um ein trainiertes Bauteil auf einer Arbeitsoberfläche zu lokalisieren und dessen
+                <strong>6DoF</strong> zu bestimmen.</p>
               <ul class="kip-bul kip-bul--tight">
-                <li class="kip-bul__hi">Die Schätzung muss auf wenige Millimeter und wenige Grad
-                  genau sein, sonst verfehlt der Greifer das Teil oder fährt gegen die Zelle.</li>
-                <li>Das befähigt den Roboter, die Fügeoperation selbstständig auszuführen,
-                  statt sie als Handarbeit zurückzulassen.</li>
+                <li class="kip-bul__hi">Diese Lokalisierung darf in der Praxis nur wenige Millimeter
+                  und Grad Abweichung aufweisen, um erfolgreich zu sein.</li>
+                <li>Durch diese Erkennung wird das System befähigt, Fügeoperationen und
+                  deterministische Programmierung automatisiert auszuführen.</li>
               </ul>
             </div>
             <div>
@@ -149,10 +150,8 @@
                 <text class="kip-dia__sub kip-6dof__cap" x="200" y="268" text-anchor="middle">
                   3 × Position (x, y, z)</text>
                 <text class="kip-dia__sub kip-6dof__cap" x="200" y="288" text-anchor="middle">
-                  3 × Drehung um jede Achse</text>
+                  3 × Drehung um die eigene Achse</text>
               </svg>
-              <figcaption class="kip-dia__cap">Sechs Freiheitsgrade: wo das Teil liegt und wie
-                es gedreht ist. Beides muss geschätzt werden, bevor der Greifer zufassen kann.</figcaption>
             </div>
           </div>
         </article>

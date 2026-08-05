@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-05T14:35:17Z",
+  "updated": "2026-08-05T20:17:32Z",
   "columns": [
     {
       "id": "backlog",
@@ -11978,7 +11978,7 @@
       "id": "T-193",
       "title": "Szenenpuffer fuer die Vortrags-Demo (vorgerenderte Isaac-Szenen, echte Inferenz)",
       "description": "",
-      "column": "in_progress",
+      "column": "in_review",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -11988,7 +11988,7 @@
       ],
       "session": "",
       "created": "2026-08-05T14:17:18Z",
-      "updated": "2026-08-05T14:17:19Z",
+      "updated": "2026-08-05T20:17:32Z",
       "started_at": "2026-08-05T14:17:19Z",
       "completed_at": null,
       "comments": [],
@@ -12010,6 +12010,24 @@
           "agent": "claude",
           "level": "error",
           "msg": "BLOCKIERT: warmer Isaac-Worker :8091 antwortet nicht (Dienst active, Port tot, 1 Restart nach SEGV um 13:16). Jede Szene laeuft dadurch in den 240s-Timeout statt der ueblichen 60-80s. Builder gestoppt, Pool bleibt leer. Vor dem Puffer-Befuellen muss der Isaac-Worker wieder rendern."
+        },
+        {
+          "ts": "2026-08-05T20:17:31Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Puffer steht und laeuft: 10 Szenen, 3x gemessen 10.1 / 10.2 / 11.1 s je Live-Sim-Klick statt 60-80 s. Auswahl aus 50 gerenderten Kandidaten, sortiert nach mittlerem Lagefehler (Pred vs GT), Szenen mit deutlich mehr Schaetzungen als Referenzteilen aussortiert. Werte: 0.9 / 1.5 / 1.5 / 9.7 / 12.9 / 20.9 / 28.7 / 75.0 / 114.3 / 127.5 mm."
+        },
+        {
+          "ts": "2026-08-05T20:17:32Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Ursachenkette bis dahin: (1) Speicherdruck 12/15 GB + 7 GB Swap -> Isaac-Worker kam nie bis zum Socket, OOM 08:36 und SEGV 13:16. (2) Warmer Worker oeffnet Port 8091 vor Ende des SimulationApp-Boots und nimmt Anfragen an, die er nie beantwortet -> Cold-Boot-Fallback im Server greift nicht, weil der nur bei ConnectionRefused anspringt. (3) Bewertung las doc['parts'], das Dokument heisst 'results'. (4) gt_raw.image_id trug die Quell-Framenummer, BOP-Konverter suchte instance_0007.npy statt _0000 -> nur Szene 0 lief. Isaac-Worker ist NICHT repariert, sondern umgangen: Szenen direkt per gen_sdg_arm_visible.py --num-scenes 50 gerendert (ein Boot, 50 Szenen)."
+        },
+        {
+          "ts": "2026-08-05T20:17:32Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
         }
       ]
     }
