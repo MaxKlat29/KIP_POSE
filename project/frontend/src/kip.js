@@ -305,7 +305,7 @@ pollHealth(); setInterval(pollHealth, 30000);   // Start nach batch (Training-Gu
 const GROUPS = [
   { id: "intro",      label: "Intro" },
   { id: "motivation", label: "Motivation" },
-  { id: "vorgehen",   label: "Vorgehen" },
+  { id: "vorgehen",   label: "Vorgehensweise" },
   { id: "rgb",        label: "RGB" },
   { id: "rgbd",       label: "RGB-D" },
   { id: "vergleich",  label: "Vergleich" },
@@ -319,7 +319,7 @@ const DECK = [
   { id: "intro",          group: "intro",      label: "Titel" },
   { id: "mot-aufgabe",    group: "motivation", label: "Ausgangssituation" },
   { id: "mot-schwierig",  group: "motivation", label: "Herausforderungen" },
-  { id: "vor-ansaetze",   group: "vorgehen",   label: "Vorgehen" },
+  { id: "vor-ansaetze",   group: "vorgehen",   label: "Vorgehensweise" },
   { id: "vor-split",      group: "vorgehen",   label: "Lösungsansatz" },
   { id: "vor-modelle",    group: "vorgehen",   label: "Verfahren" },
   { id: "vor-daten",      group: "vorgehen",   label: "Daten" },
