@@ -75,21 +75,25 @@
             <div>
               <div class="kip-cards kip-cards--4">
                 <div class="kip-card2">
+                  <span class="kip-card2__ico" aria-hidden="true">&#9673;</span>
                   <span class="kip-card2__h">Zivid L110+</span>
                   <span class="kip-card2__t">blickt von oben auf den Montagetisch und liefert
                     Farbbild und Tiefenbild in einer Aufnahme.</span>
                 </div>
                 <div class="kip-card2">
+                  <span class="kip-card2__ico" aria-hidden="true">&#10530;</span>
                   <span class="kip-card2__h">Neura Lara5</span>
                   <span class="kip-card2__t">führt mit einem Schunk-Greifer die Fügeoperation
                     aus, sobald er weiß, wo er zufassen soll.</span>
                 </div>
                 <div class="kip-card2">
+                  <span class="kip-card2__ico" aria-hidden="true">&#9635;</span>
                   <span class="kip-card2__h">CAD aller Bauteile</span>
                   <span class="kip-card2__t">liegt vollständig vor, jede Geometrie ist also
                     exakt bekannt.</span>
                 </div>
                 <div class="kip-card2 kip-card2--gap">
+                  <span class="kip-card2__ico" aria-hidden="true">&#9888;</span>
                   <span class="kip-card2__h">Was bisher fehlte</span>
                   <span class="kip-card2__t">eine automatisierte Pipeline, die dem Roboter
                     sagt, wo die Teile im Raum liegen, damit er sie greifen kann.</span>
@@ -164,24 +168,28 @@
             <div>
               <div class="kip-cards kip-cards--2">
                 <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__ico" aria-hidden="true">&#9670;</span>
                   <span class="kip-card2__h">Komplexe Domäne</span>
                   <span class="kip-card2__t">Blankes Metall trägt kaum invariante Bildmerkmale,
                     Drehsymmetrien erzeugen mehrdeutige Lagen, und der Arm verursacht Verdeckung
                     im Farb- wie im Tiefenbild.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__ico" aria-hidden="true">&#9678;</span>
                   <span class="kip-card2__h">Erkennen genügt nicht</span>
                   <span class="kip-card2__t">Detektion und Segmentierung liefern Klasse und
                     Bildregion. Die 6D-Lage folgt daraus nicht, sie erfordert eine Korrespondenz
                     zwischen Bildpunkten und CAD-Geometrie.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__ico" aria-hidden="true">&#9878;</span>
                   <span class="kip-card2__h">Millimeter und Grad</span>
                   <span class="kip-card2__t">Gefordert ist Greifgenauigkeit im
                     Millimeterbereich. Sie muss auf der Domäne erreicht werden, die am wenigsten
                     verwertbare Merkmale liefert.</span>
                 </div>
                 <div class="kip-card2 kip-card2--warn">
+                  <span class="kip-card2__ico" aria-hidden="true">&#8635;</span>
                   <span class="kip-card2__h">Determinismus reicht nicht</span>
                   <span class="kip-card2__t">Ein deterministisch programmierter Ablauf mit
                     Vorrichtungen und festen Greifpunkten löst genau eine Anordnung. Die Zelle
@@ -416,21 +424,24 @@
           <div class="kip-slide__body">
             <div class="kip-cards kip-cards--3">
               <div class="kip-card2 kip-card2--pick">
-                <span class="kip-card2__h">BOP-Standard</span>
+                <span class="kip-card2__ico" aria-hidden="true">&#9878;</span>
+                  <span class="kip-card2__h">BOP-Standard</span>
 <span class="kip-card2__t">Der Average Recall mittelt über mehrere Fehlermaße und
                   gibt an, welcher Anteil der Schätzungen unter einer festgelegten Schwelle
                   bleibt.</span>
                 <span class="kip-badges"><i class="kip-badge">AR</i><i class="kip-badge">IC-BIN-Protokoll</i></span>
               </div>
               <div class="kip-card2">
-                <span class="kip-card2__h">Symmetriebewusst</span>
+                <span class="kip-card2__ico" aria-hidden="true">&#8635;</span>
+                  <span class="kip-card2__h">Symmetriebewusst</span>
 <span class="kip-card2__t">Der Fehler wird über alle erlaubten Symmetrielagen
                   minimiert, damit eine korrekte Lage nicht als Fehler zählt, nur weil das Teil
                   gedreht erscheint.</span>
                 <span class="kip-badges"><i class="kip-badge">MSSD</i><i class="kip-badge">MSPD</i><i class="kip-badge">VSD</i></span>
               </div>
               <div class="kip-card2">
-                <span class="kip-card2__h">Daten aus der Simulation</span>
+                <span class="kip-card2__ico" aria-hidden="true">&#9635;</span>
+                  <span class="kip-card2__h">Daten aus der Simulation</span>
 <span class="kip-card2__t">Alle Szenen entstehen in Isaac Sim, die Referenzlage ist
                   dadurch exakt bekannt statt von Hand vermessen.</span>
                 <span class="kip-badges"><i class="kip-badge kip-badge--free">100 % synthetisch</i></span>
@@ -469,17 +480,20 @@
               Ebene</strong>.</p>
             <div class="kip-cards kip-cards--3">
               <div class="kip-card2 kip-card2--rgb">
-                <span class="kip-card2__h">Warum ohne Tiefe</span>
+                <span class="kip-card2__ico" aria-hidden="true">&#9673;</span>
+                  <span class="kip-card2__h">Warum ohne Tiefe</span>
 <span class="kip-card2__t">Auf glänzendem Metall rauscht das Tiefenbild durch
                   Reflexionen, und im Infrarot-Schatten des Arms fehlt es vollständig.</span>
               </div>
               <div class="kip-card2 kip-card2--rgb">
-                <span class="kip-card2__h">Was die Ebene gibt</span>
+                <span class="kip-card2__ico" aria-hidden="true">&#9644;</span>
+                  <span class="kip-card2__h">Was die Ebene gibt</span>
 <span class="kip-card2__t">Weil die Teile auf einer bekannten, ebenen Fläche
                   ruhen, sind Höhe und Kippung festgelegt und das Teil sitzt sauber auf.</span>
               </div>
               <div class="kip-card2 kip-card2--rgb kip-card2--pick">
-                <span class="kip-card2__h">Sechs werden drei</span>
+                <span class="kip-card2__ico" aria-hidden="true">&#9635;</span>
+                  <span class="kip-card2__h">Sechs werden drei</span>
 <span class="kip-card2__t">Zu schätzen bleiben damit nur noch die Position in der
                   Ebene und die Drehung um die Hochachse.</span>
               </div>

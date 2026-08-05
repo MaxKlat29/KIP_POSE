@@ -384,19 +384,19 @@
   font-weight: 700; color: var(--text);
 }
 .kip-slide__who {
-  margin-left: auto; font-size: 0.62em; color: var(--text-dim);
+  margin-left: auto; font-size: var(--card-t); color: var(--text-dim);
   border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; padding: 3px 12px;
   white-space: nowrap;
 }
 .kip-slide__body { font-size: 1em; line-height: 1.5; color: #dfe5ee; }
 .kip-slide__body--2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 44px; align-items: start; }
 .kip-slide__h3 {
-  margin: 20px 0 10px; font-size: 0.62em; font-weight: 700; letter-spacing: .11em;
+  margin: 20px 0 10px; font-size: var(--card-t); font-weight: 700; letter-spacing: .11em;
   text-transform: uppercase; color: var(--text-dim);
 }
 .kip-slide__body--2col > div > .kip-slide__h3:first-child { margin-top: 0; }
 .kip-slide__lead { margin: 0 0 20px; font-size: 1.12em; line-height: 1.4; color: #eef2f8; max-width: 60ch; }
-.kip-slide__meta { margin: 18px 0 0; font-size: 0.66em; color: var(--text-dim); }
+.kip-slide__meta { margin: 18px 0 0; font-size: var(--card-t); color: var(--text-dim); }
 .kip-slide__p { margin: 0 0 10px; max-width: 68ch; }
 
 /* ── Bullets: das Arbeitspferd der Präsentation ── */
@@ -435,7 +435,7 @@
   font-weight: 700; color: var(--text); line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
-.kip-fig__lbl { display: block; margin-top: 8px; font-size: 0.62em; line-height: 1.4; color: var(--text-dim); }
+.kip-fig__lbl { display: block; margin-top: 8px; font-size: var(--card-t); line-height: 1.4; color: var(--text-dim); }
 
 /* ── Ablaufkette ── */
 .kip-flow {
@@ -443,7 +443,7 @@
   margin: 0 0 22px; padding: 0; list-style: none;
 }
 .kip-flow li {
-  flex: 0 1 auto; padding: 11px 16px; font-size: 0.72em; font-weight: 600;
+  flex: 0 1 auto; padding: 11px 16px; font-size: var(--card-h); font-weight: 600;
   color: var(--text);
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
   border-radius: 9px; display: flex; flex-direction: column; gap: 3px;
@@ -454,14 +454,14 @@
   content: "›"; position: absolute; left: -19px; top: 50%; transform: translateY(-50%);
   color: var(--text-dim); font-size: 1.3em;
 }
-.kip-flow--big li { font-size: 0.78em; padding: 13px 18px; }
+.kip-flow--big li { font-size: var(--card-h); padding: 13px 18px; }
 .kip-flow--dec li:last-child { border-color: rgba(245,185,66,0.45); background: rgba(245,185,66,0.1); }
 .kip-flow__rgb   { color: #7ee2a4 !important; }
 .kip-flow__depth { color: #9dbcff !important; }
 .kip-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
 .kip-tag {
   display: inline-block; padding: 5px 12px; border-radius: 999px;
-  font-family: var(--mono); font-size: 0.62em;
+  font-family: var(--mono); font-size: var(--card-t);
 }
 .kip-tag--rgb   { background: rgba(34,197,94,0.18); color: #7ee2a4; border: 1px solid rgba(34,197,94,0.4); }
 .kip-tag--depth { background: rgba(37,99,235,0.22); color: #9dbcff; border: 1px solid rgba(37,99,235,0.45); }
@@ -473,7 +473,7 @@
 .kip-mini--hi td { color: rgb(140, 230, 170); font-weight: 600; }
 .kip-cmp { width: 100%; border-collapse: collapse; font-size: 0.85em; }
 .kip-cmp th {
-  text-align: left; padding: 9px 14px; font-size: 0.72em; letter-spacing: .09em;
+  text-align: left; padding: 9px 14px; font-size: var(--card-h); letter-spacing: .09em;
   text-transform: uppercase; color: var(--text-dim);
   border-bottom: 1px solid rgba(255,255,255,0.16);
 }
@@ -510,7 +510,7 @@
 .kip-slide--title .kip-slide__body { text-align: center; }
 .kip-slide--title .kip-slide__lead { max-width: none; }
 .kip-slot {
-  margin: 20px 0 0; padding: 12px 15px; font-size: 0.62em; line-height: 1.45;
+  margin: 20px 0 0; padding: 12px 15px; font-size: var(--card-t); line-height: 1.45;
   color: #c8b78a; background: rgba(245,185,66,0.07);
   border: 1px dashed rgba(245,185,66,0.42); border-radius: 9px;
 }
@@ -571,7 +571,7 @@ body.pres-mode #status { display: none !important; }
   background: #0c0f14;
 }
 .kip-shot figcaption {
-  margin-top: 8px; font-size: 0.6em; line-height: 1.4; color: var(--text-dim);
+  margin-top: 8px; font-size: var(--card-t); line-height: 1.4; color: var(--text-dim);
 }
 .kip-shot__good { color: rgb(140, 230, 170); font-family: var(--mono); }
 .kip-shot__warn { color: var(--accent); font-family: var(--mono); }
@@ -609,8 +609,12 @@ body.pres-mode #status { display: none !important; }
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.13);
   border-top: 2px solid rgba(255,255,255,0.22);
 }
-.kip-card2__h { font-size: 0.78em; font-weight: 700; color: var(--text); line-height: 1.25; }
-.kip-card2__t { font-size: 0.62em; line-height: 1.4; color: var(--text-dim); }
+/* Genau ZWEI Schriftgroessen fuer alles in den Karten (Max 05.08.): --card-h
+   fuer Ueberschriften, --card-t fuer Fliesstext, Badges und Inline-Legenden.
+   Vorher waren es fuenf (0.78 / 0.62 / 0.6 / 0.52 / 0.5) und die Karten wirkten
+   je Blatt unterschiedlich gross. */
+.kip-card2__h { font-size: var(--card-h); font-weight: 700; color: var(--text); line-height: 1.25; }
+.kip-card2__t { font-size: var(--card-t); line-height: 1.45; color: var(--text-dim); }
 .kip-card2--rgb   { border-top-color: rgba(34,197,94,0.75); }
 .kip-card2--depth { border-top-color: rgba(96,150,255,0.8); }
 .kip-card2--warn  { border-top-color: rgba(245,185,66,0.8); }
@@ -622,14 +626,14 @@ body.pres-mode #status { display: none !important; }
 }
 .kip-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
 .kip-badge {
-  font-family: var(--mono); font-size: 0.52em; font-style: normal; letter-spacing: .04em;
-  padding: 3px 8px; border-radius: 999px;
+  font-family: var(--mono); font-size: var(--card-t); font-style: normal; letter-spacing: .04em;
+  padding: 2px 8px; border-radius: 999px; opacity: .92;
   background: rgba(255,255,255,0.08); color: #cfd6e0; border: 1px solid rgba(255,255,255,0.16);
 }
 .kip-badge--rgb   { background: rgba(34,197,94,0.18); color: #8ce9b0; border-color: rgba(34,197,94,0.42); }
 .kip-badge--depth { background: rgba(37,99,235,0.24); color: #a9c4ff; border-color: rgba(96,150,255,0.5); }
 .kip-badge--free  { background: rgba(245,185,66,0.14); color: #f7cf8e; border-color: rgba(245,185,66,0.4); }
-.kip-legend-inline { margin: 4px 0 0; font-size: 0.6em; color: var(--text-dim); }
+.kip-legend-inline { margin: 4px 0 0; font-size: var(--card-t); color: var(--text-dim); }
 .kip-dot {
   display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px;
   vertical-align: baseline; background: rgba(255,255,255,0.3);
@@ -651,7 +655,7 @@ body.pres-mode #status { display: none !important; }
   font-size: 0.85em; font-weight: 700; color: var(--text);
 }
 .kip-vs__mid {
-  align-self: center; font-family: var(--mono); font-size: 0.62em;
+  align-self: center; font-family: var(--mono); font-size: var(--card-t);
   color: var(--text-dim); letter-spacing: .1em; text-transform: uppercase;
 }
 
@@ -742,7 +746,7 @@ body.pres-mode .kip-card2:hover, body.pres-mode .kip-fig:hover { filter: none; }
    aus den Ergebnisbildern schneiden. Oben abschneiden, unten behalten. */
 .kip-shot--croptop img { aspect-ratio: 1100 / 505; object-fit: cover; object-position: 50% 100%; }
 .kip-shot--cropbottom img { aspect-ratio: 1100 / 700; object-fit: cover; object-position: 50% 0%; }
-.kip-shot figcaption { font-size: 0.58em; }
+.kip-shot figcaption { font-size: var(--card-t); }
 
 /* Titelblatt: Inhalt vertikal zentriert, Standbild als Blickfang bis das Video da ist. */
 .kip-slide--title .kip-slide__body {
@@ -804,7 +808,7 @@ body.has-intro-video #slot-intro-still { display: none; }
 .kip-matrix { display: flex; flex-direction: column; gap: 8px; margin: 0 0 22px; }
 .kip-matrix__row { display: grid; grid-template-columns: 1.25fr repeat(4, 1fr); gap: 8px; }
 .kip-matrix__row--head span {
-  font-size: 0.6em; font-weight: 700; color: var(--text-dim); text-align: center;
+  font-size: var(--card-t); font-weight: 700; color: var(--text-dim); text-align: center;
   letter-spacing: .05em; text-transform: uppercase; padding: 0 4px;
 }
 .kip-matrix__row--head i { display: block; font-style: normal; font-family: var(--mono);
@@ -817,7 +821,7 @@ body.has-intro-video #slot-intro-still { display: none; }
 .kip-matrix__rh i { font-style: normal; font-weight: 400; font-size: 0.82em; color: var(--text-dim); }
 .kip-matrix__c {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  padding: 12px 8px; border-radius: 9px; font-family: var(--mono); font-size: 0.78em;
+  padding: 12px 8px; border-radius: 9px; font-family: var(--mono); font-size: var(--card-h);
   font-variant-numeric: tabular-nums;
   background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #c8d0dc;
 }
@@ -828,22 +832,29 @@ body.has-intro-video #slot-intro-still { display: none; }
   background: linear-gradient(150deg, rgba(255,255,255,0.13), rgba(255,255,255,0.05));
   color: #fff; font-weight: 700; font-size: 0.92em;
 }
-.kip-matrix__c--soft { opacity: .62; font-size: 0.66em; }
+.kip-matrix__c--soft { opacity: .62; font-size: var(--card-t); }
 
 /* Ausblick-Karten bekommen ein Symbol als optischen Anker (Max 05.08.). */
-.kip-next__ico {
+.kip-card2__ico, .kip-next__ico {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.7em; height: 1.7em; margin-bottom: 4px; border-radius: 7px;
-  font-size: 0.72em; line-height: 1;
+  font-size: var(--card-h); line-height: 1;
   background: rgba(255,255,255,0.08); color: #9dc0ff;
 }
+/* Das Symbol traegt die Farbe der Karte, damit Rand und Plaettchen zusammen
+   gelesen werden (Max 05.08.). */
+.kip-card2--pick .kip-card2__ico,
 .kip-card2--pick .kip-next__ico { background: rgba(52,211,153,0.16); color: #8ce9b0; }
+.kip-card2--rgb   .kip-card2__ico { background: rgba(34,197,94,0.16);  color: #8ce9b0; }
+.kip-card2--depth .kip-card2__ico { background: rgba(96,150,255,0.18); color: #9dc0ff; }
+.kip-card2--warn  .kip-card2__ico { background: rgba(245,185,66,0.16); color: #f7cf8e; }
+.kip-card2--gap   .kip-card2__ico { background: rgba(252,165,165,0.16); color: #fca5a5; }
 
 /* Oberspalten (Max 05.08.): RGB und RGB-D werden nicht mehr gemischt, jede
    Modalitaet bekommt ihren eigenen Block ueber zwei Spalten. */
 .kip-matrix__group { grid-template-columns: 1.25fr 2fr 2fr; margin-bottom: -2px; }
 .kip-matrix__grp {
-  text-align: center; font-size: 0.58em; font-weight: 700; letter-spacing: .06em;
+  text-align: center; font-size: var(--card-t); font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; padding: 5px 8px; border-radius: 8px 8px 0 0;
 }
 .kip-matrix__grp--rgb   { color: #8ce9b0; background: rgba(34,197,94,0.12);
@@ -874,7 +885,7 @@ body.has-intro-video #slot-intro-still { display: none; }
 .kip-chain--accent { background: rgba(52,211,153,0.11) !important; border-color: rgba(52,211,153,0.42) !important; }
 .kip-chain--out { background: rgba(255,255,255,0.1) !important; border-color: rgba(255,255,255,0.28) !important; }
 .kip-chain__h { font-size: 0.8em; font-weight: 700; color: var(--text); line-height: 1.2; }
-.kip-chain__t { font-size: 0.62em; line-height: 1.4; color: var(--text-dim); }
+.kip-chain__t { font-size: var(--card-t); line-height: 1.4; color: var(--text-dim); }
 
 @media (max-width: 1100px) {
   .kip-chain { grid-auto-flow: row; gap: 26px; }
@@ -882,11 +893,14 @@ body.has-intro-video #slot-intro-still { display: none; }
 }
 
 /* ── Textbild: ganze Sätze brauchen etwas kleinere Schrift und mehr Zeilenluft ── */
-.kip-slide { font-size: clamp(17px, 1.22vw, 23px); padding: 32px 40px 36px; }
+.kip-slide {
+  font-size: clamp(17px, 1.22vw, 23px); padding: 32px 40px 36px;
+  --card-h: 0.76em;   /* Karten-Ueberschrift */
+  --card-t: 0.62em;   /* Karten-Text, Badges, Inline-Legenden */
+}
 .kip-slide__body { line-height: 1.55; }
 .kip-bul li { margin-bottom: 13px; }
 .kip-bul--tight li { margin-bottom: 10px; font-size: 0.94em; }
-.kip-card2__t { font-size: 0.6em; line-height: 1.5; }
 .kip-slide__lead, .kip-statement { line-height: 1.45; }
 
 /* Schema: achsparallele gegen orientierte Box */
@@ -943,10 +957,7 @@ body.has-intro-video #slot-intro-still { display: none; }
 .kip-modellliste { margin-top: 0.5em; }
 .kip-modellliste .kip-slide__h3 { margin-bottom: 0.35em; }
 .kip-cards--sm { gap: 8px; }
-.kip-cards--sm .kip-card2 { padding: 8px 11px; gap: 2px; }
-.kip-cards--sm .kip-card2__h { font-size: 0.72em; }
-.kip-cards--sm .kip-card2__t { font-size: 0.6em; line-height: 1.35; }
-.kip-cards--sm .kip-badge { font-size: 0.5em; padding: 1px 5px; }
+.kip-cards--sm .kip-card2 { padding: 9px 12px; gap: 3px; }
 
 /* ── 6DoF-Schaubild (Max 05.08.): Bauteil, drei Achsen, drei Drehringe ─────── */
 .kip-6dof { max-width: min(430px, 100%); }

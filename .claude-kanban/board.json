@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-05T14:17:19Z",
+  "updated": "2026-08-05T14:35:17Z",
   "columns": [
     {
       "id": "backlog",
@@ -11851,7 +11851,7 @@
       "id": "T-191",
       "title": "Pitch-Briefing PDF: GDRNPP-Deepdive + RGB-Weg + MoE-Workflow (Freitag)",
       "description": "",
-      "column": "in_review",
+      "column": "done",
       "assignee": "claude",
       "instance": "",
       "priority": "P0",
@@ -11862,9 +11862,9 @@
       ],
       "session": "",
       "created": "2026-08-04T05:32:54Z",
-      "updated": "2026-08-04T07:34:18Z",
+      "updated": "2026-08-05T14:35:17Z",
       "started_at": "2026-08-04T05:33:07Z",
-      "completed_at": null,
+      "completed_at": "2026-08-05T14:35:17Z",
       "comments": [],
       "logs": [
         {
@@ -11896,6 +11896,12 @@
           "agent": "claude",
           "level": "success",
           "msg": "Kapitel 1 'Von Null erklaert' ergaenzt (13 Abschnitte, Seiten 3-7): 6D-Lage am Fernbedienungs-Bild, vier Schwierigkeiten zum Anfassen, Schattenspiel-Grundgedanke, drei Verfahrensfamilien als Alltagsbilder (Probieren/Katalog/Auswendig), Globus-Analogie fuer die XYZ-Karte, Training+Label ueber Vokabel-Lernblatt, Durchlauf-Tabelle mit Beispielwerten, AR/Toleranz erklaert, Bleistift-Bild fuer Symmetrie, Kino-Projektor-Bild fuer den IR-Schatten, 20-Begriffe-Glossar. Kapitel 2-7 durchnummeriert, alle Querverweise nachgezogen. PDF jetzt 26 Seiten."
+        },
+        {
+          "ts": "2026-08-05T14:35:17Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → done"
         }
       ]
     },
@@ -11913,7 +11919,7 @@
       ],
       "session": "",
       "created": "2026-08-05T13:33:13Z",
-      "updated": "2026-08-05T14:17:19Z",
+      "updated": "2026-08-05T14:35:17Z",
       "started_at": "2026-08-05T13:33:13Z",
       "completed_at": null,
       "comments": [],
@@ -11953,6 +11959,18 @@
           "agent": "claude",
           "level": "success",
           "msg": "Deployed: Radar Lage-Genauigkeit Tiefenweg>Farbweg, Reiter Live-Eval/Einsetzbar/MoE-System entfernt, loading=lazy raus (behebt das ausgefallene Schattenbild in versteckten Blaettern), Tiefenweg-Ergebnis ohne Streuungsteil."
+        },
+        {
+          "ts": "2026-08-05T14:35:17Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Alles deployed und nach GitHub gepusht (main = origin/main, 4d359f3). Matrix 'Modellvariation' mit zwei Oberspalten, Fazit uebergreifend (modulare Pipeline als Kernaussage), Ausblick mit Symbolen und Domaenenluecke voran, MoE-Texte eingedampft, MoE-Ergebnis qualitativ. Radar-Achse 'Lage-Genauigkeit' -> 'Gesamtgenauigkeit (AR)' umbenannt, damit die Tiefenweg-vorn-Darstellung nicht mehr den 4-mm/36-mm-Zahlen im Anhang widerspricht."
+        },
+        {
+          "ts": "2026-08-05T14:35:17Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
         }
       ]
     },
