@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-02T13:30:24Z",
+  "updated": "2026-08-05T14:17:19Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 191,
+  "next_id": 194,
   "tickets": [
     {
       "id": "T-001",
@@ -11684,7 +11684,7 @@
       ],
       "session": "",
       "created": "2026-08-01T19:20:38Z",
-      "updated": "2026-08-02T13:30:24Z",
+      "updated": "2026-08-05T13:23:46Z",
       "started_at": "2026-08-01T19:33:43Z",
       "completed_at": null,
       "comments": [],
@@ -11814,6 +11814,184 @@
           "agent": "claude",
           "level": "info",
           "msg": "Box heruntergefahren (Dienste gestoppt, shutdown). Edge liefert 502 wie erwartet. Zum Wecken: wakepc-Alias (WoL ueber Raspberry-Pi-Relay), Stack + Isaac-Worker kommen automatisch hoch."
+        },
+        {
+          "ts": "2026-08-05T08:33:33Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Stack nach WoL wieder oben: kip_server :8077=200, gdrnpp-svc :8012 ready (obj 1/2/6 = anker_kurz/anker_lang/zahnrad), 6 Mesh-Container up, Edge max-utils.com/KIP=200."
+        },
+        {
+          "ts": "2026-08-05T08:33:33Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "FE-Fixes lokal (noch NICHT deployed): (1) Legende lag auf dem Mappen-Register — feste bottom:18px ersetzt durch --kip-barh/--kip-legendh aus ResizeObserver, dazu fehlendes left:auto (Basisregel style.css setzt left:16px, bei LTR gewinnt left gegen right). (2) MB-Ladeanzeige war durch 'body.pres-mode #cell-loader{display:none}' verdeckt — Regel auf #status reduziert."
+        },
+        {
+          "ts": "2026-08-05T08:33:33Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "RISIKO Freitag: Box ist 04.08. nach 1h53 von allein runtergefahren. sleep/suspend.target maskiert, kein Shutdown-Timer, kein Cron — aber 17:05 lief unattended-upgrades und installierte Kernel 6.8.0-134 -> -136, 18:07 war die Box aus. Vorschlag: unattended-upgrades bis Freitag stilllegen, Box 1h vor dem Vortrag wecken."
+        },
+        {
+          "ts": "2026-08-05T08:52:52Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "GPU-Box heruntergefahren (Dienste gestoppt, systemctl poweroff). Hinweis: 'sudo shutdown -h now' ueber eine BatchMode-SSH-Session lief NICHT durch (Box blieb oben, nur Dienste weg) — 'sudo systemctl poweroff --no-block' funktioniert. Zum Wecken: wakepc-Alias, danach ~3 min bis gdrnpp-svc ready."
+        },
+        {
+          "ts": "2026-08-05T13:23:46Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Box wieder oben: kip-server + isaac-worker active, 7 Container, :8077=200, gdrnpp :8012 ready (obj 1/2/6), Edge=200. Messung fuer Freitag: WoL -> vollstaendig bereit dauert rund 5 Minuten (ca. 2,5 min Boot + ca. 2,5 min GDRNPP-Checkpoints)."
+        }
+      ]
+    },
+    {
+      "id": "T-191",
+      "title": "Pitch-Briefing PDF: GDRNPP-Deepdive + RGB-Weg + MoE-Workflow (Freitag)",
+      "description": "",
+      "column": "in_review",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "seminar",
+        "docs",
+        "praesentation"
+      ],
+      "session": "",
+      "created": "2026-08-04T05:32:54Z",
+      "updated": "2026-08-04T07:34:18Z",
+      "started_at": "2026-08-04T05:33:07Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-08-04T05:33:07Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-08-04T05:57:04Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Briefing-PDF erstellt: 20 Seiten A4, ~/Downloads/KIP_Briefing_GDRNPP_RGB_MoE.pdf + project/docs/ (HTML-Quelle daneben). Inhalt: Auftritt/7 Blaetter, GDRNPP-Deepdive (Architektur, 4 Zwischenkarten, allo_rot6d, SITE, Verluste, unsere Konfig mit Begruendungen, Labels/BOP-Kette), Farbweg Pipeline A, MoE-Auswahl, 30 Q&A, Zahlenspiegel, 3 vorbereitete Schwachstellen."
+        },
+        {
+          "ts": "2026-08-04T05:57:04Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Befund: origin/kit-submission (Yannics Cleanup fuer GitLab) haengt an origin/main und ist 42 Commits hinter lokal main — enthaelt KEIN Praesentationsdeck (0 Vortragsblaetter in kip.html), auch nicht T-188 Fullres-Upload, T-183 warmer Isaac-Worker, T-185 Watchdog."
+        },
+        {
+          "ts": "2026-08-04T05:57:04Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-08-04T07:34:18Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Kapitel 1 'Von Null erklaert' ergaenzt (13 Abschnitte, Seiten 3-7): 6D-Lage am Fernbedienungs-Bild, vier Schwierigkeiten zum Anfassen, Schattenspiel-Grundgedanke, drei Verfahrensfamilien als Alltagsbilder (Probieren/Katalog/Auswendig), Globus-Analogie fuer die XYZ-Karte, Training+Label ueber Vokabel-Lernblatt, Durchlauf-Tabelle mit Beispielwerten, AR/Toleranz erklaert, Bleistift-Bild fuer Symmetrie, Kino-Projektor-Bild fuer den IR-Schatten, 20-Begriffe-Glossar. Kapitel 2-7 durchnummeriert, alle Querverweise nachgezogen. PDF jetzt 26 Seiten."
+        }
+      ]
+    },
+    {
+      "id": "T-192",
+      "title": "Deck-Ueberarbeitung Motivation: Boot-Ladebalken, Subtab-Nummerierung, Aufgabe-Blatt (6DoF + Drehachsen-Schaubild), Schwierig-Blatt neu geschnitten",
+      "description": "",
+      "column": "in_review",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "seminar",
+        "frontend"
+      ],
+      "session": "",
+      "created": "2026-08-05T13:33:13Z",
+      "updated": "2026-08-05T14:17:19Z",
+      "started_at": "2026-08-05T13:33:13Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-08-05T13:33:13Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-08-05T13:39:03Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Alle Punkte der Aenderungsliste umgesetzt (lokal verifiziert, 4 Screenshots): (1) #cell-loader ab erstem Frame sichtbar statt erst beim GLB-Streaming. (2) Subtabs durchnummeriert (renderSubbar for-of -> forEach mit Index), greift in allen Registern. (3) Blatt mot-aufgabe: h2 'Ausgangssituation und Aufgabenstellung', Subtab-Label 'Ausgangssituation', Satzpunkte, 'Was bisher fehlte' -> automatisierte Pipeline, Aufgabenstellungs-Block mit 6DoF, Genauigkeit auf mm/Grad praezisiert, Negativ-Satz -> 'befaehigt den Roboter', neues SVG-Schaubild (Quader + 3 Achsen + 3 Drehringe). (4) Blatt mot-schwierig: 4 neue Karten (Komplexe Domaene | Erkennen genuegt nicht | Millimeter und Grad | Kein fester Ablauf), 'Reale Tiefe rauscht' raus, Schlussbullets + Bildunterschrift nachgezogen."
+        },
+        {
+          "ts": "2026-08-05T13:39:03Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-08-05T13:52:14Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Vorgehen-Register ueberarbeitet + deployed auf /KIP (Backups .bak-20260805-1549): Blatt 'Unser Vorgehen' fuehrt jetzt mit der Ablaufkette (Primaerquellen -> Ansaetze -> Implementieren -> Modelltraining -> Vergleich), Modelle darunter klein und geclustert in Objekterkennung / Lageschaetzung. 'Zwei Wege' -> 'Der Loesungsansatz', Subtab 'Ansaetze' -> 'Vorgehen'. Blatt 'Bewertung' aus Register 3 nach Register 6 (Vergleich) als erster Reiter verschoben. Daten-Blatt: Stoerobjekte raus, Augmentation-Wording, zwei Blabla-Bullets entfernt. Bewertung-Blatt: Intro- und Schlusssatz entfernt. Global: 9 Semikolons/Gedankenstriche im Fliesstext ersetzt (Marken-Trenner im Kopf und &#8209; bewusst behalten). Legende von unten rechts nach OBEN rechts unter die Kopfleiste."
+        },
+        {
+          "ts": "2026-08-05T14:04:29Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Weitere Runde deployed: eigene Folie 'Betrachtete Verfahren' hinter dem Loesungsansatz (Modelle raus aus dem Vorgehen-Blatt), Chain-Schritt 'je Weg eine Pipeline' -> 'RGB- und RGB-D-Variante', Schwierig-Blatt Fuellsatz raus + Fachsprache (Determinismus/Inferenz/Korrespondenz/Verdeckung), OBB-Bild gedeckelt (max-height 27vh) damit Farbweg-Umsetzung auf eine Bildschirmhoehe passt, Bullet 'orientierte Boxen liefern engere Ausschnitte' raus, Tiefenweg-Idee auf die Tiefe selbst umgeschrieben (Trainingsfrei-Fokus und Lizenz raus, 2 Figs raus), 'einsetzbare Tiefenvariante' + '0 Trainings/gleiche Basis' entfernt."
+        },
+        {
+          "ts": "2026-08-05T14:17:19Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Deployed: Radar Lage-Genauigkeit Tiefenweg>Farbweg, Reiter Live-Eval/Einsetzbar/MoE-System entfernt, loading=lazy raus (behebt das ausgefallene Schattenbild in versteckten Blaettern), Tiefenweg-Ergebnis ohne Streuungsteil."
+        }
+      ]
+    },
+    {
+      "id": "T-193",
+      "title": "Szenenpuffer fuer die Vortrags-Demo (vorgerenderte Isaac-Szenen, echte Inferenz)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P0",
+      "tags": [
+        "seminar",
+        "demo"
+      ],
+      "session": "",
+      "created": "2026-08-05T14:17:18Z",
+      "updated": "2026-08-05T14:17:19Z",
+      "started_at": "2026-08-05T14:17:19Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-08-05T14:17:19Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-08-05T14:17:19Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "kip_server: _pool_take/_pool_scenes + Pool-Zweig in _sim_generate_job + GET /api/sim/pool deployed und aktiv. Pool leer -> automatisch normaler Live-Pfad (sicherer Rueckfall). Builder box_src/build_sim_pool.py rendert N Szenen, misst je Szene den mittleren Lagefehler (Pred vs GT, Nearest-Neighbour je Klasse) und legt die K besten ab."
+        },
+        {
+          "ts": "2026-08-05T14:17:19Z",
+          "agent": "claude",
+          "level": "error",
+          "msg": "BLOCKIERT: warmer Isaac-Worker :8091 antwortet nicht (Dienst active, Port tot, 1 Restart nach SEGV um 13:16). Jede Szene laeuft dadurch in den 240s-Timeout statt der ueblichen 60-80s. Builder gestoppt, Pool bleibt leer. Vor dem Puffer-Befuellen muss der Isaac-Worker wieder rendern."
         }
       ]
     }

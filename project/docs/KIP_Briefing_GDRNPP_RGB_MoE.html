@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Vortragsbriefing — Farbweg und Expertenauswahl</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+
+  :root {
+    --ink: #16181c;
+    --ink2: #3d434c;
+    --mute: #6b7280;
+    --line: #d8dce2;
+    --rgbc: #1f7a4d;
+    --rgbbg: #eaf6ef;
+    --depc: #1f5c9e;
+    --depbg: #eaf1fa;
+    --warn: #9a5b00;
+    --warnbg: #fdf3e3;
+    --accent: #7a1f3d;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Charter", "Georgia", "Times New Roman", serif;
+    font-size: 10.2pt;
+    line-height: 1.52;
+    color: var(--ink);
+    margin: 0;
+    hyphens: auto;
+  }
+
+  h1, h2, h3, h4, .sans { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+
+  h1 { font-size: 21pt; line-height: 1.15; margin: 0 0 4mm; letter-spacing: -.01em; }
+  h2 {
+    font-size: 13.5pt; margin: 9mm 0 3mm; padding-bottom: 1.6mm;
+    border-bottom: 1.6pt solid var(--ink); letter-spacing: -.005em;
+  }
+  h3 { font-size: 11pt; margin: 6mm 0 2mm; color: var(--ink); }
+  h4 { font-size: 9.6pt; margin: 4mm 0 1.5mm; color: var(--ink2); text-transform: uppercase; letter-spacing: .06em; }
+
+  p { margin: 0 0 2.6mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.4mm; }
+
+  code, .mono {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 8.6pt;
+    background: #f2f3f5;
+    padding: 0 .8mm;
+    border-radius: 1.5px;
+  }
+
+  .part { page-break-before: always; }
+  .nobreak { page-break-inside: avoid; }
+
+  /* ── Titelkopf ───────────────────────────────────────── */
+  .cover { border-bottom: 3pt solid var(--ink); padding-bottom: 5mm; margin-bottom: 6mm; }
+  .kicker {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 8.4pt; text-transform: uppercase; letter-spacing: .14em;
+    color: var(--mute); margin-bottom: 2.5mm;
+  }
+  .cover .sub { font-size: 11pt; color: var(--ink2); margin: 0; }
+  .meta {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 8.4pt; color: var(--mute); margin-top: 3mm;
+  }
+
+  /* ── Boxen ───────────────────────────────────────────── */
+  .box {
+    border: .6pt solid var(--line); border-left: 2.4pt solid var(--mute);
+    padding: 3mm 4mm; margin: 3.5mm 0; background: #fafbfc;
+    page-break-inside: avoid;
+  }
+  .box--rgb { border-left-color: var(--rgbc); background: var(--rgbbg); }
+  .box--dep { border-left-color: var(--depc); background: var(--depbg); }
+  .box--warn { border-left-color: var(--warn); background: var(--warnbg); }
+  .box--key { border-left-color: var(--accent); background: #fbf3f6; }
+  .box__h {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 8.4pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; margin-bottom: 1.8mm; color: var(--ink2);
+  }
+  .box p:last-child, .box ul:last-child, .box ol:last-child { margin-bottom: 0; }
+
+  /* ── Tabellen ────────────────────────────────────────── */
+  table {
+    width: 100%; border-collapse: collapse; margin: 3mm 0 4mm;
+    font-size: 9.2pt; page-break-inside: avoid;
+  }
+  table.fixed { table-layout: fixed; }
+  /* Lange Tabellen dürfen über den Seitenrand laufen, Zeilen aber nie zerreißen */
+  table.long { page-break-inside: auto; }
+  table.long tr { page-break-inside: avoid; }
+  td:first-child, th:first-child, td.nowrap { hyphens: none; }
+  td.nowrap { white-space: nowrap; }
+  td .mono, td code { word-break: break-word; }
+  /* Dateinamen in der Leitspalte nie mitten im Wort umbrechen */
+  table:not(.fixed) td:first-child .mono,
+  table:not(.fixed) td:first-child code { white-space: nowrap; font-size: 8pt; }
+  caption {
+    caption-side: top; text-align: left;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 8.4pt; color: var(--mute); padding-bottom: 1.5mm;
+  }
+  th {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 8.2pt; text-transform: uppercase; letter-spacing: .05em;
+    text-align: left; border-bottom: 1pt solid var(--ink);
+    padding: 1.5mm 2mm 1.5mm 0; vertical-align: bottom;
+  }
+  td { padding: 1.5mm 2mm 1.5mm 0; border-bottom: .4pt solid var(--line); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 3mm; }
+  tr.hi td { background: var(--rgbbg); font-weight: 600; }
+  table.tight td, table.tight th { padding-top: 1mm; padding-bottom: 1mm; }
+
+  /* ── Ablaufkette ─────────────────────────────────────── */
+  .flow {
+    display: flex; gap: 0; margin: 3.5mm 0 4mm; list-style: none; padding: 0;
+    page-break-inside: avoid;
+  }
+  .flow li {
+    flex: 1; border: .6pt solid var(--line); border-right: none;
+    padding: 2mm 2.5mm; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 8.4pt; font-weight: 600; margin: 0; background: #fafbfc;
+  }
+  .flow li:last-child { border-right: .6pt solid var(--line); }
+  .flow li span {
+    display: block; font-weight: 400; font-size: 7.6pt; color: var(--mute);
+    margin-top: .8mm; line-height: 1.3;
+  }
+
+  /* ── Q&A ─────────────────────────────────────────────── */
+  .qa { margin: 0 0 4mm; }
+  .qa dt {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 700; font-size: 9.4pt; margin-top: 3.5mm; color: var(--ink);
+    page-break-after: avoid;
+  }
+  .qa dd { margin: 1mm 0 0; padding-left: 0; }
+  .qa dd + dd { margin-top: 1.2mm; }
+
+  /* ── Sonstiges ───────────────────────────────────────── */
+  .lead { font-size: 10.8pt; color: var(--ink2); }
+  .tagrow { margin: 2mm 0 3mm; }
+  .tag {
+    display: inline-block; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 7.8pt; padding: .8mm 2mm; border-radius: 2mm; margin-right: 1.5mm;
+    background: #eef0f3; color: var(--ink2);
+  }
+  .tag--rgb { background: var(--rgbbg); color: var(--rgbc); }
+  .tag--dep { background: var(--depbg); color: var(--depc); }
+  .toc { columns: 2; column-gap: 8mm; font-size: 9.4pt; }
+  .toc p { margin: 0 0 1.2mm; break-inside: avoid; }
+  .toc .n { color: var(--mute); display: inline-block; width: 8mm; }
+  strong.k { color: var(--accent); }
+  hr { border: none; border-top: .4pt solid var(--line); margin: 5mm 0; }
+  .fn { font-size: 8.6pt; color: var(--mute); }
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="kicker">Vortragsbriefing · Seminar „KI in der Produktion“ · wbk / KIT</div>
+  <h1>Farbweg und Expertenauswahl</h1>
+  <p class="sub">Was Sie erzählen, und was Sie darunter wissen müssen —
+    GDRNPP im Detail, Pipeline A, Schattenbasierte Expertenauswahl.</p>
+  <div class="meta">
+    Sprecher: Maximilian Klattig · 7 Blätter · Stand 4. August 2026 ·
+    Quellen: Seminararbeit (29 S., 1. August 2026), Deck <span class="mono">kip.html</span>,
+    Trainingskonfiguration <span class="mono">config_base_so.py</span>,
+    Konverter <span class="mono">isaac_to_bop.py</span>, Eval-Reports <span class="mono">results/icbin_t109/</span>,
+    GDR-Net (arXiv 2102.12145) und GDRNPP-Repository.
+  </div>
+</header>
+
+<p class="lead">Dieses Papier ist zum Hineinlesen gedacht, nicht zum Vorlesen. Teil 0 ist
+Ihr Auftritt in Kurzform. <strong>Teil 1 erklärt bei Null beginnend, was das System überhaupt
+tut</strong> — mit Bildern statt Formeln und einem Glossar am Ende. Teil 2 geht dann so tief in
+GDRNPP, dass Sie auf jede Nachfrage zu Architektur, Labels und Training antworten können. Teil 3
+und 4 sind Ihre beiden inhaltlichen Blöcke. Teil 5 ist der Fragenkatalog mit fertigen Antworten,
+Teil 6 der Zahlenspiegel. Teil 7 nennt drei Stellen, an denen ein aufmerksamer Zuhörer Sie
+festnageln kann — mit vorbereiteter Antwort.</p>
+
+<div class="toc">
+  <p><span class="n">0</span> Ihr Auftritt</p>
+  <p><span class="n">1</span> Von Null erklärt</p>
+  <p><span class="n">2</span> GDRNPP im Detail</p>
+  <p><span class="n">3</span> Der Farbweg (Pipeline A)</p>
+  <p><span class="n">4</span> Die Expertenauswahl</p>
+  <p><span class="n">5</span> Fragenkatalog</p>
+  <p><span class="n">6</span> Zahlenspiegel</p>
+  <p><span class="n">7</span> Drei Schwachstellen, vorbereitet</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<h2>0 Ihr Auftritt</h2>
+
+<p>Sie sprechen zwei zusammenhängende Blöcke, dazwischen liegt Yannics Tiefenweg und der
+Vergleich. Ihr erster Block erklärt, wie ohne Tiefe eine genaue Lage entsteht. Ihr zweiter
+Block löst den Konflikt auf, den der Vergleich davor aufgemacht hat.</p>
+
+<table class="long fixed">
+  <caption>Ihre Blätter im Register, in der Reihenfolge des Vortrags</caption>
+  <colgroup><col style="width:22%"><col style="width:65%"><col style="width:13%"></colgroup>
+  <thead>
+    <tr><th>Blatt</th><th>Kernsatz, den das Publikum mitnehmen soll</th><th class="num">ca.</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Farbweg: die Idee</strong></td>
+        <td>Die Tiefe wird bewusst nicht benutzt; was sie liefern würde, holt die bekannte
+            Tischebene aus der Geometrie. Aus sechs Freiheitsgraden werden praktisch drei.</td>
+        <td class="num">1,5 min</td></tr>
+    <tr><td><strong>Farbweg: Umsetzung</strong></td>
+        <td>Orientierte Box statt achsparalleler, dann je Bauteilklasse ein eigenes
+            GDRNPP-Modell, dann ein Adapter in Weltkoordinaten mit Aufsetzen auf die Ebene.</td>
+        <td class="num">2 min</td></tr>
+    <tr><td><strong>Farbweg: Ergebnis</strong></td>
+        <td>AR 0,886 und rund 4 mm Lagefehler bei einer Schwelle von 11 mm. Den Ausschlag
+            gibt das bauteilspezifische Training — und genau das ist auch der Preis.</td>
+        <td class="num">1,5 min</td></tr>
+    <tr class="hi"><td colspan="3">→ Übergabe an Yannic: „Damit ist der Farbweg an seiner Grenze.
+        Yannic zeigt jetzt, was die Tiefe stattdessen kann.“</td></tr>
+    <tr><td><strong>Expertenauswahl: die Idee</strong></td>
+        <td>Es ist keine Konkurrenz zwischen zwei Verfahren, sondern eine Ortsfrage. Der Arm
+            wirft einen Infrarot-Schatten; dort gibt es überhaupt keine Tiefe.</td>
+        <td class="num">2 min</td></tr>
+    <tr><td><strong>Expertenauswahl: Umsetzung</strong></td>
+        <td>Die Schattenkarte wird vorab rein geometrisch berechnet. Entscheidend ist die
+            Schnittmenge: keine Tiefe, aber Farbkamera sieht noch hin — 485 cm², 13,3 %.</td>
+        <td class="num">2 min</td></tr>
+    <tr><td><strong>Das System dahinter</strong></td>
+        <td>Zwei einheitliche Schnittstellen, <span class="mono">/segment</span> und
+            <span class="mono">/pose</span>. Deshalb sind Erkennung und Lage frei kombinierbar,
+            und die Auswahl greift an genau einer Stelle ein.</td>
+        <td class="num">1,5 min</td></tr>
+    <tr><td><strong>Expertenauswahl: Ergebnis</strong></td>
+        <td>Im Schatten 424,6 mm → 3,4 mm. Außerhalb greift die Auswahl nicht ein und der
+            Tiefenweg bleibt unverändert.</td>
+        <td class="num">1,5 min</td></tr>
+    <tr class="hi"><td colspan="3">→ Übergabe an Jerun: „Damit steht die Lösung. Jerun ordnet
+        ein, was das wert ist und wo die Grenzen liegen.“</td></tr>
+  </tbody>
+</table>
+
+<div class="box box--key">
+  <div class="box__h">Der eine Satz, falls Sie nur einen sagen dürften</div>
+  <p>Farbbild und Tiefenbild sind keine Konkurrenten, sondern örtlich ergänzende Experten —
+  der Farbweg ist überall verfügbar und dank bauteilspezifischem Training auf rund vier
+  Millimeter genau, der Tiefenweg ist genauer, wo Tiefe ankommt, und im Infrarot-Schatten
+  des Arms blind.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="part"></div>
+<h2>1 Von Null erklärt</h2>
+
+<p class="lead">Dieses Kapitel setzt nichts voraus. Wer es gelesen hat, versteht, was das
+System tut, warum es überhaupt schwierig ist und was die Zahlen bedeuten. Der Deepdive ab
+Kapitel 2 setzt genau hier auf.</p>
+
+<h3>1.1 Worum es eigentlich geht</h3>
+
+<p>Auf einem Montagetisch liegen Metallteile. Ein Roboterarm soll sie greifen. Damit er das
+kann, reicht es nicht zu wissen, <em>dass</em> dort ein Anker liegt. Der Greifer muss
+angefahren werden — er braucht die genaue Stelle und die genaue Drehlage.</p>
+
+<div class="box box--key">
+  <div class="box__h">Das Bild, das immer funktioniert</div>
+  <p>Stellen Sie sich vor, Sie beschreiben jemandem am Telefon, wo die Fernbedienung liegt.
+  „Auf dem Tisch“ genügt nicht, wenn die Person blind zugreifen soll. Sie müssten sagen:
+  <em>30 cm vom linken Rand, 15 cm von vorne, flach aufliegend, Knöpfe nach oben, um 40 Grad
+  gegen die Tischkante verdreht.</em> Das sind sechs Angaben — drei für den Ort, drei für die
+  Drehung. Genau diese sechs Zahlen nennt man die <strong>6D-Lage</strong>, und genau die
+  soll unser System aus einem einzigen Foto bestimmen.</p>
+</div>
+
+<h3>1.2 Was die sechs Zahlen sind</h3>
+
+<table class="tight">
+  <thead><tr><th>Was</th><th>Wie viele Zahlen</th><th>Bedeutung im Klartext</th></tr></thead>
+  <tbody>
+    <tr><td>Position</td><td>3</td><td>Wo auf dem Tisch, gemessen vom Tischnullpunkt: nach
+        rechts, nach hinten, nach oben.</td></tr>
+    <tr><td>Orientierung</td><td>3</td><td>Wie das Teil verdreht ist: kippen, neigen, um die
+        Hochachse drehen.</td></tr>
+  </tbody>
+</table>
+
+<p>Weil die Teile flach auf einer bekannten Tischplatte liegen, sind zwei der drei
+Drehrichtungen und die Höhe praktisch schon festgelegt — ein liegendes Teil kann nicht
+schweben und nicht auf der Kante stehen. Von den sechs Zahlen bleiben damit real drei
+übrig: <strong>zwei Koordinaten in der Ebene und die Drehung um die Hochachse.</strong>
+Diese Vereinfachung ist keine Bequemlichkeit, sie ist der Grund, warum ein Verfahren ohne
+Tiefenmessung überhaupt konkurrenzfähig ist.</p>
+
+<h3>1.3 Warum das schwer ist</h3>
+
+<table class="tight long">
+  <thead><tr><th>Schwierigkeit</th><th>Zum Anfassen</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Kein Muster auf der Oberfläche</strong></td>
+        <td>Die Teile sind blankes, glänzendes Metall. Ein Gesichtserkenner findet Augen und
+            Nase — auf einem Löffel gibt es nichts Vergleichbares wiederzuerkennen. Was das
+            Verfahren sieht, sind Umriss und Lichtreflexe, sonst nichts.</td></tr>
+    <tr><td><strong>Symmetrie</strong></td>
+        <td>Halten Sie eine Kaffeetasse ohne Henkel hoch und drehen Sie sie. Niemand kann
+            sagen, um wie viel Grad Sie gedreht haben — es gibt keine Antwort, nicht bloß
+            keine erkennbare. Genau so sind unsere Anker um ihre Längsachse.</td></tr>
+    <tr><td><strong>Der Arm steht im Bild</strong></td>
+        <td>Der Roboter verdeckt seine eigenen Teile. Ein Teil, von dem nur ein Viertel zu
+            sehen ist, muss trotzdem geschätzt werden.</td></tr>
+    <tr><td><strong>Tiefe hilft auf Metall nur bedingt</strong></td>
+        <td>Die Tiefenkamera misst über ein projiziertes Infrarot-Muster. Auf spiegelndem
+            Metall verläuft es, und hinter dem Arm kommt es gar nicht an. Mehr dazu in 1.11.</td></tr>
+  </tbody>
+</table>
+
+<h3>1.4 Der Grundgedanke: wir kennen das Teil bereits</h3>
+
+<p>Der entscheidende Umstand ist, dass wir für jedes Bauteil das <strong>CAD-Modell</strong>
+haben — die exakte Konstruktionsgeometrie aus der Fertigung. Die Aufgabe ist deshalb nicht
+„Was ist das für ein Ding?“, sondern:</p>
+
+<div class="box box--rgb">
+  <p style="font-size:11pt; margin:0;"><strong>Wie muss ich mein bekanntes 3D-Modell im Raum
+  hinstellen und hindrehen, damit es aus Sicht der Kamera genau so aussieht wie auf dem
+  Foto?</strong></p>
+</div>
+
+<p>Das ist ein Schattenspiel: Sie halten eine Figur vor eine Lampe und drehen sie so lange,
+bis der Schatten an der Wand mit einer Vorlage übereinstimmt. Ist die Figur bekannt und der
+Schatten deckungsgleich, kennen Sie ihre Lage. Alle Verfahren dieser Arbeit machen im Kern
+dieses Schattenspiel — sie unterscheiden sich nur darin, <em>wie</em> sie die richtige
+Stellung finden.</p>
+
+<h3>1.5 Drei Wege, dasselbe zu tun</h3>
+
+<table class="tight long">
+  <thead><tr><th>Weg</th><th>Wie es funktioniert</th><th>Bei uns</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Probieren</strong><br><span class="fn">Rendern und Vergleichen</span></td>
+        <td>Modell versuchsweise hinstellen, ein Bild davon rechnen, mit dem Foto vergleichen,
+            nachkorrigieren, wiederholen. Wie ein Schlüsselbund durchprobieren, bis einer
+            passt. Sehr genau, aber es kostet Zeit — jeder Versuch muss gerechnet werden.</td>
+        <td>FoundationPose, rund 8 s je Bild</td></tr>
+    <tr><td><strong>Katalog</strong><br><span class="fn">Vorlagen und Korrespondenzen</span></td>
+        <td>Vorab rund 160 Ansichten des Teils aus allen Richtungen rendern und ablegen. Im
+            Betrieb die ähnlichste Ansicht heraussuchen und feinjustieren. Wie im Farbfächer
+            den passenden Ton suchen. Schnell, aber nur so fein wie der Katalog.</td>
+        <td>GigaPose, rund 1,3 s</td></tr>
+    <tr class="hi"><td><strong>Auswendig gelernt</strong><br><span class="fn">Direkte Regression</span></td>
+        <td>Ein neuronales Netz hat an vielen Beispielen gelernt, wie das Teil in jeder Lage
+            aussieht, und gibt die Antwort in einem Durchgang aus — ohne Suchschleife. Wie ein
+            erfahrener Monteur, der auf einen Blick sagt, wie herum das Teil liegt.</td>
+        <td><strong>GDRNPP, rund 1,0 s — unser Farbweg</strong></td></tr>
+  </tbody>
+</table>
+
+<p>Der Preis des dritten Wegs steht schon im Bild: Auswendig lernen muss man <em>je Teil</em>.
+Die beiden anderen brauchen nur das CAD-Modell und laufen sofort auch für ein Bauteil, das
+sie nie gesehen haben.</p>
+
+<h3>1.6 Was GDRNPP im Kern macht</h3>
+
+<p>Der Name steht für <em>Geometry-guided Direct Regression Network</em> — „geometrisch
+geführte direkte Regression“. Die drei Bestandteile in Alltagssprache:</p>
+
+<ul>
+  <li><strong>Regression</strong> heißt schlicht: Das Netz gibt Zahlen aus, keine Kategorien.
+      Nicht „das ist ein Anker“, sondern „er liegt bei 312 Millimeter und ist um 41 Grad
+      gedreht“.</li>
+  <li><strong>Direkt</strong> heißt: in einem Durchgang, ohne nachgeschaltete Suche.</li>
+  <li><strong>Geometrisch geführt</strong> ist der eigentliche Trick — und der lohnt eine
+      eigene Erklärung.</li>
+</ul>
+
+<div class="box box--key">
+  <div class="box__h">Die Globus-Analogie</div>
+  <p>Sie fotografieren einen Globus. Wenn Sie für jeden Bildpunkt sagen könnten, welches Land
+  dort zu sehen ist — hier Portugal, hier Marokko, hier der Atlantik — dann wüssten Sie
+  automatisch auch, wie der Globus steht. Die Zuordnung „Bildpunkt → Stelle auf dem Objekt“
+  <em>enthält</em> die Lage bereits.</p>
+  <p>Genau das malt GDRNPP: eine Karte, die jedem sichtbaren Bildpunkt seine Koordinate
+  <em>auf dem Bauteil</em> zuweist. Nicht wo im Bild der Punkt liegt, sondern welche Stelle
+  des Ankers dort zu sehen ist. Aus dieser dichten Zuordnung wird anschließend die Lage
+  ausgerechnet.</p>
+</div>
+
+<p>Und weil das Netz diese Zwischenkarte tatsächlich malen muss, statt die sechs Zahlen aus
+dem Nichts zu raten, ist es „geometrisch geführt“. Es wird gezwungen, die Form des Teils zu
+verstehen, bevor es antwortet. Das ist der ganze Unterschied zu einem Netz, das man einfach
+auf die Antwort trainiert.</p>
+
+<p>Der zweite Teil des Namens, <strong>PP</strong>, steht für „plus plus“: die überarbeitete
+Fassung, die 2022 den BOP-Wettbewerb gewann. Sie brachte ein moderneres Grundnetz und
+deutlich härtere Trainingsvariation mit.</p>
+
+<h3>1.7 Was Training hier bedeutet — und woher die Lösungen kommen</h3>
+
+<p>Ein Netz lernt aus Beispielen mit Lösung. Für unseren Fall hieße das: Tausende Fotos vom
+Montagetisch, und zu jedem Foto die exakte Lage jedes Teils auf den Millimeter genau.
+<strong>Diese Lösungen von Hand zu erzeugen ist praktisch unmöglich</strong> — man müsste
+jedes Teil auf jedem Foto vermessen.</p>
+
+<p>Der Ausweg: Wir bauen die Montagezelle in einer Simulation nach — Tisch, Roboterarm,
+Beleuchtung, die echten CAD-Modelle. Dann lassen wir Teile hineinfallen und rendern ein Bild
+von oben. <strong>Der Computer weiß die Lösung, weil er die Teile selbst hingelegt hat.</strong></p>
+
+<div class="box">
+  <div class="box__h">Das Bild dazu</div>
+  <p>Es ist wie Vokabellernen mit Lösungsblatt — nur dass wir Vokabeln und Lösungsblatt selbst
+  drucken, in beliebiger Menge und garantiert fehlerfrei. Für jedes gerenderte Bild fällt
+  automatisch mit ab: die Lage jedes Teils, welche Bildpunkte zu welchem Teil gehören, wie
+  viel davon der Arm verdeckt, und die Entfernung jedes Punktes. Das nennt man Label oder
+  Referenzlage.</p>
+</div>
+
+<p>Der offensichtliche Einwand — „dann lernt das Netz doch nur die Simulation“ — ist
+berechtigt und heißt in der Fachsprache Domänenlücke. Zwei Dinge halten dagegen. Erstens
+verzerren wir die Trainingsbilder absichtlich stark: Helligkeit, Kontrast, Unschärfe,
+Rauschen, teils Graustufen. Ein Netz, das damit zurechtkommt, hängt nicht an den Feinheiten
+der Simulation. Zweitens ist das inzwischen der Normalfall — nahezu alle Spitzenverfahren des
+BOP-Wettbewerbs trainieren rein synthetisch. Dass die Prüfung an echten Aufnahmen bei uns noch
+aussteht, bleibt trotzdem die ehrlichste offene Stelle der Arbeit.</p>
+
+<h3>1.8 Ein Durchlauf, Schritt für Schritt</h3>
+
+<p>Was passiert, wenn ein Bild eintrifft:</p>
+
+<table class="long">
+  <caption>Vom Foto zum CAD-Modell im Betrachter. Werte in der rechten Spalte sind typische
+    Größenordnungen aus echten Läufen.</caption>
+  <colgroup><col style="width:6%"><col style="width:24%"><col style="width:44%"><col style="width:26%"></colgroup>
+  <thead><tr><th>#</th><th>Schritt</th><th>Was dabei geschieht</th><th>Beispiel</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Aufnahme</td>
+        <td>Eine Farbaufnahme von oben auf den Tisch.</td>
+        <td>1280 × 720 Bildpunkte</td></tr>
+    <tr><td>2</td><td>Teile finden<br><span class="fn">YOLOv8-OBB</span></td>
+        <td>Ein Detektor legt um jedes gefundene Teil ein <em>gedrehtes</em> Rechteck und sagt
+            die Klasse dazu.</td>
+        <td>4 Funde: 2× Anker lang, 2× Zahnrad</td></tr>
+    <tr><td>3</td><td>Ausschnitt</td>
+        <td>Aus jedem Rechteck wird ein quadratischer Ausschnitt geschnitten und auf feste
+            Größe gebracht.</td>
+        <td>je 320 × 320</td></tr>
+    <tr><td>4</td><td>Lage schätzen<br><span class="fn">GDRNPP</span></td>
+        <td>Für die Klasse „Anker lang“ wird das eigens dafür trainierte Modell aufgerufen. Es
+            malt die Zuordnungskarte aus 1.6 und liest daraus die Lage ab.</td>
+        <td>Drehung und Verschiebung, bezogen auf die Kamera</td></tr>
+    <tr><td>5</td><td>Umrechnen</td>
+        <td>Ein Adapter rechnet von „relativ zur Kamera“ auf „relativ zum Tischnullpunkt“ um
+            und setzt das Teil sauber auf die Tischebene auf.</td>
+        <td>x = 312 mm, y = 188 mm, 41° gedreht</td></tr>
+    <tr class="hi"><td>6</td><td>Anzeigen</td>
+        <td>Der 3D-Betrachter im Browser setzt das echte CAD-Modell an genau diese Stelle in
+            die nachgebaute Zelle.</td>
+        <td>gesamt rund 1,0 s je Bild</td></tr>
+  </tbody>
+</table>
+
+<h3>1.9 Was die Kennzahlen bedeuten</h3>
+
+<dl class="qa">
+  <dt>AR 0,886 — was heißt das?</dt>
+  <dd>Von 100 geschätzten Teilen liegen rund 89 innerhalb der erlaubten Toleranz. AR steht für
+  <em>Average Recall</em> und ist die Standardkennzahl des BOP-Vergleichs, also des etablierten
+  Maßstabs dieses Fachgebiets. Alle unsere Zahlen folgen ihm, damit sie mit veröffentlichten
+  Ergebnissen vergleichbar sind.</dd>
+
+  <dt>Welche Toleranz?</dt>
+  <dd>Ein Zehntel des Bauteildurchmessers. Bei den Ankern mit rund 112 und 115 Millimeter
+  Durchmesser sind das <strong>etwa 11 Millimeter</strong>. Beim kleineren Zahnrad
+  entsprechend nur rund 5 Millimeter — kleine Teile werden also strenger bewertet.</dd>
+
+  <dt>Und die 4 Millimeter?</dt>
+  <dd>Das ist der typische tatsächliche Fehler unseres Farbwegs, also gut zwei Ein-Cent-Münzen
+  übereinander. Anders gesagt: Wir liegen fast dreimal genauer, als die Bewertung verlangt.
+  Deshalb ist AR 0,886 kein knappes Bestehen, sondern ein deutlicher Abstand zur Schwelle.</dd>
+
+  <dt>Warum bekommt das Zahnrad trotzdem nur 0,838?</dt>
+  <dd>Nicht weil es schlechter geschätzt wird, sondern weil bei ihm die Schwelle nur halb so
+  groß ist. Derselbe Millimeterfehler zählt beim kleinen Teil als Fehlschlag und beim großen
+  noch als Treffer.</dd>
+</dl>
+
+<h3>1.10 Symmetrie — warum 83 Grad Fehler kein Fehler sind</h3>
+
+<p>Auf dem Anhangblatt steht ein roher Drehfehler von 83,3 Grad. Ohne Erklärung klingt das
+katastrophal. Es ist keiner.</p>
+
+<p>Die Anker sind um ihre Längsachse drehsymmetrisch — wie ein Bleistift. Drehen Sie einen
+Bleistift um seine Achse, sieht er unverändert aus. Fragt man nun „um wie viel Grad ist er
+gedreht?“, ist jede Antwort gleich richtig. Ein Verfahren, das 83 Grad sagt, während die
+Referenz 0 Grad notiert hat, hat sich nicht geirrt — <strong>die Frage hatte keine eindeutige
+Antwort.</strong></p>
+
+<p>Die Bewertung des BOP-Standards weiß das. Sie prüft jede erlaubte Symmetrielage und nimmt
+die günstigste. Bleiben dann noch Grad übrig, ist das ein echter Fehler. Bei uns sind es
+<strong>7,2 Grad</strong> statt 83,3. Damit man das rechnen kann, muss jede Symmetrie im
+Datensatz hinterlegt sein — und zwar richtig, sonst würde man dem Verfahren Fehler ankreiden,
+die keine sind. Für uns heißt das: Anker und Ringmagnet frei drehbar um eine Achse, das
+Zahnrad in sieben Stufen.</p>
+
+<h3>1.11 Der Infrarot-Schatten</h3>
+
+<p>Die Tiefenkamera funktioniert nicht wie ein Auge, sondern wie ein sehr feiner Beamer mit
+Kamera daneben: Sie <em>projiziert</em> ein Infrarot-Muster auf den Tisch und misst, wie stark
+es verzerrt zurückkommt. Daraus folgt für jeden Bildpunkt seine Entfernung.</p>
+
+<div class="box box--dep">
+  <div class="box__h">Das Bild dazu</div>
+  <p>Halten Sie im Kino die Hand in den Projektorstrahl — auf der Leinwand entsteht ein
+  Schatten. Genau das macht der Roboterarm mit dem Infrarot-Muster. In diesem Schatten kommt
+  kein Muster an, also gibt es dort <strong>keinen Tiefenwert</strong>. Nicht einen ungenauen,
+  sondern gar keinen. Der Tiefenweg ist dort blind.</p>
+  <p>Die Farbkamera sitzt 15 Zentimeter neben dem Projektor. Sie ist keine Projektionsquelle,
+  sondern schaut nur — und sieht deshalb in einen Teil dieses Schattens weiterhin hinein.
+  Diese Fläche, auf der keine Tiefe ankommt, die Farbkamera aber noch hinsieht, sind
+  <strong>485 cm² oder 13,3 Prozent des Tisches</strong>.</p>
+</div>
+
+<h3>1.12 Die Idee der Expertenauswahl</h3>
+
+<p>Damit steht die Ausgangslage: Zwei Verfahren, jedes mit einem klaren Vorteil und einem
+klaren Ausfall. Der Tiefenweg ist genauer, wo Tiefe ankommt, und im Schatten unbrauchbar.
+Der Farbweg ist überall verfügbar, dafür etwas gröber und braucht je Teil ein eigenes
+Training.</p>
+
+<p>Ein Handwerker mit zwei Zangen wählt nicht ein für alle Mal eine davon, sondern greift je
+nach Stelle zur passenden. Genau das tut unser System: Für jedes einzelne Bauteil wird anhand
+seiner Position auf dem Tisch entschieden, welches Verfahren zuständig ist. In der
+Bildverarbeitung heißt so etwas <em>Expertenauswahl</em>.</p>
+
+<p>Der Haken, und zugleich die schönste Stelle der Arbeit: Um zu entscheiden, ob ein Teil im
+Schatten liegt, bräuchte man seine Position — die käme aus der Tiefe, die im Schatten aber
+gerade fehlt. Gelöst wird das rein geometrisch über die bekannte Tischebene; wie genau, steht
+in 4.3.</p>
+
+<h3>1.13 Begriffe in Alltagssprache</h3>
+
+<table class="tight long">
+  <colgroup><col style="width:26%"><col style="width:74%"></colgroup>
+  <tbody>
+    <tr><td><strong>6D-Lage / Pose</strong></td><td>Ort und Drehung eines Teils, zusammen sechs Zahlen.</td></tr>
+    <tr><td><strong>CAD-Modell / Netz</strong></td><td>Die Konstruktionsgeometrie des Bauteils als 3D-Datei.</td></tr>
+    <tr><td><strong>Detektion</strong></td><td>Teile im Bild finden und einrahmen — noch ohne Lage.</td></tr>
+    <tr><td><strong>Segmentierung</strong></td><td>Wie Detektion, aber pixelgenau umrandet statt nur eingerahmt.</td></tr>
+    <tr><td><strong>OBB</strong></td><td>Gedrehtes Rechteck statt achsparallelem — liegt enger an schrägen Teilen.</td></tr>
+    <tr><td><strong>RGB / RGB-D</strong></td><td>Nur Farbbild / Farbbild plus Entfernungsbild.</td></tr>
+    <tr><td><strong>Label / Referenzlage</strong></td><td>Die bekannte richtige Antwort zu einem Trainingsbild.</td></tr>
+    <tr><td><strong>Synthetische Daten</strong></td><td>Trainingsbilder aus der Simulation statt von der Kamera.</td></tr>
+    <tr><td><strong>Domänenlücke</strong></td><td>Der Unterschied zwischen Simulation und Wirklichkeit.</td></tr>
+    <tr><td><strong>Backbone</strong></td><td>Das große Grundnetz, das aus dem Bild Merkmale zieht.</td></tr>
+    <tr><td><strong>Epoche</strong></td><td>Ein vollständiger Durchlauf durch alle Trainingsbilder.</td></tr>
+    <tr><td><strong>Überanpassung</strong></td><td>Das Netz lernt die Trainingsbilder auswendig statt die Aufgabe.</td></tr>
+    <tr><td><strong>Prüfpunkt</strong></td><td>Zwischenstand des Trainings, gespeichert zum späteren Auswählen.</td></tr>
+    <tr><td><strong>Inferenz</strong></td><td>Das fertige Netz anwenden, im Gegensatz zum Trainieren.</td></tr>
+    <tr><td><strong>PnP</strong></td><td>Klassisches Rechenverfahren, das aus Punktzuordnungen die Lage bestimmt.</td></tr>
+    <tr><td><strong>Regression</strong></td><td>Zahlen vorhersagen statt Kategorien.</td></tr>
+    <tr><td><strong>BOP</strong></td><td>Der etablierte Vergleichsstandard für Lageschätzung: Datenformat, Datensätze, Bewertung.</td></tr>
+    <tr><td><strong>AR</strong></td><td>Die BOP-Hauptkennzahl: Anteil der Schätzungen innerhalb der Toleranz.</td></tr>
+    <tr><td><strong>MSSD / MSPD</strong></td><td>Zwei Fehlermaße: Abstand in 3D am Objekt / Abstand in der Bildebene.</td></tr>
+    <tr><td><strong>Trainingsfrei</strong></td><td>Verfahren, das ein neues Teil allein aus dem CAD-Modell erschließt.</td></tr>
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="part"></div>
+<h2>2 GDRNPP im Detail</h2>
+
+<h3>2.1 Wo das Verfahren steht</h3>
+
+<p>GDRNPP (Liu et al., TPAMI 2025) ist die weiterentwickelte Fassung von
+<em>GDR-Net — Geometry-guided Direct Regression Network</em> (Wang et al., CVPR 2021).
+Es gewann den Großteil der Preise beim BOP-Wettbewerb 2022 und steht unter Apache-2.0,
+ist also uneingeschränkt einsetzbar. Das ist neben der Genauigkeit der zweite Grund für
+die Wahl: FoundationPose ist genauer, aber nicht kommerziell nutzbar.</p>
+
+<p>Methodisch gibt es drei Familien der Lageschätzung. <strong>Rendern-und-Vergleichen</strong>
+(FoundationPose) rendert Hypothesen und vergleicht sie mit dem Bild. <strong>Vorlagen- und
+korrespondenzbasierte</strong> Verfahren (GigaPose) suchen die ähnlichste vorgerenderte
+Ansicht. GDRNPP gehört zur <strong>direkten Regression</strong>: Ein Netz gibt die Lage
+unmittelbar aus, ohne Suchschleife. Deshalb ist es mit rund einer Sekunde je Bild schnell.</p>
+
+<h3>2.2 Das Problem, das GDR-Net gelöst hat</h3>
+
+<p>Die klassische Vorgehensweise war zweistufig: Ein Netz sagt 2D-3D-Korrespondenzen vorher,
+und ein PnP-Löser mit RANSAC rechnet daraus die Lage. Das ist genau, hat aber einen
+strukturellen Nachteil: <strong>PnP mit RANSAC ist nicht differenzierbar.</strong> Der
+Trainingsfehler der eigentlichen Zielgröße — der Lage — kann also nicht in das Netz
+zurückfließen. Das Netz wird auf Korrespondenzen optimiert, obwohl niemand Korrespondenzen
+will.</p>
+
+<p>GDR-Nets Antwort ist das <strong>Patch-PnP</strong>: ein kleines, lernbares Netz, das den
+geometrischen Löser ersetzt. Damit ist die Kette vom Bild bis zur Lage durchgehend
+differenzierbar und wird Ende-zu-Ende trainiert. Die geometrischen Zwischenkarten bleiben
+erhalten — daher „geometry-guided“ — sie werden aber zusätzlich beaufsichtigt, nicht mehr
+an einen externen Löser übergeben.</p>
+
+<div class="box box--key">
+  <div class="box__h">Wenn Sie es in einem Satz brauchen</div>
+  <p>GDRNPP sagt für jeden sichtbaren Bildpunkt vorher, welcher Stelle auf dem CAD-Modell er
+  entspricht, und ein kleines nachgeschaltetes Netz liest aus diesem dichten Zuordnungsfeld
+  direkt die Lage ab — statt einen klassischen, nicht trainierbaren Löser zu benutzen.</p>
+</div>
+
+<h3>2.3 Die Architektur in fünf Schritten</h3>
+
+<ol class="flow">
+  <li>ROI-Zoom<span>Ausschnitt auf feste Größe</span></li>
+  <li>Backbone<span>ConvNeXt-B</span></li>
+  <li>Geometriekopf<span>vier dichte Karten</span></li>
+  <li>Patch-PnP<span>drei Faltungen, zwei FC</span></li>
+  <li>Lage<span>R und t</span></li>
+</ol>
+
+<p><strong>Schritt 1 — ROI-Zoom.</strong> Aus dem Detektionsrechteck wird ein quadratischer
+Ausschnitt geschnitten und auf eine feste Kantenlänge skaliert. Im Original sind das 256×256,
+<strong>bei uns 320×320</strong> (Begründung in 2.9). Beim Training wird das Rechteck zufällig
+verschoben und skaliert — <em>Dynamic Zoom-In</em>, bei uns mit Randfaktor 1,5. Das macht das
+Netz unempfindlich gegen die Ungenauigkeit des Detektors, denn im Betrieb kommt die Box von
+YOLO und nicht aus der Referenz.</p>
+
+<p><strong>Schritt 2 — Backbone.</strong> Ein ConvNeXt-Base, auf ImageNet vortrainiert,
+Eingang dreikanalig, also reines RGB. Wir greifen nur die letzte Merkmalsstufe ab
+(<span class="mono">out_indices=(3,)</span>, 1024 Kanäle). Kein Tiefenzweig — er ist im
+Netz vorhanden, aber abgeschaltet.</p>
+
+<p><strong>Schritt 3 — Geometriekopf.</strong> Ein Dekoder blendet die Merkmale wieder auf und
+gibt vier dichte Karten aus, bei uns mit 80×80 Bildpunkten (im Original 64×64). Diese vier
+Karten sind der Kern des Verfahrens und in 2.4 einzeln beschrieben.</p>
+
+<p><strong>Schritt 4 — Patch-PnP.</strong> Die Karten werden gestapelt und durch drei
+Faltungsschichten mit Kernel 3×3 und Schrittweite 2 geführt, jeweils mit Gruppennormierung
+und Aktivierung. Das Ergebnis wird flachgelegt und über zwei vollverbundene Schichten auf
+256 Werte verdichtet. Zwei parallele Ausgabeschichten liefern daraus die Drehung und die
+Verschiebung.</p>
+
+<p><strong>Schritt 5 — Lage.</strong> Ausgegeben wird die Rotation als 6D-Darstellung und die
+Translation in der SITE-Parametrierung; beides wird anschließend in die übliche Form
+<span class="mono">R_m2c</span>, <span class="mono">t_m2c</span> (Modell → Kamera, in
+Millimetern, OpenCV-Kamerakonvention) zurückgerechnet. Genau in dieser Form nimmt sie unser
+Adapter entgegen.</p>
+
+<h3>2.4 Die vier dichten Zwischenkarten</h3>
+
+<table>
+  <caption>Was der Geometriekopf ausgibt — bei uns je 80×80 Bildpunkte</caption>
+  <thead>
+    <tr><th>Karte</th><th>Inhalt</th><th>Woher die Vorgabe kommt</th><th>Verlust</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>M<sub>XYZ</sub></strong><br><span class="fn">Objektkoordinaten</span></td>
+      <td>Für jeden Vordergrundpunkt seine 3D-Koordinate <em>auf dem Objekt</em>, normiert auf
+          [0,1] über die Kanten der Objekt-Bounding-Box. Drei Kanäle.</td>
+      <td>Wird aus dem CAD-Modell an der Referenzlage gerendert. Bei uns online im
+          Trainingsschritt (<span class="mono">XYZ_ONLINE=True</span>).</td>
+      <td>L1, nur auf sichtbaren Punkten</td>
+    </tr>
+    <tr>
+      <td><strong>M<sub>SRA</sub></strong><br><span class="fn">Oberflächenregionen</span></td>
+      <td>Die Objektoberfläche wird in <strong>64 Fragmente</strong> zerlegt; die Karte sagt
+          je Punkt die Wahrscheinlichkeit über diese Regionen vorher (plus Hintergrund).</td>
+      <td>Fragmente über Farthest-Point-Sampling auf dem Netz; Zuordnung folgt aus M<sub>XYZ</sub>.</td>
+      <td>Kreuzentropie</td>
+    </tr>
+    <tr>
+      <td><strong>M<sub>vis</sub></strong><br><span class="fn">sichtbare Maske</span></td>
+      <td>Welche Punkte des Ausschnitts das Objekt <em>tatsächlich sichtbar</em> zeigen.</td>
+      <td><span class="mono">mask_visib/</span> aus dem BOP-Datensatz.</td>
+      <td>L1</td>
+    </tr>
+    <tr>
+      <td><strong>M<sub>full</sub></strong><br><span class="fn">amodale Maske</span></td>
+      <td>Wo das Objekt <em>wäre</em>, auch hinter dem Arm. Der zweite Maskenkopf ist eine
+          GDRNPP-Neuerung gegenüber GDR-Net.</td>
+      <td><span class="mono">mask/</span>, die volle Silhouette an der Referenzlage.</td>
+      <td>L1</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="box">
+  <div class="box__h">Warum die Regionenkarte überhaupt existiert</div>
+  <p>Sie ist die Antwort auf die Symmetrie. Auf einem drehsymmetrischen Teil ist die
+  Objektkoordinate eines Bildpunkts mehrdeutig — mehrere Stellen des Modells passen gleich
+  gut. Eine reine Koordinatenregression würde dann auf den Mittelwert zwischen den möglichen
+  Antworten gezogen und wäre systematisch falsch. Die Regionenkarte darf stattdessen einem
+  Punkt <em>mehrere</em> Regionen mit geteilter Wahrscheinlichkeit zuweisen. Sie wirkt im
+  Patch-PnP als Aufmerksamkeitssignal (<span class="mono">REGION_ATTENTION=True</span>) und
+  entschärft damit genau die Mehrdeutigkeit, die unsere Anker mitbringen.</p>
+</div>
+
+<p>Zusätzlich bekommt das Patch-PnP die 2D-Bildkoordinaten des Ausschnitts als eigene Kanäle
+(<span class="mono">WITH_2D_COORD=True</span>). Erst dadurch enthält der Eingang beide Seiten
+der Korrespondenz: „welcher Bildpunkt“ und „welche Objektstelle“ — die Information, die ein
+klassischer PnP-Löser bekommen hätte.</p>
+
+<h3>2.5 Die Rotationsdarstellung: warum 6D und warum allozentrisch</h3>
+
+<p><strong>Warum nicht Quaternion oder Eulerwinkel.</strong> Jede Darstellung einer Drehung mit
+vier oder weniger Werten hat Unstetigkeitsstellen: Zwei fast gleiche Drehungen können weit
+auseinanderliegende Werte haben. Ein Netz, das solche Werte regressieren soll, muss an diesen
+Stellen springen, was es nicht sauber lernen kann. Die 6D-Darstellung — <strong>die ersten
+beiden Spalten der Rotationsmatrix</strong> — ist dagegen stetig. Die dritte Spalte ergibt sich
+aus dem Kreuzprodukt, orthonormalisiert wird per Gram-Schmidt. In unserer Konfiguration:
+<span class="mono">ROT_TYPE="allo_rot6d"</span>.</p>
+
+<p><strong>Warum allozentrisch.</strong> Das Netz sieht nur den herausgeschnittenen Ausschnitt,
+nicht dessen Position im Gesamtbild. Ein Teil am Bildrand erscheint dem Netz identisch zu
+demselben Teil in Bildmitte — die <em>egozentrische</em> Drehung relativ zur Kamera ist aber
+eine andere, weil sich die Blickrichtung geändert hat. Die <em>allozentrische</em> Drehung ist
+relativ zum Sehstrahl definiert und damit genau die Größe, die aus dem Ausschnitt allein
+bestimmbar ist. Nach der Vorhersage wird sie mit der geschätzten Verschiebung und den
+Kameraparametern in die egozentrische umgerechnet.</p>
+
+<div class="box box--warn">
+  <div class="box__h">Falls jemand fragt, warum das wichtig ist</div>
+  <p>Ohne die allozentrische Darstellung müsste das Netz aus einem Ausschnitt eine Größe
+  vorhersagen, die im Ausschnitt gar nicht enthalten ist. Es würde also lernen, aus der
+  Bildposition zu raten — bei unserer Aufnahme von oben mit 1280×720 Bildpunkten wäre der
+  Fehler am Rand am größten. Es ist derselbe Gedanke wie bei der Tiefenkonvention: Erst die
+  saubere geometrische Definition macht die Zahl fair.</p>
+</div>
+
+<h3>2.6 Die Translationsdarstellung: SITE</h3>
+
+<p>Die Verschiebung wird nicht direkt in Millimetern regressiert, sondern
+<strong>maßstabsinvariant</strong> (Scale-Invariant Translation Estimate). Vorhergesagt werden
+drei Werte, die sich auf den Ausschnitt beziehen:</p>
+
+<ul>
+  <li><strong>δ<sub>x</sub>, δ<sub>y</sub></strong> — wie weit der projizierte Objektmittelpunkt
+      vom Mittelpunkt des Ausschnitts abweicht, in Anteilen von dessen Breite und Höhe.</li>
+  <li><strong>δ<sub>z</sub></strong> — die Entfernung, geteilt durch das Zoom-Verhältnis
+      zwischen Ausschnittsgröße und ursprünglicher Boxgröße.</li>
+</ul>
+
+<p>Der Grund ist derselbe wie oben: Nach dem Zuschneiden und Skalieren ist die absolute
+Bildposition verloren, und ein Teil, das doppelt so weit weg liegt, sieht nach dem Zoom
+identisch aus. Die drei δ-Werte sind dagegen aus dem Ausschnitt bestimmbar; die metrische
+Verschiebung wird danach mit Ausschnittsgröße, Zoom-Verhältnis und den Kameraparametern
+zurückgerechnet. In unserer Konfiguration heißt das
+<span class="mono">TRANS_TYPE="centroid_z"</span>.</p>
+
+<h3>2.7 Die Verlustfunktion</h3>
+
+<p>Der Gesamtverlust hat zwei Teile. Der <strong>geometrische Teil</strong> beaufsichtigt die
+vier dichten Karten (Zeile für Zeile in der Tabelle in 2.4). Der <strong>Lageteil</strong>
+beaufsichtigt das Ergebnis des Patch-PnP und ist <em>entflochten</em>, also in drei getrennte
+Terme zerlegt, damit ein Fehler in der Drehung nicht mit einem Fehler in der Tiefe verrechnet
+wird:</p>
+
+<table class="tight">
+  <caption>Die Verlustterme in unserer Konfiguration, alle mit Gewicht 1,0</caption>
+  <thead><tr><th>Term</th><th>Art</th><th>Was er bestraft</th></tr></thead>
+  <tbody>
+    <tr><td><span class="mono">XYZ_LW</span></td><td>L1, maskiert auf sichtbar</td><td>falsche Objektkoordinaten</td></tr>
+    <tr><td><span class="mono">MASK_LW</span></td><td>L1</td><td>falsche sichtbare Maske</td></tr>
+    <tr><td><span class="mono">FULL_MASK_LW</span></td><td>L1</td><td>falsche amodale Maske</td></tr>
+    <tr><td><span class="mono">REGION_LW</span></td><td>Kreuzentropie</td><td>falsche Regionenzuordnung</td></tr>
+    <tr class="hi"><td><span class="mono">PM_LW</span>, <span class="mono">PM_LOSS_SYM=True</span></td>
+        <td>Punktabgleich, symmetriebewusst</td>
+        <td>Drehfehler, gemessen als mittlerer Abstand der Modellpunkte —
+            <strong>minimiert über alle erlaubten Symmetrielagen</strong></td></tr>
+    <tr><td><span class="mono">CENTROID_LW</span></td><td>L1</td><td>Versatz des projizierten Mittelpunkts (δ<sub>x</sub>, δ<sub>y</sub>)</td></tr>
+    <tr><td><span class="mono">Z_LW</span></td><td>L1</td><td>Entfernungsfehler (δ<sub>z</sub>)</td></tr>
+  </tbody>
+</table>
+
+<p>Die hervorgehobene Zeile ist für uns die wichtigste. <span class="mono">PM_LOSS_SYM</span>
+bedeutet: Der Drehverlust wird gegen <em>alle</em> zulässigen Symmetrielagen des Bauteils
+gerechnet und der kleinste Wert genommen. Ohne das würde das Training den Anker dafür
+bestrafen, dass er um seine eigene Längsachse verdreht ist — also für etwas, das gar kein
+Fehler ist. <span class="mono">PM_R_ONLY=True</span> heißt, dass dieser Term nur die Drehung
+bewertet; die Verschiebung ist über die beiden anderen Terme abgedeckt. Genau dieselbe
+Symmetriebehandlung greift später bei der Bewertung — die Symmetrieangaben kommen in beiden
+Fällen aus derselben Datei <span class="mono">models_info.json</span>.</p>
+
+<h3>2.8 Was GDRNPP gegenüber GDR-Net ändert</h3>
+
+<table class="tight">
+  <thead><tr><th>Bereich</th><th>GDR-Net (2021)</th><th>GDRNPP (BOP 2022, TPAMI 2025)</th></tr></thead>
+  <tbody>
+    <tr><td>Backbone</td><td>ResNet-34</td><td>ConvNeXt</td></tr>
+    <tr><td>Maskenköpfe</td><td>einer (sichtbar)</td><td>zwei (sichtbar + amodal)</td></tr>
+    <tr><td>Augmentierung</td><td>moderat</td><td>deutlich stärkere Domänenrandomisierung</td></tr>
+    <tr><td>Training</td><td>—</td><td>angepasste Lernrate, Gewichtsabfall, Sichtbarkeitsschwelle, Boxdefinition</td></tr>
+    <tr><td>Tiefenverfeinerung</td><td>—</td><td>optionaler Nachlauf: gerenderte gegen gemessene Tiefe</td></tr>
+    <tr><td>Ensemble</td><td>—</td><td>Zusammenführung mehrerer Vorhersagen</td></tr>
+  </tbody>
+</table>
+
+<div class="box box--rgb">
+  <div class="box__h">Wichtig für Ihre Antwort</div>
+  <p>Die optionale <strong>Tiefenverfeinerung von GDRNPP setzen wir bewusst nicht ein</strong>.
+  Wir fahren <span class="mono">test_gdrn.sh</span>, nicht
+  <span class="mono">test_gdrn_depth_refine.sh</span>. Sonst wäre der „Farbweg“ kein Farbweg
+  mehr, und der Vergleich mit dem Tiefenweg wäre wertlos. Das ist eine bewusste
+  Selbstbeschränkung, keine Lücke — und ein guter Satz, wenn jemand fragt, ob wir nicht mehr
+  aus GDRNPP herausholen könnten.</p>
+</div>
+
+<h3>2.9 Unsere konkrete Konfiguration</h3>
+
+<p>Alles Folgende steht in <span class="mono">box_src/gdrnpp/config_base_so.py</span>; die
+Konfigurationen je Bauteil erben davon und setzen nur den Datensatznamen und das
+Ausgabeverzeichnis.</p>
+
+<table class="tight long fixed">
+  <caption>Trainingskonfiguration, mit Begründung wo sie vom Standard abweicht</caption>
+  <colgroup><col style="width:19%"><col style="width:24%"><col style="width:57%"></colgroup>
+  <thead><tr><th>Einstellung</th><th>Wert</th><th>Warum</th></tr></thead>
+  <tbody>
+    <tr class="hi"><td>Ausschnitt / Ausgabe</td><td>320 / 80</td>
+        <td>Standard ist 256 / 64. Das Zahnrad hat nur 49,9 mm Durchmesser und feine
+            Merkmale; bei 64 Ausgabepunkten liegt die Zahnstruktur unter der Auflösung des
+            Regionenrasters — die Drehung konvergierte nicht (Median 87°).</td></tr>
+    <tr><td>Backbone</td><td>timm <span class="mono">convnext_base</span>, vortrainiert, 3 Kanäle</td>
+        <td>RGB-only ist gesetzt; der Tiefenzweig bleibt aus.</td></tr>
+    <tr><td>Geometriekopf</td><td><span class="mono">TopDownDoubleMaskXyzRegionHead</span>, 1024 → 64 Regionen</td>
+        <td>Doppelmaske, entspricht GDRNPP-Standard.</td></tr>
+    <tr><td>Patch-PnP</td><td>Gruppennorm, GELU, Regionen-Aufmerksamkeit, 2D-Koordinaten an</td><td>—</td></tr>
+    <tr><td>Optimierer</td><td>Ranger, Lernrate 8·10⁻⁴, Gewichtsabfall 0,01</td><td>GDRNPP-Standard.</td></tr>
+    <tr><td>Zeitplan</td><td>160 Epochen, flach dann Kosinus ab 72 %</td>
+        <td>Standard sind 100. Das Zahnrad brauchte länger; der größere randomisierte
+            Datensatz rechtfertigt die Verlängerung.</td></tr>
+    <tr><td>Stapelgröße</td><td>16, gemischte Genauigkeit</td><td>Eine RTX 3090 mit 24 GB.</td></tr>
+    <tr class="hi"><td>Hintergrundtausch</td><td><strong>aus</strong> (Standard: 50 %)</td>
+        <td>Der Standard klebt zufällige VOC-Bilder hinter das Objekt. Unsere Renderings
+            enthalten bereits die echte Szene mit Roboterarm und Störteilen — genau den
+            Kontext, auf den es ankommt. Ihn zu ersetzen wäre die falsche Augmentierung.</td></tr>
+    <tr class="hi"><td>Farbaugmentierung</td><td>90 %</td>
+        <td>Glänzendes, texturloses Metall hat kein verwertbares Eigenfarbsignal. Das Netz
+            soll formorientiert werden, nicht texturorientiert. Die Kette enthält unter
+            anderem Graustufenwandlung, Kontrast, Helligkeit, Unschärfe und Rauschen.</td></tr>
+    <tr><td>Sichtbarkeitsschwelle</td><td>0,20</td>
+        <td>Instanzen unter 20 % Sichtbarkeit fliegen bereits beim Konvertieren raus; der
+            Lader ist auf denselben Wert gesetzt, damit das Band 20–30 % als Trainingssignal
+            erhalten bleibt. Genau das ist der Bereich hinter dem Arm.</td></tr>
+    <tr class="hi"><td>Prüfpunktauswahl</td><td>alle 10 Epochen, 20 behalten</td>
+        <td>GDRNPP hat keine Validierung während des Trainings und kein frühes Stoppen; die
+            Kette würde blind die letzte Epoche ausliefern. Wir behalten stattdessen 16
+            gleichmäßig verteilte Stände und wählen den nach Validierungs-AR besten
+            (<span class="mono">model_best.pth</span>). Das ist unsere Absicherung gegen
+            Überanpassung.</td></tr>
+  </tbody>
+</table>
+
+<h3>2.10 Die Labels — was GDRNPP zum Training braucht</h3>
+
+<p>Das ist die Frage, die im Seminar am wahrscheinlichsten kommt. Antwort in einem Satz:
+<strong>GDRNPP braucht kein einziges von Hand annotiertes Bild.</strong> Alles kommt aus der
+Simulation, und die geometrischen Zielkarten werden zur Trainingszeit aus dem CAD-Modell und
+der bekannten Referenzlage gerendert.</p>
+
+<table>
+  <caption>Was der Konverter <span class="mono">isaac_to_bop.py</span> je Szene schreibt</caption>
+  <thead><tr><th>Datei</th><th>Inhalt</th><th>Wozu GDRNPP es braucht</th></tr></thead>
+  <tbody>
+    <tr><td><span class="mono">rgb/</span></td><td>Farbbild, 1280×720</td><td>der einzige Netzeingang</td></tr>
+    <tr><td><span class="mono">scene_gt.json</span></td>
+        <td><span class="mono">cam_R_m2c</span>, <span class="mono">cam_t_m2c</span> in mm, <span class="mono">obj_id</span></td>
+        <td>die Referenzlage — daraus wird M<sub>XYZ</sub> gerendert und der Lageverlust berechnet</td></tr>
+    <tr><td><span class="mono">scene_gt_info.json</span></td>
+        <td>Boxen, Pixelzahlen, <span class="mono">visib_fract</span></td>
+        <td>Ausschnitt und Sichtbarkeitsfilter</td></tr>
+    <tr><td><span class="mono">mask_visib/</span></td><td>sichtbare Silhouette</td><td>Vorgabe für M<sub>vis</sub></td></tr>
+    <tr><td><span class="mono">mask/</span></td><td>volle Silhouette</td><td>Vorgabe für M<sub>full</sub></td></tr>
+    <tr><td><span class="mono">scene_camera.json</span></td>
+        <td><span class="mono">cam_K</span>, <span class="mono">depth_scale</span>, Extrinsik</td>
+        <td>Umrechnung der SITE-Werte in metrische Verschiebung</td></tr>
+    <tr><td><span class="mono">models/*.ply</span></td><td>CAD-Netz in Millimetern</td><td>Rendern der Objektkoordinaten, Punktabgleich</td></tr>
+    <tr class="hi"><td><span class="mono">models_info.json</span></td>
+        <td>Durchmesser, Ausdehnung, <strong>Symmetrien</strong></td>
+        <td>der symmetriebewusste Verlust <em>und</em> die Bewertung</td></tr>
+    <tr><td><span class="mono">depth/</span></td><td>16-Bit-Tiefe</td>
+        <td><strong>vom Farbweg nicht benutzt</strong> — liegt für den Tiefenweg im selben Datensatz</td></tr>
+  </tbody>
+</table>
+
+<div class="box box--rgb">
+  <div class="box__h">Zwei Details, die Sie parat haben sollten</div>
+  <p><strong>Der Arm ist nie eine Instanz.</strong> Er trägt in der Szene kein semantisches
+  Label und taucht deshalb in keiner Annotation auf. Er verdeckt aber — die Teile hinter ihm
+  haben schlicht weniger sichtbare Bildpunkte und damit einen kleineren
+  <span class="mono">visib_fract</span>. Verdeckung entsteht also von selbst und muss nicht
+  modelliert werden.</p>
+  <p><strong>Die Symmetrien sind gemessen, nicht angenommen.</strong> Anker kurz, Anker lang
+  und Ringmagnet bekommen eine kontinuierliche Drehsymmetrie um die Y-Achse durch den
+  Bauteilmittelpunkt. Beim Zahnrad wird die Ordnung aus dem Netz selbst ermittelt: Die
+  Silhouette wird entlang der Symmetrieachse rasterisiert und die Periodizität der Ränder
+  ausgewertet. Ergebnis ist <strong>C₇</strong> — und zwar aus der inneren Siebenkeil-Nabe,
+  nicht aus der Außenkontur, die praktisch eine glatte Scheibe ist. Für die Bewertung
+  entstehen daraus 6 zusätzliche Drehmatrizen plus Identität, für die Anker werden die
+  kontinuierliche Symmetrie zu 315 Transformationen diskretisiert.</p>
+</div>
+
+<h3>2.11 Warum ein Modell je Bauteil</h3>
+
+<p>GDRNPP kann grundsätzlich mehrere Objekte in einem Modell führen. Wir trainieren dennoch
+<em>ein Modell je Klasse</em> (im Repository als „SO“, single object, geführt). Der Grund ist
+die Genauigkeit: Ein Netz, das nur eine Geometrie kennt, muss seine Kapazität nicht auf
+fremde Formen verteilen. Genau das ist die Erklärung für die vier Millimeter — und zugleich
+die ehrliche Kehrseite, die auf Ihrem Ergebnisblatt als letzter Punkt steht: Jedes neue
+Bauteil braucht ein eigenes Training, bevor der Farbweg es schätzen kann. Der Tiefenweg
+braucht dagegen nur das CAD-Modell.</p>
+
+<h3>2.12 Bekannte Grenzen des Farbwegs</h3>
+
+<ul>
+  <li><strong>Kein Maßstab aus dem Bild.</strong> Die Entfernung muss aus dem Erscheinungsbild
+      erschlossen werden. Der Rest wird über die Tischebene aufgefangen — deshalb ist die
+      Ebenenbedingung kein Zusatz, sondern tragend.</li>
+  <li><strong>Feine Merkmale kosten Auflösung.</strong> Das Zahnrad ist der Beleg: erst
+      320/80 statt 256/64 machte die Drehung lernbar.</li>
+  <li><strong>Echte Mehrdeutigkeit bleibt.</strong> Bei teilweiser Sicht auf einen Anker kann
+      die Drehlage objektiv nicht eindeutig sein. Das löst kein Weg allein auf.</li>
+  <li><strong>Neues Teil heißt neues Training.</strong> Siehe 2.11.</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="part"></div>
+<h2>3 Der Farbweg (Pipeline A)</h2>
+
+<h3>3.1 Die Idee — und warum sie zuerst gegen die Tiefe entschieden wurde</h3>
+
+<p>Die ursprüngliche Festlegung war ein reiner Farbweg, aus einem praktischen Grund: Auf
+glänzendem Metall rauscht das Tiefenbild durch Reflexionen, und im Infrarot-Schatten des Arms
+fehlt es ganz. Ein System, dessen Kern auf instabilen Tiefenwerten steht, wollten wir nicht
+bauen.</p>
+
+<p>Den erwarteten Genauigkeitsnachteil fängt eine geometrische Zusatzbedingung auf:
+<strong>Die Teile liegen auf einer bekannten, ebenen Fläche.</strong> Damit sind Höhe und
+Kippung festgelegt, und aus der sechsdimensionalen Aufgabe bleiben praktisch drei Größen —
+zwei Koordinaten in der Ebene und die Drehung um die Hochachse. Das ist der Satz, der Ihr
+erstes Blatt trägt.</p>
+
+<h3>3.2 Die Kette</h3>
+
+<ol class="flow">
+  <li>Farbbild<span>von oben, 1280×720</span></li>
+  <li>YOLOv8-OBB<span>gedrehte Rechtecke</span></li>
+  <li>GDRNPP<span>je Klasse ein Modell</span></li>
+  <li>Adapter<span>Welt + Aufsetzen</span></li>
+  <li>3D-Betrachter<span>CAD an der Lage</span></li>
+</ol>
+
+<p><strong>Warum orientierte Boxen.</strong> Ein achsparalleles Rechteck um ein schräg
+liegendes, längliches Teil enthält sehr viel Hintergrund. Das gedrehte Rechteck mit
+Mittelpunkt, Breite, Höhe und Winkel schmiegt sich an die Kontur an. Nach dem ROI-Zoom auf
+320×320 landet dadurch deutlich mehr Bauteilfläche im Ausschnitt — bei gleicher Rechenzeit
+mehr nutzbares Signal. Das ist der direkte Grund, warum Pipeline A auf YOLOv8-OBB steht und
+nicht auf einem Standarddetektor.</p>
+
+<div class="box box--warn">
+  <div class="box__h">Ein architektonisches Detail, das Sie kennen sollten</div>
+  <p>GDRNPP ist der <strong>einzige Lagedienst, der nicht frei kombinierbar ist</strong>. Er
+  liest die orientierte Box direkt, nicht die Maske der anderen Erkennungsdienste, und ist
+  damit fest an YOLOv8-OBB gekoppelt. Das Gateway erzwingt diese Kopplung: Wer GDRNPP als
+  Lagequelle wählt, bekommt automatisch YOLO-OBB als Erkennung. Auf dem Systemblatt sagen Sie
+  „frei kombinierbar“ — wenn jemand nachhakt, ist <em>das</em> die eine Ausnahme, und sie ist
+  bewusst so verdrahtet, nicht vergessen.</p>
+</div>
+
+<h3>3.3 Was der Adapter macht</h3>
+
+<p>GDRNPP liefert <span class="mono">R_m2c</span> und <span class="mono">t_m2c</span> in
+Millimetern in der OpenCV-Kamerakonvention. Der Adapter rechnet in einem Schritt in die
+Weltdarstellung des Betrachters um:</p>
+
+<div class="box">
+<p class="mono" style="font-size:8.8pt; line-height:1.7; background:none; padding:0;">
+R_m2w = R_w2c<sup>T</sup> · R_m2c<br>
+t_m2w = R_w2c<sup>T</sup> · (t_m2c − t_w2c)<br>
+t_world = t_m2w / 1000 − table_origin
+</p>
+<p class="fn" style="margin-top:2mm;">Ergebnis: Z-nach-oben-Welt, Ursprung im Tischnullpunkt,
+Einheit Meter. Danach folgen die Vereinheitlichung der Symmetrielage und das Aufsetzen auf
+die Tischebene.</p>
+</div>
+
+<p>Das Aufsetzen ist der Punkt, an dem die Ebenenbedingung aus 3.1 tatsächlich wirksam wird:
+Kein Teil schwebt, keines kippt in eine physikalisch unmögliche Lage. Wichtig für die
+Ehrlichkeit der Zahlen: <strong>Bei der Bewertung ist das Aufsetzen abgeschaltet</strong>,
+damit die reine Schätzgenauigkeit gemessen wird und nicht die Korrektur.</p>
+
+<h3>3.4 Das Ergebnis</h3>
+
+<table>
+  <caption>Bewertung nach BOP, IC-BIN-Protokoll, Validierungssplit mit Referenzlage</caption>
+  <thead>
+    <tr><th>Klasse</th><th class="num">AR</th><th class="num">MSSD</th><th class="num">MSPD</th>
+        <th class="num">⌀ mm</th><th class="num">Instanzen</th><th>Symmetrie</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Anker lang</td><td class="num">0,907</td><td class="num">0,875</td><td class="num">0,939</td>
+        <td class="num">115,2</td><td class="num">1253</td><td>kontinuierlich, 315 Lagen</td></tr>
+    <tr><td>Anker kurz</td><td class="num">0,871</td><td class="num">0,836</td><td class="num">0,905</td>
+        <td class="num">112,1</td><td class="num">1306</td><td>kontinuierlich, 315 Lagen</td></tr>
+    <tr><td>Zahnrad</td><td class="num">0,838</td><td class="num">0,720</td><td class="num">0,957</td>
+        <td class="num">49,9</td><td class="num">1484</td><td>C₇, 7 Lagen</td></tr>
+    <tr class="hi"><td>Beide Ankerklassen</td><td class="num">0,886</td><td class="num">—</td><td class="num">—</td>
+        <td class="num">—</td><td class="num">—</td><td>Kennzahl im Vortrag</td></tr>
+  </tbody>
+</table>
+
+<p>Dazu: mittlerer Lagefehler rund <strong>4 mm</strong> bei einer Schwelle von
+<strong>11 mm</strong> (ein Zehntel des Objektdurchmessers), symmetriebereinigter Drehfehler
+<strong>7,2°</strong> gegenüber roh 83,3°, Laufzeit <strong>1,0 s</strong> je Bild für
+Erkennung und Lage zusammen.</p>
+
+<div class="box box--key">
+  <div class="box__h">Die Zahl, die das Zahnrad erklärt</div>
+  <p>Beim Zahnrad fallen MSSD (0,720) und MSPD (0,957) weit auseinander. Übersetzt: Die Lage
+  <em>im Bild</em> stimmt fast immer, der <em>dreidimensionale</em> Oberflächenabstand reißt
+  häufiger die Schwelle. Das ist plausibel, denn die Schwelle ist ein Zehntel des
+  Durchmessers — beim Zahnrad also nur rund <strong>5 mm</strong> statt 11 mm. Ein kleines
+  Teil wird nach BOP schlicht strenger bewertet. Das ist ein starkes Argument, falls jemand
+  das Zahnrad als Schwachstelle darstellt.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="part"></div>
+<h2>4 Die Expertenauswahl</h2>
+
+<h3>4.1 Warum überhaupt</h3>
+
+<p>Der Vergleich davor hat ein unbequemes Ergebnis geliefert: FoundationPose erreicht auf der
+korrigierten Tiefe 0,968 und schlägt damit den trainierten Farbweg mit 0,886. Der naheliegende
+Schluss wäre, überall auf Tiefe zu setzen. Genau das geht nicht.</p>
+
+<p>Die Zivid-Kamera bestimmt die Tiefe, indem sie ein <strong>Infrarot-Muster</strong> auf den
+Tisch projiziert und dessen Verzerrung auswertet. Steht der Roboterarm im Strahlengang, wirft
+er einen Infrarot-Schatten. Dort entsteht <em>kein Tiefenwert</em> — nicht ein schlechter,
+sondern gar keiner. Die Farbkamera sitzt 15 cm neben dem Projektor und sieht in Teile dieses
+Bereichs weiterhin hinein.</p>
+
+<p class="tagrow">
+  <span class="tag tag--rgb">im Schatten: Farbweg</span>
+  <span class="tag tag--dep">außerhalb: Tiefenweg</span>
+</p>
+
+<p>Damit ist die Frage keine Konkurrenz zwischen zwei Verfahren, sondern eine
+<strong>Ortsfrage</strong>. Für jedes Bauteil wird der Experte gewählt, der an dieser Stelle
+des Tisches überhaupt arbeiten kann. In der Bildverarbeitung heißt so etwas Expertenauswahl:
+mehrere spezialisierte Verfahren stehen bereit, ein Auswahlschritt entscheidet.</p>
+
+<h3>4.2 Die Schattenkarte</h3>
+
+<p>Der Schatten hängt allein von der Geometrie der Zelle ab — Kamerapositionen, Armstellung,
+Tischfläche. Er lässt sich deshalb <strong>vorab und exakt berechnen</strong>, statt ihn im
+Betrieb zu schätzen.</p>
+
+<ul>
+  <li>Von der <strong>Infrarot-Quelle</strong> bei (300, 88, 1100) mm und von der
+      <strong>Farbkamera</strong> bei (450, 88, 1100) mm werden Strahlen auf das Raster der
+      Tischfläche geschossen (57–783 mm × 42–537 mm).</li>
+  <li>Jeder Strahl wird gegen das Zellenmodell geschnitten. Dafür genügt das
+      Standardverfahren von Möller und Trumbore für den Schnitt Strahl gegen Dreieck.</li>
+  <li>Es entstehen zwei Flächen: wo <em>keine Tiefe</em> ankommt, und wo die
+      <em>Farbkamera nicht hinsieht</em>.</li>
+  <li><strong>Entscheidend ist die Differenz</strong>: keine Tiefe, aber Farbkamera sieht
+      noch hin. Nur dort muss überhaupt umgeschaltet werden.</li>
+</ul>
+
+<table class="tight">
+  <thead><tr><th>Bereich</th><th class="num">Fläche</th><th class="num">Anteil</th></tr></thead>
+  <tbody>
+    <tr><td>Infrarot-Schatten gesamt</td><td class="num">1569 cm²</td><td class="num">42,9 %</td></tr>
+    <tr><td>Sichtschatten der Farbkamera</td><td class="num">1435 cm²</td><td class="num">39,3 %</td></tr>
+    <tr class="hi"><td>Auswahlbereich für den Farbweg</td><td class="num">485 cm²</td><td class="num">13,3 %</td></tr>
+  </tbody>
+</table>
+
+<p class="fn">Die Karte gilt für genau eine Stellung von Kamera und Arm. Ändert sich eine
+davon, wird sie neu berechnet — das ist eine Sekundenrechnung, kein Training.</p>
+
+<h3>4.3 Der Kniff: Auswahl ohne Tiefe</h3>
+
+<p>Hier steckt die eigentliche Pointe, und sie lohnt sich auf der Bühne. Um zu entscheiden, ob
+ein Teil im Schatten liegt, bräuchte man seine Position — die käme aus der Tiefe, die im
+Schatten aber gerade fehlt. <strong>Ein Henne-Ei-Problem.</strong></p>
+
+<p>Gelöst wird es rein geometrisch:</p>
+
+<ol class="flow">
+  <li>Bildposition<span>vom Detektor</span></li>
+  <li>Sehstrahl<span>über die Kameraparameter</span></li>
+  <li>Schnitt<span>mit der Tischebene</span></li>
+  <li>Aufstandsstelle<span>in Weltkoordinaten</span></li>
+  <li>im Auswahlbereich?<span>Farbweg oder Tiefenweg</span></li>
+</ol>
+
+<p>Der Detektor liefert die Bildposition. Daraus folgt der Sehstrahl. Weil die Tischebene
+bekannt ist — dieselbe Annahme, die schon den Farbweg trägt — liefert der Schnitt die
+vermutete Aufstandsstelle des Teils in Weltkoordinaten. <strong>Ohne einen einzigen
+Tiefenwert.</strong> Danach ist es ein simpler Test, ob dieser Punkt im Auswahlbereich liegt.</p>
+
+<p>Zusätzlich gibt es eine <strong>fähigkeitsbasierte Auswahl</strong>: Bauteilklassen, für
+die noch keine Tiefenvorlagen existieren — aktuell das Zahnrad — laufen unabhängig von ihrer
+Lage immer über den Farbweg. So funktioniert jede Klasse an jeder Stelle des Tisches.</p>
+
+<h3>4.4 Das System dahinter</h3>
+
+<p>Die Auswahl ist deshalb so billig einzubauen, weil die Architektur darauf ausgelegt ist:
+Jeder Erkennungsdienst bedient <span class="mono">/segment</span>, jeder Lagedienst
+<span class="mono">/pose</span>, beide mit einheitlichem Ausgabeformat. Drei Erkennungs- und
+vier Lageverfahren ergeben rund zwölf sinnvolle Kombinationen — <strong>die Expertenauswahl
+greift an genau einer Stelle ein</strong>, im Gateway zwischen Stufe eins und Stufe zwei.</p>
+
+<table class="tight">
+  <caption>Die Dienste, wie sie tatsächlich laufen</caption>
+  <thead><tr><th>Dienst</th><th>Stufe</th><th>Modalität</th><th>Anmerkung</th></tr></thead>
+  <tbody>
+    <tr><td>YOLOv8-OBB</td><td>Erkennung</td><td>RGB</td><td>orientierte Boxen, Erkennung des Farbwegs</td></tr>
+    <tr><td>YOLO-seg</td><td>Erkennung</td><td>RGB</td><td>pixelgenaue Masken</td></tr>
+    <tr><td>SAM 3</td><td>Erkennung</td><td>RGB</td><td>trainingsfrei, aus Begriffs-Prompts</td></tr>
+    <tr class="hi"><td>GDRNPP</td><td>Lage</td><td>RGB</td><td>je Bauteil trainiert, nativer Dienst</td></tr>
+    <tr><td>FoundationPose</td><td>Lage</td><td>RGB-D</td><td>trainingsfrei, nur als Vergleichsmaßstab</td></tr>
+    <tr><td>GigaPose</td><td>Lage</td><td>RGB und RGB-D</td><td>einsetzbare Tiefenvariante</td></tr>
+  </tbody>
+</table>
+
+<p>Die GPU-Dienste laufen gemeinsam in einem Container-Verbund auf der Arbeitsstation. Der
+GDRNPP-Dienst und der zentrale Server liegen aus technischen Gründen nativ daneben: Die
+Umgebung mit detectron2 und den trainierten Prüfpunkten existiert bereits und funktioniert;
+ein Containerabbild dafür wäre rund 20 GB groß und würde einen bekanntermaßen mühsamen Bau
+reproduzieren, ohne etwas zu gewinnen. Der Betrachter im Browser spricht ausschließlich den
+zentralen Server an.</p>
+
+<h3>4.5 Dass es wirkt, ist gemessen — nicht behauptet</h3>
+
+<p>Damit die Wirkung des Schattens nicht nur an realen Bildern behauptet wird, bildet die
+Simulation ihn vollständig nach: Die gerenderte Tiefe wird <em>innerhalb</em> des
+Infrarot-Schattens vor der Lageschätzung ausgeblendet, rund <strong>76.000 Bildpunkte je
+Bild</strong>. Der Tiefenweg erlebt im Versuch damit dieselbe Blindheit wie an der realen
+Anlage. Das ist der methodisch wichtigste Satz Ihres Ergebnisblatts.</p>
+
+<table class="tight">
+  <caption>Lagefehler auf einem Testbild mit im Schatten ausgeblendeter Tiefe</caption>
+  <thead><tr><th>Teil</th><th>Lage</th><th class="num">mit Auswahl</th><th class="num">nur Tiefenweg</th></tr></thead>
+  <tbody>
+    <tr class="hi"><td>Anker kurz</td><td>im Schatten</td><td class="num">Farbweg, 3,4 mm</td><td class="num">424,6 mm</td></tr>
+    <tr><td>Anker lang</td><td>außerhalb</td><td class="num">Tiefenweg, 16,2 mm</td><td class="num">9,4 mm</td></tr>
+  </tbody>
+</table>
+
+<div class="box box--warn">
+  <div class="box__h">Diese Zeile werden Sie erklären müssen</div>
+  <p>Außerhalb des Schattens steht 16,2 mm gegen 9,4 mm — <em>mit</em> Auswahl also
+  scheinbar schlechter. Die Auswahl greift dort aber gar nicht ein, beide Werte stammen vom
+  Tiefenweg. Der Unterschied ist die normale Streuung der trainingsfreien Verfeinerung, die
+  bei rund 30 bis 48 mm liegt; zwei Einzelmessungen desselben Verfahrens dürfen so weit
+  auseinanderliegen. <strong>Sagen Sie das aktiv dazu</strong>, bevor jemand fragt — sonst
+  liest die Tabelle sich, als koste die Auswahl außerhalb Genauigkeit.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="part"></div>
+<h2>5 Fragenkatalog</h2>
+
+<h4>Zu GDRNPP</h4>
+<dl class="qa">
+  <dt>Was ist GDRNPP eigentlich, in einem Satz?</dt>
+  <dd>Ein Faltungsnetz, das aus einem Bildausschnitt für jeden sichtbaren Punkt vorhersagt,
+  welcher Stelle des CAD-Modells er entspricht, und ein kleines nachgeschaltetes Netz liest
+  aus diesem dichten Zuordnungsfeld unmittelbar die Lage ab.</dd>
+
+  <dt>Warum überhaupt ein lernbares PnP? Es gibt doch bewährte Löser.</dt>
+  <dd>Weil PnP mit RANSAC nicht differenzierbar ist. Der Lagefehler kann also nicht ins Netz
+  zurückfließen, und das Netz wird auf Korrespondenzen optimiert statt auf das, was man
+  eigentlich will. Das Patch-PnP macht die Kette durchgehend trainierbar.</dd>
+
+  <dt>Welche Zwischengrößen sagt das Netz vorher?</dt>
+  <dd>Vier dichte Karten mit je 80×80 Punkten: die Objektkoordinate je Punkt, eine Zerlegung
+  der Oberfläche in 64 Regionen, die sichtbare Maske und die volle Maske einschließlich der
+  verdeckten Teile.</dd>
+
+  <dt>Warum eine Regionenkarte, wenn es die Koordinatenkarte schon gibt?</dt>
+  <dd>Wegen der Symmetrie. Auf einem drehsymmetrischen Teil ist die Objektkoordinate eines
+  Bildpunkts mehrdeutig; eine reine Regression würde zum Mittelwert zwischen den möglichen
+  Antworten gezogen. Die Regionenkarte darf einem Punkt mehrere Regionen mit geteilter
+  Wahrscheinlichkeit zuweisen und wirkt als Aufmerksamkeitssignal.</dd>
+
+  <dt>Wie wird die Drehung dargestellt?</dt>
+  <dd>Als die ersten beiden Spalten der Rotationsmatrix, sechs Werte. Quaternionen und
+  Eulerwinkel haben Unstetigkeitsstellen, an denen ein Netz springen müsste. Die dritte Spalte
+  folgt aus dem Kreuzprodukt.</dd>
+
+  <dt>Was heißt allozentrisch?</dt>
+  <dd>Die Drehung ist relativ zum Sehstrahl definiert, nicht relativ zur Kamera. Das Netz sieht
+  nur den Ausschnitt und weiß nicht, wo im Bild er lag; die allozentrische Drehung ist genau
+  die Größe, die aus dem Ausschnitt allein bestimmbar ist. Sie wird danach mit der Verschiebung
+  und den Kameraparametern in die kameraseitige umgerechnet.</dd>
+
+  <dt>Und die Verschiebung?</dt>
+  <dd>Maßstabsinvariant: der Versatz des projizierten Mittelpunkts in Anteilen der
+  Ausschnittsbreite und -höhe, und die Entfernung geteilt durch das Zoom-Verhältnis. Sonst
+  müsste das Netz eine absolute Größe vorhersagen, die durch das Zuschneiden gerade
+  verlorengegangen ist.</dd>
+
+  <dt>Wie geht das Training mit Symmetrie um?</dt>
+  <dd>Der Drehverlust wird gegen alle zulässigen Symmetrielagen gerechnet und der kleinste Wert
+  genommen. Die Symmetrien stehen in <span class="mono">models_info.json</span> und werden
+  von Training <em>und</em> Bewertung aus derselben Quelle gelesen.</dd>
+
+  <dt>Warum ConvNeXt und nicht ResNet?</dt>
+  <dd>Das ist eine der Änderungen von GDRNPP gegenüber GDR-Net, zusammen mit dem zweiten
+  Maskenkopf und deutlich stärkerer Domänenrandomisierung. Wir fahren
+  <span class="mono">convnext_base</span>, auf ImageNet vortrainiert.</dd>
+
+  <dt>Ihr habt die Auflösung erhöht — warum?</dt>
+  <dd>Standard sind 256 Bildpunkte Eingang und 64 Ausgang. Das Zahnrad hat 49,9 mm Durchmesser
+  und feine Merkmale; bei 64 Ausgabepunkten liegt die Zahnstruktur unter der Auflösung, und die
+  Drehung konvergierte nicht — Median 87 Grad. Mit 320 und 80 wurde sie lernbar. Das ist ein
+  allgemeiner Hebel für kleine Teile, kein Trick für dieses eine Bauteil.</dd>
+
+  <dt>GDRNPP hat doch eine Tiefenverfeinerung. Warum nutzt ihr sie nicht?</dt>
+  <dd>Bewusst nicht. Sonst wäre der Farbweg kein Farbweg mehr und der ganze Vergleich mit dem
+  Tiefenweg wertlos. Wir fahren die reine RGB-Auswertung.</dd>
+
+  <dt>Wie lange trainiert so ein Modell?</dt>
+  <dd>160 Epochen auf einer RTX 3090 mit 24 GB, Stapelgröße 16, gemischte Genauigkeit,
+  Optimierer Ranger mit flachem Verlauf und Kosinus-Abklingen ab 72 Prozent. Je Bauteilklasse
+  ein eigener Lauf.</dd>
+
+  <dt>Wie wählt ihr den ausgelieferten Stand aus?</dt>
+  <dd>GDRNPP validiert nicht während des Trainings und stoppt nicht früh; die Standardkette
+  würde blind die letzte Epoche ausliefern — bei 160 Epochen auf synthetischen Daten ein
+  Überanpassungskandidat. Wir behalten deshalb 16 gleichmäßig über den Lauf verteilte Stände
+  und wählen den mit dem besten Validierungs-AR.</dd>
+</dl>
+
+<h4>Zu Labels und Daten</h4>
+<dl class="qa">
+  <dt>Wie viele Bilder habt ihr von Hand annotiert?</dt>
+  <dd>Kein einziges. Alles kommt aus der Simulation in Isaac Sim, mit exakt bekannter
+  Referenzlage, Maske, Tiefe und Begrenzungsrechteck. Genau deshalb ist der Ansatz überhaupt
+  tragfähig — und die Spitzenverfahren des BOP-Wettbewerbs machen es genauso.</dd>
+
+  <dt>Welche Labels braucht GDRNPP konkret?</dt>
+  <dd>Farbbild, Referenzlage je Instanz, sichtbare und volle Maske, Begrenzungsrechteck mit
+  Sichtbarkeitsanteil, Kameraparameter, das CAD-Netz in Millimetern und die Symmetrieangaben.
+  Die geometrischen Zielkarten werden daraus zur Trainingszeit gerendert, sie liegen nicht als
+  Datei vor.</dd>
+
+  <dt>Wird die Tiefe im Farbweg irgendwo benutzt?</dt>
+  <dd>Nein. Das Netz hat einen dreikanaligen Eingang, der Tiefenzweig ist abgeschaltet. Die
+  Tiefe liegt im selben BOP-Datensatz, weil der Tiefenweg sie braucht.</dd>
+
+  <dt>Ist der Roboterarm annotiert?</dt>
+  <dd>Nein, er trägt kein semantisches Label und ist nie eine Instanz. Er verdeckt aber — die
+  Teile hinter ihm haben weniger sichtbare Bildpunkte und damit einen kleineren
+  Sichtbarkeitsanteil. Verdeckung entsteht von selbst.</dd>
+
+  <dt>Woher wisst ihr, dass das Zahnrad siebenzählig ist?</dt>
+  <dd>Gemessen, nicht angenommen. Die Silhouette wird entlang der Symmetrieachse rasterisiert
+  und die Periodizität der Ränder ausgewertet. Die Außenkontur ist praktisch eine glatte
+  Scheibe; die Ordnung sieben stammt aus der inneren Siebenkeil-Nabe.</dd>
+
+  <dt>Warum werden Instanzen unter 20 Prozent Sichtbarkeit verworfen?</dt>
+  <dd>Weil darunter kaum noch verwertbares Signal übrig ist. Wichtiger ist die Gegenrichtung:
+  Der Bereich zwischen 20 und 30 Prozent bleibt <em>drin</em>, obwohl der Standard ihn
+  wegwerfen würde. Genau das ist der Bereich hinter dem Arm, den das Netz lernen soll.</dd>
+
+  <dt>Warum tauscht ihr die Hintergründe nicht aus, wie es üblich ist?</dt>
+  <dd>Weil unsere Renderings bereits die echte Szene enthalten — Roboterarm, Störteile, Tisch.
+  Zufällige Fremdbilder dahinterzukleben würde genau den Kontext zerstören, auf den es
+  ankommt. Stattdessen augmentieren wir photometrisch sehr stark, damit das Netz formorientiert
+  wird statt texturorientiert. Auf glänzendem, texturlosem Metall gibt es kein verwertbares
+  Eigenfarbsignal.</dd>
+</dl>
+
+<h4>Zur Bewertung</h4>
+<dl class="qa">
+  <dt>Was ist AR genau?</dt>
+  <dd>Der Anteil der Schätzungen, deren Lagefehler unter einer Schwelle bleibt, gemittelt über
+  mehrere Fehlermaße: den dreidimensionalen Oberflächenabstand MSSD und den zweidimensionalen
+  Projektionsabstand MSPD. Beide minimieren den Fehler über alle erlaubten Symmetrielagen.
+  Maßgeblich ist das IC-BIN-Protokoll, weil dessen Griff-in-die-Kiste-Aufgabe unserer am
+  nächsten kommt.</dd>
+
+  <dt>Warum ist der rohe Drehfehler 83 Grad, wenn das Verfahren gut ist?</dt>
+  <dd>Weil die Anker um ihre Längsachse drehsymmetrisch sind. Der rohe Wert misst eine
+  Mehrdeutigkeit, keinen Fehler. Symmetriebereinigt bleiben 7,2 Grad.</dd>
+
+  <dt>Warum ist die Schwelle 11 mm?</dt>
+  <dd>Sie ist definiert als ein Zehntel des Objektdurchmessers; die Anker haben rund 112 und
+  115 mm. Beim Zahnrad mit 49,9 mm liegt sie entsprechend bei rund 5 mm — es wird also
+  strenger bewertet.</dd>
+
+  <dt>Ist das Aufsetzen auf die Tischebene nicht ein Trick, der die Zahlen schönt?</dt>
+  <dd>Es ist bei der Bewertung abgeschaltet. Gemessen wird die reine Schätzgenauigkeit. Im
+  Betrieb ist es an, weil dort kein Teil schweben soll.</dd>
+</dl>
+
+<h4>Zur Expertenauswahl</h4>
+<dl class="qa">
+  <dt>Warum nicht einfach immer das genaueste Verfahren?</dt>
+  <dd>Drei Gründe. Die Lizenz von FoundationPose ist nicht kommerziell. Es braucht rund acht
+  Sekunden je Bild. Und im Infrarot-Schatten des Arms gibt es überhaupt keine Tiefe, dort ist
+  es blind.</dd>
+
+  <dt>Wie entscheidet ihr, ob ein Teil im Schatten liegt, wenn dort die Tiefe fehlt?</dt>
+  <dd>Rein geometrisch. Aus der Bildposition folgt der Sehstrahl, der Schnitt mit der bekannten
+  Tischebene liefert die vermutete Aufstandsstelle in Weltkoordinaten. Dafür ist kein einziger
+  Tiefenwert nötig. Danach wird nur noch geprüft, ob dieser Punkt im Auswahlbereich liegt.</dd>
+
+  <dt>Wie verlässlich ist die Schattenkarte?</dt>
+  <dd>Sie ist rein geometrisch aus Kamerapositionen, Armstellung und Tischgeometrie berechnet,
+  mit einem Standardverfahren für den Schnitt Strahl gegen Dreieck. Sie gilt für genau eine
+  Konfiguration und wird bei Änderung neu berechnet. Der Abgleich mit der real gemessenen
+  Schattenfläche steht noch aus — das ist eine der offenen Fragen.</dd>
+
+  <dt>Ist ein Auswahlbereich von 13 Prozent nicht ziemlich wenig?</dt>
+  <dd>Die 13,3 Prozent sind die Fläche, auf der die Auswahl überhaupt eingreifen <em>muss</em>.
+  Der Infrarot-Schatten ist mit 42,9 Prozent viel größer; im Rest davon sieht auch die
+  Farbkamera nicht hin, dort hilft kein Verfahren. Und die Wirkung auf dieser Fläche ist nicht
+  klein: 424,6 mm gegen 3,4 mm.</dd>
+
+  <dt>Was passiert mit einem neuen Bauteil?</dt>
+  <dd>Der Tiefenweg braucht nur das CAD-Modell und läuft sofort. Der Farbweg braucht ein
+  eigenes Training. Bis es vorliegt, greift die fähigkeitsbasierte Auswahl — so wie aktuell
+  beim Zahnrad, für das noch keine Tiefenvorlagen existieren und das deshalb immer über den
+  Farbweg läuft.</dd>
+
+  <dt>Ihr sagt „frei kombinierbar“ — stimmt das wirklich?</dt>
+  <dd>Mit einer bewussten Ausnahme: GDRNPP liest die orientierte Box direkt statt einer Maske
+  und ist deshalb fest an YOLO-OBB gekoppelt. Das Gateway erzwingt diese Paarung. Alle übrigen
+  Kombinationen sind frei.</dd>
+
+  <dt>Ist die simulierte Tiefe nicht geschönt?</dt>
+  <dd>Gemessen wird korrekt und für alle Verfahren gleich. Offen ist allein die Domänenlücke:
+  Die simulierte Tiefe ist nahezu ideal, die reale rauscht auf glänzendem Metall. Wie groß der
+  Abstand ausfällt, zeigt erst der Test an echten Aufnahmen — das ist die wichtigste offene
+  Frage der Arbeit.</dd>
+</dl>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="part"></div>
+<h2>6 Zahlenspiegel</h2>
+
+<table class="tight">
+  <caption>Vergleich der Wege, Ankerklassen, je 100 Szenen, Absturzrate null</caption>
+  <thead><tr><th>Kombination</th><th>Modalität</th><th class="num">AR</th>
+      <th class="num">Drehung</th><th class="num">Lage</th><th class="num">Laufzeit</th></tr></thead>
+  <tbody>
+    <tr><td>YOLO-OBB + FoundationPose</td><td>RGB-D</td><td class="num">0,968</td>
+        <td class="num">5,0°</td><td class="num">36 mm</td><td class="num">7,9 s</td></tr>
+    <tr class="hi"><td>YOLO-OBB + GDRNPP (Pipeline A)</td><td>RGB</td><td class="num">0,886</td>
+        <td class="num">7,2°</td><td class="num">4 mm</td><td class="num">1,0 s</td></tr>
+    <tr><td>YOLO-OBB + GigaPose-3D</td><td>RGB-D</td><td class="num">0,838</td>
+        <td class="num">15,2°</td><td class="num">30 mm</td><td class="num">1,3 s</td></tr>
+    <tr><td>YOLO-OBB + GigaPose-2D</td><td>RGB</td><td class="num">0,636</td>
+        <td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+    <tr><td colspan="2">Mittel über alle Kombinationen</td>
+        <td class="num" colspan="4">0,49 → 0,85 nach den Datenkorrekturen</td></tr>
+  </tbody>
+</table>
+
+<table class="tight">
+  <caption>Zahlen, die Sie ohne Nachdenken parat haben sollten</caption>
+  <tbody>
+    <tr><td>AR Farbweg, beide Anker</td><td class="num">0,886</td>
+        <td>Anker lang 0,907 · Anker kurz 0,871 · Zahnrad 0,838</td></tr>
+    <tr><td>Lagefehler Farbweg</td><td class="num">≈ 4 mm</td><td>Schwelle 11 mm</td></tr>
+    <tr><td>Drehfehler Farbweg</td><td class="num">7,2°</td><td>roh 83,3°</td></tr>
+    <tr><td>Laufzeit Farbweg</td><td class="num">1,0 s</td><td>Erkennung und Lage zusammen</td></tr>
+    <tr><td>Tiefenkonvention-Fund</td><td class="num">38 → 6 mm</td><td>kehrte den Vergleich um</td></tr>
+    <tr><td>Infrarot-Schatten</td><td class="num">1569 cm²</td><td>42,9 % der Tischfläche</td></tr>
+    <tr><td>Sichtschatten</td><td class="num">1435 cm²</td><td>39,3 %</td></tr>
+    <tr><td>Auswahlbereich</td><td class="num">485 cm²</td><td>13,3 %</td></tr>
+    <tr><td>Wirkung im Schatten</td><td class="num">424,6 → 3,4 mm</td><td>ein Teil, ein Testbild</td></tr>
+    <tr><td>Ausgeblendete Tiefe je Bild</td><td class="num">≈ 76.000 px</td><td>Nachbildung in der Simulation</td></tr>
+    <tr><td>Ausschnitt / Ausgabe GDRNPP</td><td class="num">320 / 80</td><td>Standard 256 / 64</td></tr>
+    <tr><td>Oberflächenregionen</td><td class="num">64</td><td>Regionenkarte</td></tr>
+    <tr><td>Trainingsdauer</td><td class="num">160 Epochen</td><td>je Bauteil, eine RTX 3090</td></tr>
+    <tr><td>Symmetrielagen</td><td class="num">315 / 7</td><td>Anker kontinuierlich · Zahnrad C₇</td></tr>
+    <tr><td>Kamera</td><td class="num">Zivid L110+</td><td>Arm: Neura Lara5 mit Schunk-Greifer</td></tr>
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<h2>7 Drei Schwachstellen, vorbereitet</h2>
+
+<div class="box box--warn">
+  <div class="box__h">1 · Der AR ist bei uns nicht das Mittel aus drei Maßen</div>
+  <p>Im Grundlagenteil der Arbeit werden drei Fehlermaße genannt: VSD, MSSD und MSPD. In
+  unserem Auswertungslauf ist <strong>VSD abgeschaltet</strong>
+  (<span class="mono">vsd_enabled: false</span>); der berichtete AR ist das Mittel aus AR<sub>MSSD</sub>
+  und AR<sub>MSPD</sub>. Wenn jemand nachrechnet, fällt das auf.</p>
+  <p><strong>Antwort:</strong> „Wir berichten AR über MSSD und MSPD. VSD braucht eine
+  Tiefenrasterung der Szene und ist in unserem Harness abgeschaltet — beide Wege werden aber
+  unter exakt demselben Protokoll bewertet, der Vergleich bleibt also fair. Für den Farbweg
+  wäre VSD ohnehin das systemfremde Maß.“</p>
+</div>
+
+<div class="box box--warn">
+  <div class="box__h">2 · 0,886 gegen die Einzelwerte</div>
+  <p>Die abgelegten Berichte je Klasse geben 0,8706 und 0,9068 — Mittel 0,889. Im Deck und im
+  Paper steht 0,886. Die Differenz von drei Tausendstel stammt aus unterschiedlichen Läufen
+  und ist inhaltlich bedeutungslos, aber jemand mit Taschenrechner sieht sie.</p>
+  <p><strong>Antwort:</strong> „Die 0,886 stammen aus dem im Paper berichteten Lauf; die
+  Einzelwerte der abgelegten Berichte mitteln sich auf 0,889. Das ist Rundung und Laufstreuung,
+  an der Aussage ändert es nichts.“</p>
+</div>
+
+<div class="box box--warn">
+  <div class="box__h">3 · „Ihr habt gegen euch selbst evaluiert“</div>
+  <p>Training und Bewertung stammen beide aus der Simulation. Das ist der stärkste Angriff auf
+  die Arbeit, und er ist teilweise berechtigt.</p>
+  <p><strong>Antwort:</strong> „Bewertet wird auf einem getrennten Validierungssplit, den kein
+  Modell gesehen hat, mit eigener Referenzlage. Die Domänenlücke zur Realität bleibt trotzdem
+  bestehen und ist die erste Position unseres Ausblicks: ein kleiner realer Datensatz, durch
+  beide Wege gemessen. Was wir hier zeigen, ist der saubere Vergleich der Verfahren
+  untereinander — nicht die absolute Genauigkeit an der realen Anlage.“ Diesen Punkt nicht
+  verteidigen, sondern zugeben und einordnen. Er steht ohnehin auf Jeruns Grenzenblatt.</p>
+</div>
+
+<hr>
+<p class="fn">Erstellt am 4. August 2026 für den Vortrag am Freitag. Alle technischen Angaben
+gegen den Quellcode im Projektstand <span class="mono">main</span> geprüft; die Angaben zu
+GDR-Net und GDRNPP gegen die Originalveröffentlichung (arXiv 2102.12145) und das
+Projektrepository.</p>
+
+</body>
+</html>
