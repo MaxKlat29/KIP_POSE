@@ -317,12 +317,12 @@ const GROUPS = [
 
 const DECK = [
   { id: "intro",          group: "intro",      label: "Titel" },
-  { id: "mot-aufgabe",    group: "motivation", label: "Aufgabe" },
+  { id: "mot-aufgabe",    group: "motivation", label: "Ausgangssituation" },
   { id: "mot-schwierig",  group: "motivation", label: "Warum schwierig" },
-  { id: "vor-ansaetze",   group: "vorgehen",   label: "Ansätze" },
-  { id: "vor-split",      group: "vorgehen",   label: "Zwei Wege" },
+  { id: "vor-ansaetze",   group: "vorgehen",   label: "Vorgehen" },
+  { id: "vor-split",      group: "vorgehen",   label: "Lösungsansatz" },
+  { id: "vor-modelle",    group: "vorgehen",   label: "Verfahren" },
   { id: "vor-daten",      group: "vorgehen",   label: "Daten" },
-  { id: "vor-bewertung",  group: "vorgehen",   label: "Bewertung" },
   { id: "rgb-idee",       group: "rgb",        label: "Idee" },
   { id: "rgb-umsetzung",  group: "rgb",        label: "Umsetzung" },
   { id: "rgb-demo",       group: "rgb",        label: "Live-Sim", demo: "sim",
@@ -333,15 +333,15 @@ const DECK = [
   { id: "rgbd-demo",      group: "rgbd",       label: "Live-Sim", demo: "sim",
     combo: { seg: "yolo-obb", pose: "FoundationPose" } },
   { id: "rgbd-ergebnis",  group: "rgbd",       label: "Ergebnis" },
-  { id: "vgl-demo",       group: "vergleich",  label: "Live-Eval", demo: "batch" },
-  { id: "vgl-matrix",     group: "vergleich",  label: "Baukasten" },
-  { id: "vgl-zahlen",     group: "vergleich",  label: "Einsetzbar" },
+  // Bewertung eroeffnet den Vergleich (Max 05.08.): Maßstab erst definieren,
+  // dann messen. Lag vorher am Ende des Vorgehen-Registers.
+  { id: "vor-bewertung",  group: "vergleich",  label: "Bewertung" },
+  { id: "vgl-matrix",     group: "vergleich",  label: "Matrix" },
   { id: "vgl-befund",     group: "vergleich",  label: "Befund" },
   { id: "moe-idee",       group: "moe",        label: "Idee" },
   { id: "moe-umsetzung",  group: "moe",        label: "Umsetzung" },
   { id: "moe-demo",       group: "moe",        label: "Live-Sim", demo: "moe" },
   { id: "moe-ergebnis",   group: "moe",        label: "Ergebnis" },
-  { id: "moe-system",     group: "moe",        label: "System" },
   { id: "fazit",          group: "fazit",      label: "Fazit" },
   { id: "ausblick",       group: "ausblick",   label: "Ausblick" },
   { id: "disk-fragen",    group: "diskussion", label: "Fragen" },
@@ -384,18 +384,21 @@ function renderSubbar(groupId, activeId) {
   subbarEl.innerHTML = "";
   subbarEl.hidden = pages.length < 2;
   if (subbarEl.hidden) return;
-  for (const p of pages) {
+  pages.forEach((p, i) => {
     const active = p.id === activeId;
+    // Durchnummeriert wie das Mappen-Register (Max 05.08.), damit im Vortrag
+    // "Blatt 4.2" eindeutig ist und man die Schrittfolge sieht.
+    const nr = i + 1;
     const b = mkTab({
       id: `sub-${p.id}`,
       cls: `kip-sub${p.demo ? " kip-sub--demo" : ""}${active ? " kip-sub--active" : ""}`,
-      label: p.demo ? `▶ ${p.label}` : p.label,
+      label: p.demo ? `${nr} ▶ ${p.label}` : `${nr} ${p.label}`,
       controls: `screen-${p.demo || p.id}`,
       onClick: () => showPage(p.id),
     });
     b.setAttribute("aria-selected", String(active));
     subbarEl.appendChild(b);
-  }
+  });
 }
 
 // Zeigt ein Vortragsblatt: alles Bedien-Chrome aus, die 3D-Zelle bleibt Hintergrund.
@@ -873,6 +876,21 @@ document.addEventListener("keydown", (e) => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
   document.body.classList.toggle("notizen-aus");
 });
+// Vorschau und Ladebalken sitzen rechts UEBER der Bottom-Leiste, deren Hoehe je
+// Blatt wechselt (Pipeline-Zeile und Unterreiter kommen und gehen). Feste
+// Pixelwerte legten sie auf die Mappen (Max 04.08.), also misst ein Observer die
+// echte Hoehe und reicht sie als CSS-Variable weiter. Die Legende braucht das
+// nicht mehr, sie sitzt seit 05.08. oben rechts.
+(function trackBottombarHeight() {
+  const bar = document.querySelector(".kip-bottombar");
+  if (!bar || !window.ResizeObserver) return;
+  const sync = () => document.documentElement.style.setProperty(
+    "--kip-barh", `${Math.ceil(bar.getBoundingClientRect().height)}px`);
+  new ResizeObserver(sync).observe(bar);
+  window.addEventListener("resize", sync);
+  sync();
+})();
+
 // Einstieg: Titelblatt, oder direkt die per #hash verlinkte Seite.
 showPage(location.hash.slice(1) || DECK[0].id);
 

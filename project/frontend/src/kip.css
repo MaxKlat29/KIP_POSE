@@ -550,7 +550,10 @@
   outline: 2px solid #6ee7b7; outline-offset: 2px; border-radius: 8px;
 }
 /* Im Deck gehören Lade- und Statusmeldungen nicht auf die Wand. */
-body.pres-mode #cell-loader, body.pres-mode #status { display: none !important; }
+/* Nur die Statusmeldungen sind auf der Wand Ballast. Der Ladebalken der Zelle
+   bleibt sichtbar — vor einer Live-Demo will man sehen, wie viel der ~27 MB
+   noch fehlen (Max 04.08.). */
+body.pres-mode #status { display: none !important; }
 
 @media (max-width: 900px) {
   .kip-slide__body--2col, .kip-qa { grid-template-columns: 1fr; columns: 1; }
@@ -827,6 +830,28 @@ body.has-intro-video #slot-intro-still { display: none; }
 }
 .kip-matrix__c--soft { opacity: .62; font-size: 0.66em; }
 
+/* Ausblick-Karten bekommen ein Symbol als optischen Anker (Max 05.08.). */
+.kip-next__ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.7em; height: 1.7em; margin-bottom: 4px; border-radius: 7px;
+  font-size: 0.72em; line-height: 1;
+  background: rgba(255,255,255,0.08); color: #9dc0ff;
+}
+.kip-card2--pick .kip-next__ico { background: rgba(52,211,153,0.16); color: #8ce9b0; }
+
+/* Oberspalten (Max 05.08.): RGB und RGB-D werden nicht mehr gemischt, jede
+   Modalitaet bekommt ihren eigenen Block ueber zwei Spalten. */
+.kip-matrix__group { grid-template-columns: 1.25fr 2fr 2fr; margin-bottom: -2px; }
+.kip-matrix__grp {
+  text-align: center; font-size: 0.58em; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; padding: 5px 8px; border-radius: 8px 8px 0 0;
+}
+.kip-matrix__grp--rgb   { color: #8ce9b0; background: rgba(34,197,94,0.12);
+                          border-bottom: 2px solid rgba(34,197,94,0.5); }
+.kip-matrix__grp--depth { color: #9dc0ff; background: rgba(96,150,255,0.12);
+                          border-bottom: 2px solid rgba(96,150,255,0.55); }
+@media (max-width: 1100px) { .kip-matrix__group { display: none; } }
+
 @media (max-width: 1100px) {
   .kip-matrix__row { grid-template-columns: 1fr 1fr; }
 }
@@ -891,7 +916,14 @@ body.has-intro-video #slot-intro-still { display: none; }
 
 /* Echte Detektor-Ausgabe: orientierte Boxen als Overlay ueber dem Szenenbild,
    damit Aussage und Bild dasselbe zeigen. */
-.kip-obbimg { width: 100%; display: block; border-radius: 10px; border: 1px solid rgba(255,255,255,0.16); }
+/* Das Szenenbild sass unter dem Schema und trieb das Blatt in die Hoehe
+   (Max 05.08.). Gedeckelt passt die rechte Spalte neben den Text. */
+.kip-obbimg {
+  width: 100%; display: block; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.16);
+  max-height: 27vh;
+}
+.kip-obb { max-height: 20vh; }
 .kip-obbimg__box { fill: rgba(52,211,153,0.12); stroke: #34d399; stroke-width: 4; }
 .kip-obbimg__lbl { fill: #8ce9b0; font-family: var(--mono); font-size: 22px; font-weight: 600; }
 
@@ -905,19 +937,59 @@ body.has-intro-video #slot-intro-still { display: none; }
 .kip-dia__cap { margin: 0 0 6px; font-size: 0.58em; line-height: 1.45; color: var(--text-dim); max-width: 46ch; }
 .kip-streu { max-width: min(400px, 100%); }
 
+/* ── Modell-Liste klein und nach Stufe getrennt (Max 05.08.) ──────────────────
+   Das Blatt fuehrt jetzt mit dem Vorgehen; die konkreten Verfahren stehen
+   darunter als Beleg, geclustert in Objekterkennung und Lageschaetzung. */
+.kip-modellliste { margin-top: 0.5em; }
+.kip-modellliste .kip-slide__h3 { margin-bottom: 0.35em; }
+.kip-cards--sm { gap: 8px; }
+.kip-cards--sm .kip-card2 { padding: 8px 11px; gap: 2px; }
+.kip-cards--sm .kip-card2__h { font-size: 0.72em; }
+.kip-cards--sm .kip-card2__t { font-size: 0.6em; line-height: 1.35; }
+.kip-cards--sm .kip-badge { font-size: 0.5em; padding: 1px 5px; }
+
+/* ── 6DoF-Schaubild (Max 05.08.): Bauteil, drei Achsen, drei Drehringe ─────── */
+.kip-6dof { max-width: min(430px, 100%); }
+.kip-6dof__ring { fill: none; stroke-width: 1.6; stroke-dasharray: 6 5; }
+.kip-6dof__ring--x { stroke: rgba(255,107,107,0.55); }
+.kip-6dof__ring--y { stroke: rgba(107,209,138,0.55); }
+.kip-6dof__ring--z { stroke: rgba(105,167,255,0.55); }
+.kip-6dof__tip--x { fill: #ff6b6b; }
+.kip-6dof__tip--y { fill: #6bd18a; }
+.kip-6dof__tip--z { fill: #69a7ff; }
+.kip-6dof__ax { stroke-width: 2; }
+.kip-6dof__ax--x { stroke: #ff6b6b; }
+.kip-6dof__ax--y { stroke: #6bd18a; }
+.kip-6dof__ax--z { stroke: #69a7ff; }
+.kip-dia .kip-6dof__l { font-weight: 700; font-size: 15px; }
+.kip-dia .kip-6dof__l--x { fill: #ff6b6b; }
+.kip-dia .kip-6dof__l--y { fill: #6bd18a; }
+.kip-dia .kip-6dof__l--z { fill: #69a7ff; }
+.kip-6dof__top   { fill: #6f7a8a; }
+.kip-6dof__left  { fill: #4d5768; }
+.kip-6dof__right { fill: #5d6879; }
+.kip-dia .kip-6dof__cap { font-size: 12.5px; }
+
 /* ── Rechte Spalte sauber ausrichten (Max): Vorschau und Legende stehen
    rechtsbündig übereinander, mit gleichem Abstand zum Rand und ohne die
    Navigationsleiste zu berühren. Vorher hing die Legende am Ende der
    Bottombar und wanderte mit der Anzahl der Register. */
+/* Die Hoehe der Bottom-Leiste wechselt mit Pipeline-Zeile und Unterreitern.
+   Feste Pixelwerte legten die Legende auf die Mappen (Max 04.08.), deshalb
+   meldet kip.js die gemessene Hoehe als --kip-barh / --kip-legendh. */
+/* Legende oben rechts, direkt unter der Kopfleiste (Max 05.08.). Unten lag sie
+   auf den Mappen und konkurrierte mit Vorschau und Ladebalken um denselben
+   Platz. left/bottom MUESSEN zurueckgesetzt werden, die Basisregel in
+   style.css setzt beide. */
 .kip-bottombar .legend {
-  position: fixed; right: 16px; bottom: 18px; margin: 0;
+  position: fixed; top: 62px; right: 16px; left: auto; bottom: auto; margin: 0;
   background: rgba(16, 18, 22, 0.9); border: 1px solid rgba(255,255,255,0.14);
   border-radius: 10px; padding: 8px 14px; z-index: 56;
   display: flex; gap: 18px; flex-wrap: wrap; max-width: min(38vw, 470px);
 }
-.pip { right: 16px; bottom: 74px; width: min(30vw, 400px); }
-.pip.pip--big { bottom: 74px; }
-.kip-cell-loader { right: 16px; bottom: 74px; }
+.pip { right: 16px; width: min(30vw, 400px); bottom: calc(var(--kip-barh, 66px) + 14px); }
+.pip.pip--big { bottom: calc(var(--kip-barh, 66px) + 14px); }
+.kip-cell-loader { right: 16px; bottom: calc(var(--kip-barh, 66px) + 14px); }
 
 /* ══ Druckansicht (?print) ═══════════════════════════════════════════════════
    Ein Blatt je Seite im 16:9-Format, ohne Bedien-Chrome. Das PDF ist die
