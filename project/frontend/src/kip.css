@@ -990,19 +990,23 @@ body.has-intro-video #slot-intro-still { display: none; }
 /* Die Hoehe der Bottom-Leiste wechselt mit Pipeline-Zeile und Unterreitern.
    Feste Pixelwerte legten die Legende auf die Mappen (Max 04.08.), deshalb
    meldet kip.js die gemessene Hoehe als --kip-barh / --kip-legendh. */
-/* Legende oben rechts, direkt unter der Kopfleiste (Max 05.08.). Unten lag sie
-   auf den Mappen und konkurrierte mit Vorschau und Ladebalken um denselben
-   Platz. left/bottom MUESSEN zurueckgesetzt werden, die Basisregel in
-   style.css setzt beide. */
+/* Rechte Spalte, von unten gestapelt (Max 06.08.): Mappen-Leiste, darueber die
+   Kameravorschau, darueber Legende und Ladebalken. Oben rechts bleibt frei —
+   dort wird im Vortrag der Teams-Call eingeblendet.
+   left/top MUESSEN zurueckgesetzt werden, die Basisregel in style.css setzt sie. */
 .kip-bottombar .legend {
-  position: fixed; top: 62px; right: 16px; left: auto; bottom: auto; margin: 0;
+  position: fixed; right: 16px; left: auto; top: auto; margin: 0;
+  bottom: calc(var(--kip-barh, 66px) + var(--kip-piph, 0px) + 26px);
   background: rgba(16, 18, 22, 0.9); border: 1px solid rgba(255,255,255,0.14);
   border-radius: 10px; padding: 8px 14px; z-index: 56;
   display: flex; gap: 18px; flex-wrap: wrap; max-width: min(38vw, 470px);
 }
 .pip { right: 16px; width: min(30vw, 400px); bottom: calc(var(--kip-barh, 66px) + 14px); }
 .pip.pip--big { bottom: calc(var(--kip-barh, 66px) + 14px); }
-.kip-cell-loader { right: 16px; bottom: calc(var(--kip-barh, 66px) + 14px); }
+.kip-cell-loader {
+  right: 16px;
+  bottom: calc(var(--kip-barh, 66px) + var(--kip-piph, 0px) + var(--kip-legendh, 0px) + 38px);
+}
 
 /* ══ Druckansicht (?print) ═══════════════════════════════════════════════════
    Ein Blatt je Seite im 16:9-Format, ohne Bedien-Chrome. Das PDF ist die

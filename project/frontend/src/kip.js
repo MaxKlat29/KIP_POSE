@@ -445,6 +445,7 @@ function showDemo(which) {
       + '<span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>';
   }
   const pip = document.getElementById("pip");
+  const legend = document.getElementById("legend");
   const pipImg = document.getElementById("pip__img");
   // Ein Vortragsblatt versteckt die Vorschau. Kommt man zurueck auf eine
   // Live-Ansicht und es liegt noch ein Bild vor, gehoert es wieder hin
@@ -518,6 +519,7 @@ document.addEventListener("keydown", (e) => {
 let lastCamPose = null;   // {cam_pos, look_at, up, fov_y} der zuletzt geladenen Szene
 function wirePip() {
   const pip = document.getElementById("pip");
+  const legend = document.getElementById("legend");
   const img = document.getElementById("pip__img");
   const btnBoxes = document.getElementById("pip-boxes");
   const btnCam = document.getElementById("cam-photo");
@@ -876,17 +878,31 @@ document.addEventListener("keydown", (e) => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || "")) return;
   document.body.classList.toggle("notizen-aus");
 });
-// Vorschau und Ladebalken sitzen rechts UEBER der Bottom-Leiste, deren Hoehe je
-// Blatt wechselt (Pipeline-Zeile und Unterreiter kommen und gehen). Feste
-// Pixelwerte legten sie auf die Mappen (Max 04.08.), also misst ein Observer die
-// echte Hoehe und reicht sie als CSS-Variable weiter. Die Legende braucht das
-// nicht mehr, sie sitzt seit 05.08. oben rechts.
-(function trackBottombarHeight() {
+// Die rechte Spalte stapelt sich von unten: Mappen-Leiste, darueber die
+// Kameravorschau, darueber Legende und Ladebalken. Oben rechts bleibt frei, dort
+// wird im Vortrag der Teams-Call eingeblendet (Max 06.08.). Beide Hoehen
+// wechseln zur Laufzeit — die Leiste mit Pipeline-Zeile und Unterreitern, die
+// Vorschau mit ihrem Seitenverhaeltnis — deshalb gemessen statt geraten.
+(function trackStackHeights() {
   const bar = document.querySelector(".kip-bottombar");
+  const pip = document.getElementById("pip");
+  const legend = document.getElementById("legend");
   if (!bar || !window.ResizeObserver) return;
-  const sync = () => document.documentElement.style.setProperty(
-    "--kip-barh", `${Math.ceil(bar.getBoundingClientRect().height)}px`);
-  new ResizeObserver(sync).observe(bar);
+  const h = (el) => (el && !el.hidden ? Math.ceil(el.getBoundingClientRect().height) : 0);
+  const sync = () => {
+    const s = document.documentElement.style;
+    s.setProperty("--kip-barh", `${h(bar)}px`);
+    s.setProperty("--kip-piph", `${h(pip)}px`);
+    s.setProperty("--kip-legendh", `${h(legend)}px`);
+  };
+  const ro = new ResizeObserver(sync);
+  ro.observe(bar);
+  for (const el of [pip, legend]) {
+    if (!el) continue;
+    ro.observe(el);
+    // hidden-Wechsel loest keinen Resize aus -> Attribut beobachten.
+    new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ["hidden", "class"] });
+  }
   window.addEventListener("resize", sync);
   sync();
 })();
