@@ -1702,32 +1702,61 @@ _POOL_FILES = ("rgb_0000.png", "depth_0000.npy", "instance_0000.npy",
                "semantic_0000.json", "gt_raw_0000.json")
 
 
-def _pool_scenes():
+# Je Pipeline ein eigener Satz Szenen (T-193, Max 06.08.): eine Szene, die fuer
+# den Farbweg gut laeuft, muss fuer den Tiefenweg nicht gut sein, und die
+# Expertenauswahl braucht zusaetzlich Teile INNERHALB und AUSSERHALB der
+# Auswahlflaeche. Liegt kein Unterordner vor, greift der flache Pool wie bisher.
+_POOL_KINDS = ("rgb", "rgbd", "moe")
+
+
+def _pool_kind_for(combo_id):
+    c = (combo_id or "").strip().lower()
+    if c == "moe":
+        return "moe"
+    if c == "gdrnpp":
+        return "rgb"
+    return "rgbd"
+
+
+def _pool_dir(kind=None):
+    """Verzeichnis fuer eine Pipeline, mit Rueckfall auf den flachen Pool."""
+    if kind:
+        d = _SIM_POOL / kind
+        if d.is_dir() and any(p.is_dir() for p in d.iterdir()):
+            return d
+    return _SIM_POOL
+
+
+def _pool_scenes(kind=None):
     """Sortierte Liste der Pool-Szenen (Verzeichnisse mit rgb_0000.png)."""
-    if not _SIM_POOL.is_dir():
+    root = _pool_dir(kind)
+    if not root.is_dir():
         return []
-    return sorted(d for d in _SIM_POOL.iterdir()
-                  if d.is_dir() and (d / "rgb_0000.png").exists())
+    return sorted(d for d in root.iterdir()
+                  if d.is_dir() and d.name not in _POOL_KINDS
+                  and (d / "rgb_0000.png").exists())
 
 
-def _pool_take(rawdir):
+def _pool_take(rawdir, combo_id=None):
     """Naechste Pool-Szene reihum nach rawdir kopieren. True, wenn geklappt.
 
     Der Zaehler liegt als Datei im Pool, damit die Reihenfolge einen
     Server-Neustart ueberlebt — im Vortrag soll nicht zweimal dieselbe Szene
     kommen, nur weil zwischendurch neu deployt wurde.
     """
-    scenes = _pool_scenes()
+    kind = _pool_kind_for(combo_id)
+    scenes = _pool_scenes(kind)
     if not scenes:
         return False
+    cursor = _pool_dir(kind) / ".cursor"
     with _POOL_LOCK:
         try:
-            idx = int(_POOL_CURSOR.read_text().strip())
+            idx = int(cursor.read_text().strip())
         except Exception:
             idx = 0
         pick = scenes[idx % len(scenes)]
         try:
-            _POOL_CURSOR.write_text(str((idx + 1) % len(scenes)))
+            cursor.write_text(str((idx + 1) % len(scenes)))
         except Exception:
             pass                      # Pool read-only -> dann eben immer ab 0
     for name in _POOL_FILES:
@@ -1823,7 +1852,7 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
         # Sekunden statt in einer Minute — im Vortrag ist die Bilderzeugung die
         # uninteressante Wartezeit, gezeigt wird die Inferenz. Die faehrt danach
         # unveraendert und in Echtzeit weiter.
-        pooled = _pool_take(rawdir)
+        pooled = _pool_take(rawdir, combo_id)
         if pooled:
             for phase, pct, wait in (("Isaac Sim startet (booting)", 10, 1.4),
                                      ("Isaac Sim rendert Frame", 40, 2.2),
@@ -2096,15 +2125,21 @@ def sim_generate_async(pipeline: str = "gdrnpp", seg: str | None = None,
 @app.get("/api/sim/pool")
 def sim_pool_status():
     """Zustand des Vortrags-Szenenpuffers (T-193). Leerer Pool = normaler Live-Pfad."""
-    scenes = _pool_scenes()
-    try:
-        cursor = int(_POOL_CURSOR.read_text().strip())
-    except Exception:
-        cursor = 0
-    return {"dir": str(_SIM_POOL), "count": len(scenes),
-            "next": scenes[cursor % len(scenes)].name if scenes else None,
-            "scenes": [d.name for d in scenes],
-            "active": bool(scenes)}
+    out, total = {}, 0
+    for kind in _POOL_KINDS:
+        sc = _pool_scenes(kind) if (_SIM_POOL / kind).is_dir() else []
+        try:
+            cur = int((_SIM_POOL / kind / ".cursor").read_text().strip())
+        except Exception:
+            cur = 0
+        out[kind] = {"count": len(sc),
+                     "next": sc[cur % len(sc)].name if sc else None,
+                     "scenes": [d.name for d in sc]}
+        total += len(sc)
+    flat = _pool_scenes()
+    return {"dir": str(_SIM_POOL), "per_pipeline": out,
+            "flat_count": len(flat), "count": total or len(flat),
+            "active": bool(total or flat)}
 
 
 @app.get("/api/sim/live_rgb/{job}")
