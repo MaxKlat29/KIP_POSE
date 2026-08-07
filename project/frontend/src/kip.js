@@ -445,7 +445,6 @@ function showDemo(which) {
       + '<span class="legend__item"><i class="legend__swatch" style="background:#ff2d2d"></i>Inferiert (Schätzung)</span>';
   }
   const pip = document.getElementById("pip");
-  const legend = document.getElementById("legend");
   const pipImg = document.getElementById("pip__img");
   // Ein Vortragsblatt versteckt die Vorschau. Kommt man zurueck auf eine
   // Live-Ansicht und es liegt noch ein Bild vor, gehoert es wieder hin
@@ -461,8 +460,13 @@ function showDemo(which) {
   } else if (which === "moe") {
     viewer.setParts([]);
     ensureMoeShadow().then((ok) => {
+      if (!ok) return;
       const zoneOn = document.getElementById("moe-show-zone")?.checked !== false;
-      if (ok) moeOverlay.show(zoneOn);
+      const coneOn = document.getElementById("moe-show-cone")?.checked !== false;
+      moeOverlay.show(zoneOn);
+      // Der Kegel wurde bisher nur beim Umschalten der Checkbox gesetzt. Steht
+      // sie von Anfang an auf an, lief der Zustand nie durch (Max 07.08.).
+      moeOverlay.setConeVisible(coneOn);
     });
   } else if (which === "batch") {
     pip.hidden = true;                  // Batch ist Tabellen-Ansicht, kein 3D-Live
@@ -519,7 +523,6 @@ document.addEventListener("keydown", (e) => {
 let lastCamPose = null;   // {cam_pos, look_at, up, fov_y} der zuletzt geladenen Szene
 function wirePip() {
   const pip = document.getElementById("pip");
-  const legend = document.getElementById("legend");
   const img = document.getElementById("pip__img");
   const btnBoxes = document.getElementById("pip-boxes");
   const btnCam = document.getElementById("cam-photo");
@@ -885,19 +888,19 @@ document.addEventListener("keydown", (e) => {
 // Vorschau mit ihrem Seitenverhaeltnis — deshalb gemessen statt geraten.
 (function trackStackHeights() {
   const bar = document.querySelector(".kip-bottombar");
-  const pip = document.getElementById("pip");
-  const legend = document.getElementById("legend");
+  const pipEl = document.getElementById("pip");
+  const legendEl = document.getElementById("legend");
   if (!bar || !window.ResizeObserver) return;
   const h = (el) => (el && !el.hidden ? Math.ceil(el.getBoundingClientRect().height) : 0);
   const sync = () => {
     const s = document.documentElement.style;
     s.setProperty("--kip-barh", `${h(bar)}px`);
-    s.setProperty("--kip-piph", `${h(pip)}px`);
-    s.setProperty("--kip-legendh", `${h(legend)}px`);
+    s.setProperty("--kip-piph", `${h(pipEl)}px`);
+    s.setProperty("--kip-legendh", `${h(legendEl)}px`);
   };
   const ro = new ResizeObserver(sync);
   ro.observe(bar);
-  for (const el of [pip, legend]) {
+  for (const el of [pipEl, legendEl]) {
     if (!el) continue;
     ro.observe(el);
     // hidden-Wechsel loest keinen Resize aus -> Attribut beobachten.
