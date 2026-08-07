@@ -179,6 +179,9 @@ def main():
     ap.add_argument("--keep", type=int, default=5)
     ap.add_argument("--min-parts", type=int, default=4)
     ap.add_argument("--skip-render", action="store_true")
+    ap.add_argument("--verify", default=None,
+                    help="zweite Pipeline, unter der die Ueberlebenden nochmal "
+                         "geprueft werden (Falsch-Positive sind pipelineabhaengig)")
     a = ap.parse_args()
 
     if a.kind == "flat":
@@ -215,6 +218,32 @@ def main():
             print(f"  {i:3}/{len(scenes)} {d.name}: {mm:6.1f} mm, {ngt} Teile{tag}", flush=True)
         else:
             print(f"  {i:3}/{len(scenes)} {d.name}: verworfen ({zone})", flush=True)
+
+    # Zweite Stufe: Falsch-Positive haengen von der Pipeline ab (die Detektion
+    # laeuft bei Pipeline A ueber den nativen Worker, bei den Mesh-Kombis ueber
+    # yolo-obb-svc, mit anderen Schwellen). Eine Szene, die im Vortrag unter
+    # mehreren Pipelines gezeigt wird, muss unter allen sauber sein.
+    if a.verify and good:
+        print(f"\n[{a.kind}] Gegenprobe unter {a.verify}: {len(good)} Kandidaten",
+              flush=True)
+        (root / ".cursor").write_text("0")
+        order = {d.name: i for i, (_, _, _, d) in enumerate(good)}
+        keep2 = []
+        for mm, ngt, zone, d in good:
+            (root / ".cursor").write_text(str(sorted(p.name for p in root.iterdir()
+                                                     if p.is_dir()).index(d.name)))
+            doc2, err2 = run_job(a.verify)
+            if doc2 is None:
+                print(f"  {d.name}: Gegenprobe fehlgeschlagen ({err2})", flush=True)
+                continue
+            ok2, mm2, ngt2, _ = assess(doc2, a.min_parts, None)
+            if ok2:
+                keep2.append((max(mm, mm2), ngt, zone, d))
+                print(f"  {d.name}: auch unter {a.verify} sauber "
+                      f"({mm2:.1f} mm)  ✓", flush=True)
+            else:
+                print(f"  {d.name}: unter {a.verify} nicht sauber", flush=True)
+        good = keep2
 
     good.sort(key=lambda x: x[0])
     best = good[:a.keep]

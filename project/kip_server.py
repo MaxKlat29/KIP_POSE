@@ -1928,6 +1928,22 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
         gt_all = json.load(open(scene_dir / "scene_gt.json"))
         cam_all = json.load(open(scene_dir / "scene_camera.json"))
         trained = _trained_oids()
+        # T-193 (Max 07.08.): Reine Tiefen-Kombis blenden das Zahnrad aus.
+        # FoundationPose und GigaPose arbeiten ueber vorgerenderte Tiefenvorlagen,
+        # und fuer das Zahnrad gibt es keine — jede Ausgabe dazu waere geraten.
+        # In der Expertenauswahl bleibt die Klasse drin, dort faengt sie der
+        # Farbweg ab (faehigkeitsbasierte Auswahl, siehe Paper 4.3).
+        ZAHNRAD_OID = 6
+        # gateway_proxy._modality liefert "RGBD" (ohne Bindestrich) bzw.
+        # "RGB+RGBD" fuer die Expertenauswahl. Normalisiert vergleichen, sonst
+        # greift der Filter nie — und die Expertenauswahl bleibt aussen vor,
+        # dort faengt der Farbweg das Zahnrad ab.
+        _mod = str(_combo_meta(combo_id).get("modality", "")).upper()
+        _mod = _mod.replace("-", "").replace("_", "").replace(" ", "")
+        rgbd_only = (_mod == "RGBD"
+                     and combo_id != getattr(_gwp, "MOE_COMBO_ID", "moe"))
+        if rgbd_only:
+            trained = {o for o in trained if o != ZAHNRAD_OID}
         # einziger Frame: "0"
         im = 0
         cam = cam_all[str(im)]
@@ -1969,6 +1985,8 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
             else:
                 wp = []
             for p in wp:
+                if rgbd_only and int(p.get("obj_id", 0)) == ZAHNRAD_OID:
+                    continue
                 iid += 1
                 if not _add_pred_filtered(results, kept_proj,
                                           np.array(p["R"], float).reshape(3, 3), np.array(p["t"], float),
@@ -2010,6 +2028,12 @@ def _sim_generate_job(job, combo_id="gdrnpp", seg_prompts=None):
             _kept_gw = []
             for pr in preds:
                 oid = _OID.get((pr.get("part") or "").lower())
+                # Reine Tiefen-Kombis kennen das Zahnrad nicht (keine
+                # Tiefenvorlagen) — solche Ausgaben sind geraten und gehoeren
+                # nicht ins Bild. Die Referenz dazu ist oben schon draussen.
+                if rgbd_only and oid == ZAHNRAD_OID:
+                    n_drop += 1
+                    continue
                 if not _pred_on_table(pr["t_world"], table_origin):
                     n_drop += 1
                     continue
