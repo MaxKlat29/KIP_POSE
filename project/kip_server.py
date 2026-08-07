@@ -228,9 +228,12 @@ KIP_MOE_RGBD_SOURCE = os.environ.get("KIP_MOE_RGBD_SOURCE", "foundationpose")
 # A/B-Vergleichskombi passend zum RGB-D-Zweig (gleiche Modellfamilie = fair).
 _MOE_AB_COMBO = {"foundationpose": "yolo_obb__foundationpose",
                  "gigapose_rgbd": "yolo_obb__gigapose_rgbd"}
-# Klassen je RGB-D-Zweig (T-178e): FoundationPose ist mesh-basiert und kann
-# zahnrad (Mesh registriert); GigaPose hat nur Anker-Templates (FU T-179).
-_MOE_RGBD_CLASSES = {"foundationpose": "anker_kurz,anker_lang,zahnrad",
+# Klassen je RGB-D-Zweig. Das Zahnrad laeuft in der Expertenauswahl IMMER ueber
+# den Farbweg (Max 07.08.), unabhaengig davon, ob der Tiefenzweig es technisch
+# annehmen wuerde — genau die faehigkeitsbasierte Auswahl aus Paper 4.3. Vorher
+# stand zahnrad bei FoundationPose in der Liste (T-178e), damit landete es je
+# nach Lage doch auf dem Tiefenzweig, wo es keine Vorlagen gibt.
+_MOE_RGBD_CLASSES = {"foundationpose": "anker_kurz,anker_lang",
                      "gigapose_rgbd": "anker_kurz,anker_lang"}
 _moe_shadow_cache: dict = {"mtime": None, "data": None}
 
