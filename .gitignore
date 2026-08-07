@@ -114,3 +114,6 @@ hf_token*
 
 # S-012 local test venv (not committed)
 .venv-s012/
+
+# Playwright-MCP-Debugartefakte
+.playwright-mcp/

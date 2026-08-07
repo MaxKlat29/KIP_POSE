@@ -3,7 +3,7 @@
   "project": "POSE",
   "project_path": "/Users/Admin/POSE",
   "created": "2026-05-17T13:21:19Z",
-  "updated": "2026-08-05T20:17:32Z",
+  "updated": "2026-08-07T13:20:39Z",
   "columns": [
     {
       "id": "backlog",
@@ -22,7 +22,7 @@
       "label": "Fertig"
     }
   ],
-  "next_id": 194,
+  "next_id": 195,
   "tickets": [
     {
       "id": "T-001",
@@ -11919,7 +11919,7 @@
       ],
       "session": "",
       "created": "2026-08-05T13:33:13Z",
-      "updated": "2026-08-05T14:35:17Z",
+      "updated": "2026-08-07T06:49:50Z",
       "started_at": "2026-08-05T13:33:13Z",
       "completed_at": null,
       "comments": [],
@@ -11971,6 +11971,12 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_review → in_review"
+        },
+        {
+          "ts": "2026-08-07T06:49:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "IR-Kegel wieder da: Ursache war eine Variablen-Verschattung aus 8aa8f31 (const legend in showDemo/wirePip neben dem Modul-legend) -> ReferenceError in der temporalen Todeszone, showDemo brach ab. Folgen waren MoE-Overlay, Sim-Metriken, Vorschau-Wiederherstellung und renderGating. Behoben in c9d5fce."
         }
       ]
     },
@@ -11988,7 +11994,7 @@
       ],
       "session": "",
       "created": "2026-08-05T14:17:18Z",
-      "updated": "2026-08-05T20:17:32Z",
+      "updated": "2026-08-07T08:25:37Z",
       "started_at": "2026-08-05T14:17:19Z",
       "completed_at": null,
       "comments": [],
@@ -12028,6 +12034,63 @@
           "agent": "claude",
           "level": "info",
           "msg": "moved: in_progress → in_review"
+        },
+        {
+          "ts": "2026-08-07T06:49:50Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Pool final gesetzt: 2 Szenen (3.4 mm und 37.3 mm), beide 4 Referenzen / 4 Schaetzungen, also ohne Falsch-Positive, beide MoE-tauglich (Teile innerhalb UND ausserhalb der Auswahlflaeche). Kein eigener MoE-Topf noetig, MoE faellt auf den gemeinsamen Pool zurueck. Kontrolllauf: 2 Klicks, beide 4/4."
+        },
+        {
+          "ts": "2026-08-07T06:49:50Z",
+          "agent": "claude",
+          "level": "warn",
+          "msg": "Befund: Falsch-Positive sind PIPELINE-ABHAENGIG. Szenen aus dem RGB-D-Batch waren dort 4/4, unter gdrnpp aber 6/4, 5/4 und 6/4 — Pipeline A geht ueber den nativen :8078-Worker, die Mesh-Kombis ueber yolo-obb-svc, offenbar mit anderen Schwellen. Eine Szene muss also unter JEDER Pipeline geprueft werden, unter der sie gezeigt wird. Das war die Ursache der 'faulty Szenen'."
+        },
+        {
+          "ts": "2026-08-07T08:25:37Z",
+          "agent": "claude",
+          "level": "success",
+          "msg": "Demo-Pool final: EINE geprueft saubere Szene (1x Anker_Kurz, 2x Zahnrad, 1x Anker_Lang), gilt fuer alle Pipelines. RGB 4/4 mit Zahnraedern, RGB-D 2/2 ohne (keine Tiefenvorlagen -> Referenz und Schaetzung ausgeblendet), MoE 4/4 mit beiden Zahnraedern als rgb_cap ueber den Farbweg und beiden Ankern ueber RGB-D."
+        },
+        {
+          "ts": "2026-08-07T08:25:37Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: in_review → in_review"
+        }
+      ]
+    },
+    {
+      "id": "T-194",
+      "title": "Nach-Präsi-Cleanup: KIP-Stack auf der Box entautomatisieren (systemd disable + docker no-restart)",
+      "description": "",
+      "column": "in_progress",
+      "assignee": "claude",
+      "instance": "",
+      "priority": "P1",
+      "tags": [
+        "ops",
+        "cleanup"
+      ],
+      "session": "",
+      "created": "2026-08-07T13:20:25Z",
+      "updated": "2026-08-07T13:20:39Z",
+      "started_at": "2026-08-07T13:20:39Z",
+      "completed_at": null,
+      "comments": [],
+      "logs": [
+        {
+          "ts": "2026-08-07T13:20:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "moved: backlog → in_progress"
+        },
+        {
+          "ts": "2026-08-07T13:20:39Z",
+          "agent": "claude",
+          "level": "info",
+          "msg": "Bestand: 5 kip-* systemd-Units enabled (server/worker/gdrnpp-svc/isaac-worker/drive-upload) + 6 kip_mesh-Container mit restart=unless-stopped. nodestat + civion-redis bleiben (nicht KIP)."
         }
       ]
     }
